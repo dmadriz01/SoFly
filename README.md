@@ -72,12 +72,28 @@ To try it: go to **Me** → enter your email → click the link in the email (in
 
 If you use Vercel preview deployments and want login to work on them, also add `https://*-<your-team>.vercel.app/auth/callback` to the Supabase redirect URLs.
 
+## Custom SMTP (required before public launch)
+
+Supabase's built-in sender only emails your own team members and is capped at a few emails per hour. To let anyone log in, use your own provider. These steps use [Resend](https://resend.com); Postmark and SendGrid work the same way.
+
+1. Create a Resend account and **add and verify a domain** you own (Domains → Add Domain, then add the DNS records it shows). A verified domain is required to email people other than yourself.
+2. Create an API key (API Keys → Create, "Sending access").
+3. In Supabase, open **Project Settings → Authentication → SMTP Settings** and turn on **Enable custom SMTP**:
+   - **Sender email:** an address on your verified domain, e.g. `login@yourdomain.com`
+   - **Sender name:** `BayMeet`
+   - **Host:** `smtp.resend.com`
+   - **Port:** `465`
+   - **Username:** `resend`
+   - **Password:** your API key
+4. Save, then request a magic link with an email that isn't yours to confirm it arrives.
+5. Optional: raise the hourly cap under **Authentication → Rate Limits**, and edit the message under **Authentication → Emails → Magic Link**.
+
 ## Things to know
 
 - **Open the magic link in the same browser** you requested it from. Login uses the PKCE flow, which stores a one-time verifier in the browser that asked for the link.
 - **Supabase's built-in email sender is heavily rate limited** (a few emails per hour, and only to project team members by default). It's fine for development. Before real users arrive, configure your own SMTP provider under **Project Settings → Authentication → SMTP Settings**.
 - **Times are Pacific.** The date picker on the post form is interpreted as Pacific time regardless of the poster's device time zone, and all times are displayed in Pacific.
-- **Display names** default to the part of the email before the `@`. There's no profile editor; a user can change it by updating their row in `profiles`.
+- **Display names** come from the optional "Your name" field on the login page, used only when an email signs up for the first time. If it's left blank, the name defaults to the part of the email before the `@`. There's no profile editor; change a name by editing the row in the `profiles` table (Supabase → Table Editor).
 
 ## Project layout
 
