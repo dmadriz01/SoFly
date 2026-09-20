@@ -4,7 +4,7 @@ import { ageFieldProblem, ageLabel, ageOn, parseBirthDate, resolveAgeRange, with
 import fs from "node:fs";
 import path from "node:path";
 import { aboutLinks, hasAbout, parseAbout } from "../lib/about.ts";
-import { BRAND } from "../lib/brand.ts";
+import { BRAND, ICON_SIZES, ICON_VERSION, iconUrl } from "../lib/brand.ts";
 import { parseChatUrl } from "../lib/chat.ts";
 import { parseHandle, socialUrl } from "../lib/social.ts";
 import * as email from "../lib/email-templates.ts";
@@ -146,6 +146,16 @@ t("weeks: only real dates are accepted", isDateKey("2026-09-21") && !isDateKey("
   t("brand: no hard-coded copy of the old orange is left in the source", stray.length === 0, stray.join(", "));
   const cfg = fs.readFileSync(path.join(process.cwd(), "tailwind.config.ts"), "utf8");
   t("brand: the styling config reads the shared palette, not its own copy", cfg.includes("BRAND.accent") && !/#[0-9a-fA-F]{6}/.test(cfg));
+
+  // Icons are cached for a year and phones keep their own copy: every icon URL must carry a version
+  // that changes with the colour, or an old-colour icon keeps showing.
+  const read = (f: string) => fs.readFileSync(path.join(process.cwd(), f), "utf8");
+  t("icons: the version follows the accent colour", ICON_VERSION.startsWith(BRAND.accent.slice(1) + "-"), ICON_VERSION);
+  t("icons: every size's URL is versioned", ICON_SIZES.every((n) => iconUrl(n) === `/pwa-icon/${n}?v=${ICON_VERSION}`));
+  t("icons: the home-screen, tab and manifest icons all use the versioned URLs", /iconUrl\(64\)/.test(read("app/layout.tsx")) && /iconUrl\(180\)/.test(read("app/layout.tsx")) && /iconUrl\(192\)/.test(read("app/manifest.ts")) && /iconUrl\(512\)/.test(read("app/manifest.ts")));
+  t("icons: the notification icon in the service worker uses the current version", read("public/sw.js").includes(iconUrl(192)), "sw.js is static: update its icon line when ICON_VERSION changes");
+  t("icons: no unversioned icon URL is left anywhere", ["app", "components", "lib", "public"].flatMap((d) => walk(path.join(process.cwd(), d)).concat(fs.existsSync(path.join(process.cwd(), d, "sw.js")) ? [path.join(process.cwd(), d, "sw.js")] : [])).every((f) => !/["'`]\/pwa-icon\/\d+["'`]/.test(fs.readFileSync(f, "utf8"))));
+  t("icons: the old separate icon routes (with year-long caches under fixed URLs) are gone", !fs.existsSync(path.join(process.cwd(), "app/icon.tsx")) && !fs.existsSync(path.join(process.cwd(), "app/apple-icon.tsx")));
 }
 
 // ---- chat links (only known apps; no look-alike hosts) ----

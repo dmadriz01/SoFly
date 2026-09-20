@@ -5,6 +5,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import vm from "node:vm";
 import webpush from "web-push";
+import { iconUrl } from "../lib/brand.ts";
 import { diagnosePush } from "../lib/diagnose.ts";
 import { notifyEventCancelled, notifyHostOfRequest, notifyRequestDecision, sendDailyEmails } from "../lib/notify.ts";
 import { isPushEndpoint, sendPushToUser, type PushPayload, type PushSender } from "../lib/push.ts";
@@ -256,7 +257,7 @@ const NOW = new Date("2026-09-20T19:51:45Z");
   t("service worker: registers push and click handlers", "push" in sw.listeners && "notificationclick" in sw.listeners && "install" in sw.listeners);
   await sw.fire("push", pushEvent({ title: "Ann wants to join", body: "Pickeball", url: "/events/ev1", tag: "request-ev1" }));
   t("service worker: shows the notification with its title and text", sw.shown[0]?.title === "Ann wants to join" && sw.shown[0].options.body === "Pickeball");
-  t("service worker: keeps the tag (so repeats replace each other) and uses our icon", sw.shown[0].options.tag === "request-ev1" && sw.shown[0].options.icon === "/pwa-icon/192");
+  t("service worker: keeps the tag (so repeats replace each other) and uses our icon", sw.shown[0].options.tag === "request-ev1" && sw.shown[0].options.icon === iconUrl(192));
   t("service worker: remembers where to go on tap", (sw.shown[0].options.data as { url: string }).url === "/events/ev1");
 
   sw = build();

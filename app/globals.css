@@ -86,16 +86,21 @@
 /* While the swipe screen is showing on a phone, the page itself never scrolls: it is just the card.
    (On larger screens the page behaves normally.) */
 @media (max-width: 767px) {
-  html.swipe-lock,
-  html.swipe-lock body {
+  html.swipe-lock {
     height: 100dvh;
     overflow: hidden;
     overscroll-behavior: none;
   }
+  /* The body is pinned to the same box the tab bar is pinned to (the visible screen), so the bottom
+     of the body is the bottom of the bar. No explicit height: that would be measured differently. */
   html.swipe-lock body {
     position: fixed;
     inset: 0;
     width: 100%;
+    height: auto;
+    min-height: 0;
+    overflow: hidden;
+    overscroll-behavior: none;
     display: flex;
     flex-direction: column;
   }
@@ -109,16 +114,9 @@
     min-height: 0;
     width: 100%;
     padding-top: 0.5rem;
-    /* No room is reserved for the bottom bar: it takes its own place below (see next rule), so the
-       card and buttons can never end up underneath it, whatever size the phone or its toolbars are. */
-    padding-bottom: 0.25rem;
-  }
-  /* On the swipe screen the tab bar stops being pinned to the screen edge and becomes the last
-     item in the page's column. It keeps its own height (including the home-indicator space). */
-  html.swipe-lock nav[aria-label="Main"].fixed {
-    position: static;
-    flex: none;
-    width: 100%;
+    /* Leave room for the tab bar, which is the same fixed bar as on every other screen. Its real
+       height is measured in components/Nav.tsx; the fallback is the same bar's height by design. */
+    padding-bottom: calc(var(--nav-h, 3.9375rem) + 0.25rem);
   }
   html.swipe-lock footer {
     display: none;

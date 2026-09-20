@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Analytics } from "@vercel/analytics/react";
 import { Footer } from "@/components/Footer";
 import { BottomNav, TopNav } from "@/components/Nav";
+import { iconUrl } from "@/lib/brand";
 import { getPendingRequestCount } from "@/lib/requests";
 import { SITE_NAME, SITE_URL, TAGLINE } from "@/lib/site";
 import "./globals.css";
@@ -23,6 +24,10 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: `${SITE_NAME}: meetups around the Bay Area`,
     description: TAGLINE,
+  },
+  icons: {
+    icon: [{ url: iconUrl(64), sizes: "64x64", type: "image/png" }],
+    apple: [{ url: iconUrl(180), sizes: "180x180", type: "image/png" }],
   },
   appleWebApp: { capable: true, title: SITE_NAME, statusBarStyle: "default" },
 };

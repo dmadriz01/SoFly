@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useRef } from "react";
 
 const stroke = {
   fill: "none",
@@ -60,8 +61,22 @@ function Badge({ count }: { count: number }) {
 
 export function BottomNav({ pending = 0 }: { pending?: number }) {
   const pathname = usePathname();
+  const ref = useRef<HTMLElement>(null);
+  // Publishes the bar's real height (home-indicator space included) as --nav-h so the swipe screen
+  // can leave exactly that much room. The bar itself is the same on every screen.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const publish = () => document.documentElement.style.setProperty("--nav-h", `${el.offsetHeight}px`);
+    publish();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(publish);
+    observer.observe(el, { box: "border-box" });
+    return () => observer.disconnect();
+  }, []);
   return (
     <nav
+      ref={ref}
       aria-label="Main"
       className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-cream/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
     >
