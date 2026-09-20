@@ -120,6 +120,8 @@ Set the subject to `Your BayMeet login code` and use this body in each:
 | `009_hardening_and_cleanup` | tightened privileges, cleaner policies and functions, extra limits and indexes |
 | `010_email_settings` | each person's on/off switch for BayMeet's emails |
 | `011_meetup_feedback` | guests' private "would you join again?" answers, shown only as totals |
+| `012_men_only_audience` | lets a meetup be set for men only (as well as everyone or women only) |
+| `013_push_subscriptions` | the devices that turned on push notifications |
 
 **Changing the database?** Update `schema.sql` and add a migration, then run `npm test`. `test:db` builds a database both ways, runs about 240 checks on each (who can see and do what), and fails if the two ever differ. `test:unit` covers ages, dates, calendar files, chat-link safety, and the email logic (who gets emailed, when, and why someone is skipped). `test:contract` reads the app's own code, finds every database call, and checks each one against the permissions the schema really grants, so a write the database would refuse fails here, not in production.
 
@@ -144,6 +146,26 @@ To turn it on (all optional; without these the app works exactly as before, just
 3. Environment variable changes only take effect on a **new deployment**. After adding or changing one, redeploy.
 
 Notes: emails come from your Gmail address and may land in spam at first. Gmail limits sending to a few hundred a day, and the reminder job stops at 250 per run. On Vercel's free plan a cron job can run only once a day, at some point within the scheduled hour.
+
+## Push notifications
+
+The same moments as the emails (a join request, a host's answer, a cancellation, the day-before reminder and the day-after "how was it?") can also arrive as a notification on a phone or computer. Each person turns it on per device on the **Me** tab, and can send themselves a test. Logging out turns it off for that device, so a shared phone never shows the last person's notifications.
+
+To set it up (optional; without it the card doesn't appear and nothing else changes):
+
+1. Run `supabase/migrations/013_push_subscriptions.sql`.
+2. Generate your own key pair. In this project's folder run `npx web-push generate-vapid-keys`. It prints a **Public Key** and a **Private Key**. Keep the private one secret; nobody else, including me, needs to see it.
+3. In Vercel → **Settings → Environment Variables**, add:
+   - `NEXT_PUBLIC_VAPID_PUBLIC_KEY`: the public key. Leave it **not** Sensitive; browsers need to read it.
+   - `VAPID_PRIVATE_KEY`: the private key. Mark it **Sensitive**.
+   - `VAPID_SUBJECT` (optional): `mailto:` plus your contact address. It defaults to `NEXT_PUBLIC_CONTACT_EMAIL`.
+   - `SUPABASE_SERVICE_ROLE_KEY` must already be set (see Email notifications).
+4. **Redeploy.** The public key is baked into the site when it's built, so it only appears after a new deployment.
+5. On each device: **Me → Push notifications on this device → Turn on**, then **Send a test notification**.
+
+**iPhone and iPad:** Apple only allows web push for sites on the Home Screen (iOS 16.4 or newer). In Safari tap Share → **Add to Home Screen**, open BayMeet from that icon, then turn notifications on. The card explains this itself when it detects it.
+
+**Nothing arrives?** The **Send a test notification** button checks each link (keys, contact address, server key, your devices, and whether the push service accepts the message) and shows which is broken. The `Daily emails:` line in Vercel's logs also reports `pushes` and `pushFailed`.
 
 ## Launch setup
 

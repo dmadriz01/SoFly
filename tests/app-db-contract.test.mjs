@@ -58,6 +58,13 @@ function analyze(source, fileName) {
     }
     return keys;
   };
+  // Which database role a call runs as, judged by the client it goes through.
+  const roleOf = (client) => {
+    const text = client ? client.getText(sf) : "";
+    if (text === "admin" || text === "createAdminClient()") return "service_role"; // bypasses the API rules
+    if (text === "createPublicClient()") return "anon";
+    return "authenticated";
+  };
   const line = (n) => `${fileName}:${sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1}`;
 
   const visit = (node) => {
@@ -67,9 +74,9 @@ function analyze(source, fileName) {
       const fromTable = ts.isCallExpression(target) && ts.isPropertyAccessExpression(target.expression) && target.expression.name.text === "from" ? str(target.arguments[0]) : null;
 
       if (["insert", "update", "upsert"].includes(method) && fromTable) {
-        ops.push({ kind: method, table: fromTable, columns: keysOf(node.arguments[0]), at: line(node) });
+        ops.push({ kind: method, table: fromTable, columns: keysOf(node.arguments[0]), role: roleOf(target.expression.expression), at: line(node) });
       } else if (method === "delete" && fromTable) {
-        ops.push({ kind: "delete", table: fromTable, at: line(node) });
+        ops.push({ kind: "delete", table: fromTable, role: roleOf(target.expression.expression), at: line(node) });
       } else if (method === "select") {
         // .from("t").select("...") or a select chained after insert/update: find the table at the chain's root
         let root = target;
@@ -80,8 +87,7 @@ function analyze(source, fileName) {
             if (root.expression.name.text === "from") {
               table = str(root.arguments[0]);
               // Reads through the cookie-less client run as `anon`; everything else as the signed-in user.
-              const client = root.expression.expression;
-              role = ts.isCallExpression(client) && client.expression.getText(sf) === "createPublicClient" ? "anon" : "authenticated";
+              role = roleOf(root.expression.expression);
               break;
             }
             root = root.expression.expression;
@@ -111,7 +117,9 @@ function analyze(source, fileName) {
 // ---- check one operation against the database ----
 async function check(op, role = "authenticated") {
   const problems = [];
-  const need = async (cond, msg) => { if (!(await cond)) problems.push(msg); };
+  // The server-only admin client bypasses the API's column and row rules, so only check that what
+  // it names exists. Everything else is judged against what its role is really granted.
+  const need = async (cond, msg) => { if (role !== "service_role" && !(await cond)) problems.push(msg); };
 
   if (op.kind === "rpc") {
     await need(fnExecutable(role, op.name), `${role} can't run function ${op.name}()`);

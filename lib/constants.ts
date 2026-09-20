@@ -44,27 +44,18 @@ export const CATEGORIES: readonly Category[] = CATEGORY_GROUPS.flatMap((g) => g.
 export const SKILL_LEVELS = ["All levels", "Beginner", "Intermediate", "Advanced"] as const;
 export type SkillLevel = (typeof SKILL_LEVELS)[number];
 
-export const AUDIENCES = ["Everyone", "Women-only"] as const;
+export const AUDIENCES = ["Everyone", "Women-only", "Men-only"] as const;
 export type Audience = (typeof AUDIENCES)[number];
 
-/**
- * Age restrictions hosts can pick. Ranges are inclusive at both ends (a 21-year-old fits
- * both 18-21 and 21-25). null/null means anyone 18+, since BayMeet is 18+ only.
- * Add a row to offer another group; the database stores plain min/max ages.
- */
-export const AGE_GROUPS: { value: string; label: string; min: number | null; max: number | null }[] = [
-  { value: "18+", label: "Anyone 18+", min: null, max: null },
-  { value: "21+", label: "21+", min: 21, max: null },
-  { value: "25+", label: "25+", min: 25, max: null },
-  { value: "30+", label: "30+", min: 30, max: null },
-  { value: "40+", label: "40+", min: 40, max: null },
-  { value: "50+", label: "50+", min: 50, max: null },
-  { value: "18-21", label: "Ages 18–21", min: 18, max: 21 },
-  { value: "21-25", label: "Ages 21–25", min: 21, max: 25 },
-  { value: "25-30", label: "Ages 25–30", min: 25, max: 30 },
-  { value: "30-40", label: "Ages 30–40", min: 30, max: 40 },
-  { value: "40-50", label: "Ages 40–50", min: 40, max: 50 },
+/** One-tap starting points for the age fields. Hosts can type any ages they like. */
+export const AGE_QUICK_PICKS: { label: string; min: string; max: string }[] = [
+  { label: "Anyone 18+", min: "", max: "" },
+  { label: "21+", min: "21", max: "" },
+  { label: "18–25", min: "18", max: "25" },
+  { label: "25–35", min: "25", max: "35" },
+  { label: "35+", min: "35", max: "" },
 ];
+
 
 // Existing values ("SF - Mission", "Oakland", "Marin", ...) are kept exactly so older events
 // still match. Cities are the 100 incorporated Bay Area cities outside San Francisco, by county.
@@ -174,7 +165,6 @@ export const isSkillLevel = (v: unknown): v is SkillLevel =>
 export const isAudience = (v: unknown): v is Audience =>
   typeof v === "string" && (AUDIENCES as readonly string[]).includes(v);
 
-export const findAgeGroup = (value: unknown) => AGE_GROUPS.find((g) => g.value === value);
 
 export const JOIN_MODES = ["open", "request"] as const;
 export type JoinMode = (typeof JOIN_MODES)[number];

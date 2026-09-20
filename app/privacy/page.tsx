@@ -77,6 +77,15 @@ export default function PrivacyPage() {
       </section>
 
       <section className="space-y-2">
+        <h2 className="text-lg font-bold">Push notifications</h2>
+        <p className="text-ink/90">
+          If you turn on push notifications, your browser gives us an address for your device so we can
+          send you notifications. We use it only for that, and we remove it when you turn notifications
+          off or log out on that device.
+        </p>
+      </section>
+
+      <section className="space-y-2">
         <h2 className="text-lg font-bold">Cookies</h2>
         <p className="text-ink/90">
           We use one essential cookie to keep you logged in. We don&rsquo;t use advertising cookies.

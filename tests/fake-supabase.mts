@@ -12,15 +12,24 @@ export function fakeAdmin(
 ) {
   const from = (table: string) => {
     const filters: ((r: Row) => boolean)[] = [];
+    let deleting = false;
     const matching = () => (data[table] ?? []).filter((r) => filters.every((f) => f(r)));
     const api = {
       select: () => api,
+      delete: () => ((deleting = true), api),
       eq: (c: string, v: unknown) => (filters.push((r) => r[c] === v), api),
       is: (c: string, v: unknown) => (filters.push((r) => (v === null ? r[c] == null : r[c] === v)), api),
       gte: (c: string, v: string) => (filters.push((r) => new Date(r[c] as string) >= new Date(v)), api),
       lt: (c: string, v: string) => (filters.push((r) => new Date(r[c] as string) < new Date(v)), api),
       maybeSingle: async () => ({ data: matching()[0] ?? null, error: null }),
-      then: (resolve: (v: { data: Row[]; error: null }) => unknown) => resolve({ data: matching(), error: null }),
+      then: (resolve: (v: { data: Row[]; error: null }) => unknown) => {
+        if (deleting) {
+          const doomed = matching();
+          data[table] = (data[table] ?? []).filter((r) => !doomed.includes(r));
+          return resolve({ data: [], error: null });
+        }
+        return resolve({ data: matching(), error: null });
+      },
     };
     return api;
   };

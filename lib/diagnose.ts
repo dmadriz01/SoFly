@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import * as email from "./email-templates";
 import { mailConfigured, sendMail, type Mail, type MailResult } from "./mailer";
+import { pushConfigured, sendPushToUser, vapidSubject, type PushOutcome, type PushPayload } from "./push";
 import { SITE_URL } from "./site";
 import { createAdminClient } from "./supabase/admin";
 import { firstName } from "./utils";
@@ -79,5 +80,74 @@ export async function diagnoseEmail(
     });
   }
 
+  return checks;
+}
+
+type PushDeps = {
+  admin?: SupabaseClient | null;
+  push?: (userId: string, payload: PushPayload) => Promise<PushOutcome>;
+  publicKeySet?: boolean;
+  privateKeySet?: boolean;
+  subject?: string | null;
+};
+
+/**
+ * Walks the push chain for one person: are the key pair and contact set up, is the server key set,
+ * how many devices are subscribed, and does a real test notification get accepted by each push service.
+ */
+export async function diagnosePush(who: { userId: string }, deps: PushDeps = {}): Promise<Check[]> {
+  const admin = deps.admin === undefined ? createAdminClient() : deps.admin;
+  const publicKeySet = deps.publicKeySet ?? Boolean(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY);
+  const privateKeySet = deps.privateKeySet ?? Boolean(process.env.VAPID_PRIVATE_KEY);
+  const subject = deps.subject === undefined ? vapidSubject() : deps.subject;
+  const checks: Check[] = [];
+
+  checks.push({
+    label: "Push public key is set up",
+    ok: publicKeySet,
+    detail: publicKeySet ? undefined : "Add NEXT_PUBLIC_VAPID_PUBLIC_KEY in Vercel, then redeploy.",
+  });
+  checks.push({
+    label: "Push private key is set up",
+    ok: privateKeySet,
+    detail: privateKeySet ? undefined : "Add VAPID_PRIVATE_KEY in Vercel, then redeploy.",
+  });
+  checks.push({
+    label: "Push contact address is set up",
+    ok: Boolean(subject),
+    detail: subject ? undefined : "Set NEXT_PUBLIC_CONTACT_EMAIL (or VAPID_SUBJECT) in Vercel, then redeploy.",
+  });
+  checks.push({
+    label: "Server key is set up",
+    ok: Boolean(admin),
+    detail: admin ? undefined : "Add SUPABASE_SERVICE_ROLE_KEY in Vercel, then redeploy.",
+  });
+
+  if (admin && publicKeySet && privateKeySet && subject) {
+    const { data: devices } = await admin.from("push_subscriptions").select("id").eq("user_id", who.userId);
+    const count = devices?.length ?? 0;
+    checks.push({
+      label: "You have a device with push turned on",
+      ok: count > 0,
+      detail: count > 0 ? `${count} ${count === 1 ? "device" : "devices"}.` : "Turn push on for this device first (the button above).",
+    });
+    if (count > 0) {
+      const push = deps.push ?? ((id, p) => sendPushToUser(admin, id, p));
+      const outcome = await push(who.userId, {
+        title: "BayMeet test",
+        body: "Push notifications work on this device.",
+        url: "/me",
+        tag: "test",
+      });
+      const okAll = outcome.sent > 0 && outcome.failed === 0;
+      checks.push({
+        label: "The push service accepted the test notification",
+        ok: okAll,
+        detail: okAll
+          ? `Sent to ${outcome.sent} ${outcome.sent === 1 ? "device" : "devices"}.${outcome.removed ? ` Removed ${outcome.removed} expired.` : ""}`
+          : outcome.firstFailure ?? (outcome.removed ? "That device had expired and was removed. Turn push on again." : "Nothing was sent."),
+      });
+    }
+  }
   return checks;
 }

@@ -1,5 +1,5 @@
+import { ageFieldProblem } from "./age";
 import {
-  findAgeGroup,
   isAudience,
   isCategory,
   isJoinMode,
@@ -21,7 +21,8 @@ export const EVENT_FIELDS = [
   "chat_url",
   "skill_level",
   "audience",
-  "age_group",
+  "age_min",
+  "age_max",
   "join_mode",
 ] as const;
 
@@ -76,7 +77,13 @@ export function validateEvent(input: Record<string, string>): EventErrors {
   if (!isSkillLevel(v("skill_level"))) errors.skill_level = "Pick a skill level.";
   if (!isAudience(v("audience"))) errors.audience = "Pick who it's for.";
   if (!isJoinMode(v("join_mode"))) errors.join_mode = "Choose who can join.";
-  if (!findAgeGroup(v("age_group"))) errors.age_group = "Pick an age group.";
+  const minProblem = ageFieldProblem(v("age_min"));
+  const maxProblem = ageFieldProblem(v("age_max"));
+  if (minProblem) errors.age_min = minProblem;
+  if (maxProblem) errors.age_max = maxProblem;
+  if (!minProblem && !maxProblem && v("age_min") !== "" && v("age_max") !== "" && Number(v("age_max")) < Number(v("age_min"))) {
+    errors.age_max = "The oldest age can't be lower than the youngest.";
+  }
 
   if (v("chat_url")) {
     const parsed = parseChatUrl(v("chat_url"));

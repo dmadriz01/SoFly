@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import * as email from "./email-templates";
 import { mailConfigured, sendMail, type Mail, type MailResult } from "./mailer";
+import { pushConfigured, sendPushToUser, type PushOutcome, type PushPayload } from "./push";
 import { SITE_URL } from "./site";
 import { createAdminClient } from "./supabase/admin";
 import { addDaysToKey, formatWhenLong, pacificDate, pacificLocalToUtc } from "./time";
@@ -14,12 +15,24 @@ import { firstName } from "./utils";
 export type Deps = {
   admin?: SupabaseClient | null;
   send?: (mail: Mail) => Promise<MailResult>;
+  push?: (userId: string, payload: PushPayload) => Promise<PushOutcome>;
+  /** Tests can force either channel on or off; otherwise it follows the real configuration. */
+  mailConfigured?: boolean;
+  pushConfigured?: boolean;
 };
 
-const use = (deps: Deps) => ({
-  admin: deps.admin === undefined ? createAdminClient() : deps.admin,
-  send: deps.send ?? sendMail,
-});
+const use = (deps: Deps) => {
+  const admin = deps.admin === undefined ? createAdminClient() : deps.admin;
+  return {
+    admin,
+    send: deps.send ?? sendMail,
+    // Push has its own consent (a person turns it on per device), so it ignores the email switch.
+    push:
+      deps.push ??
+      (async (userId: string, payload: PushPayload): Promise<PushOutcome> =>
+        admin ? sendPushToUser(admin, userId, payload) : { sent: 0, removed: 0, failed: 0 }),
+  };
+};
 
 const eventUrl = (id: string) => `${SITE_URL}/events/${id}`;
 
@@ -55,7 +68,7 @@ async function safely(label: string, work: () => Promise<void>) {
 /** A person asked to join an approval-only meetup: tell the host. */
 export function notifyHostOfRequest(eventId: string, requesterId: string, deps: Deps = {}) {
   return safely("request received", async () => {
-    const { admin, send } = use(deps);
+    const { admin, send, push } = use(deps);
     if (!admin) return;
     const { data: event } = await admin.from("events").select("title, host_id, join_mode").eq("id", eventId).maybeSingle();
     if (!event || event.join_mode !== "request" || event.host_id === requesterId) return;
@@ -64,16 +77,24 @@ export function notifyHostOfRequest(eventId: string, requesterId: string, deps: 
       recipient(admin, event.host_id),
       admin.from("profiles").select("name").eq("id", requesterId).maybeSingle(),
     ]);
-    if (!host.ok) return;
-    await send({
-      to: host.to.email,
-      ...email.requestReceived({
-        hostName: host.to.name,
-        requesterName: firstName(requester.data?.name),
-        eventTitle: event.title,
-        eventUrl: eventUrl(eventId),
-        siteUrl: SITE_URL,
-      }),
+    const requesterName = firstName(requester.data?.name);
+    if (host.ok) {
+      await send({
+        to: host.to.email,
+        ...email.requestReceived({
+          hostName: host.to.name,
+          requesterName,
+          eventTitle: event.title,
+          eventUrl: eventUrl(eventId),
+          siteUrl: SITE_URL,
+        }),
+      });
+    }
+    await push(event.host_id, {
+      title: `${requesterName} wants to join`,
+      body: event.title,
+      url: `/events/${eventId}`,
+      tag: `request-${eventId}`,
     });
   });
 }
@@ -81,14 +102,22 @@ export function notifyHostOfRequest(eventId: string, requesterId: string, deps: 
 /** The host approved or declined: tell the requester. */
 export function notifyRequestDecision(eventId: string, userId: string, approved: boolean, deps: Deps = {}) {
   return safely("request decision", async () => {
-    const { admin, send } = use(deps);
+    const { admin, send, push } = use(deps);
     if (!admin) return;
     const { data: event } = await admin.from("events").select("title").eq("id", eventId).maybeSingle();
+    if (!event) return;
     const to = await recipient(admin, userId);
-    if (!event || !to.ok) return;
-    await send({
-      to: to.to.email,
-      ...email.requestDecision({ name: to.to.name, eventTitle: event.title, approved, eventUrl: eventUrl(eventId), siteUrl: SITE_URL }),
+    if (to.ok) {
+      await send({
+        to: to.to.email,
+        ...email.requestDecision({ name: to.to.name, eventTitle: event.title, approved, eventUrl: eventUrl(eventId), siteUrl: SITE_URL }),
+      });
+    }
+    await push(userId, {
+      title: approved ? "You're in!" : `An update on ${event.title}`,
+      body: approved ? `${event.title}. Tap for the address and details.` : "The host couldn't fit you in this time.",
+      url: `/events/${eventId}`,
+      tag: `decision-${eventId}`,
     });
   });
 }
@@ -96,7 +125,7 @@ export function notifyRequestDecision(eventId: string, userId: string, approved:
 /** The host cancelled: tell everyone who was approved to go. */
 export function notifyEventCancelled(eventId: string, deps: Deps = {}) {
   return safely("event cancelled", async () => {
-    const { admin, send } = use(deps);
+    const { admin, send, push } = use(deps);
     if (!admin) return;
     const { data: event } = await admin.from("events").select("title, starts_at, host_id").eq("id", eventId).maybeSingle();
     if (!event) return;
@@ -105,16 +134,23 @@ export function notifyEventCancelled(eventId: string, deps: Deps = {}) {
     const when = formatWhenLong(event.starts_at);
     for (const g of (guests ?? []).filter((g) => g.user_id !== event.host_id).slice(0, 200)) {
       const to = await recipient(admin, g.user_id as string);
-      if (!to.ok) continue;
-      await send({
-        to: to.to.email,
-        ...email.eventCancelled({
-          name: to.to.name,
-          eventTitle: event.title,
-          when: `${when.day} at ${when.time}`,
-          eventUrl: eventUrl(eventId),
-          siteUrl: SITE_URL,
-        }),
+      if (to.ok) {
+        await send({
+          to: to.to.email,
+          ...email.eventCancelled({
+            name: to.to.name,
+            eventTitle: event.title,
+            when: `${when.day} at ${when.time}`,
+            eventUrl: eventUrl(eventId),
+            siteUrl: SITE_URL,
+          }),
+        });
+      }
+      await push(g.user_id as string, {
+        title: `Cancelled: ${event.title}`,
+        body: "The host cancelled this meetup.",
+        url: `/events/${eventId}`,
+        tag: `cancelled-${eventId}`,
       });
     }
   });
@@ -157,6 +193,10 @@ export type DailyResult = {
   failed: number;
   firstFailure?: string;
   mailConfigured: boolean;
+  /** Push notifications delivered to a device, and refused by a push service. */
+  pushes: number;
+  pushFailed: number;
+  pushConfigured: boolean;
   note?: string;
 };
 
@@ -167,7 +207,7 @@ export type DailyResult = {
  * The result says exactly what happened and why anyone was skipped, and is logged.
  */
 export async function sendDailyEmails(now = new Date(), deps: Deps = {}): Promise<DailyResult> {
-  const { admin, send } = use(deps);
+  const { admin, send, push } = use(deps);
   const result: DailyResult = {
     reminders: 0,
     feedbackRequests: 0,
@@ -175,7 +215,10 @@ export async function sendDailyEmails(now = new Date(), deps: Deps = {}): Promis
     eventsYesterday: 0,
     skipped: { noEmail: 0, optedOut: 0, lookupFailed: 0 },
     failed: 0,
-    mailConfigured: deps.send ? true : mailConfigured(),
+    mailConfigured: deps.mailConfigured ?? (deps.send ? true : mailConfigured()),
+    pushes: 0,
+    pushFailed: 0,
+    pushConfigured: deps.pushConfigured ?? (deps.push ? true : pushConfigured()),
   };
   const done = (note?: string) => {
     if (note) result.note = note;
@@ -184,7 +227,9 @@ export async function sendDailyEmails(now = new Date(), deps: Deps = {}): Promis
   };
 
   if (!admin) return done("SUPABASE_SERVICE_ROLE_KEY is not set");
-  if (!result.mailConfigured) return done("ALERT_EMAIL_USER / ALERT_EMAIL_APP_PASSWORD are not set");
+  if (!result.mailConfigured && !result.pushConfigured) {
+    return done("Neither email (ALERT_EMAIL_*) nor push (VAPID keys) is set up");
+  }
 
   const today = pacificDate(now);
   const day = (offset: number) => pacificLocalToUtc(`${addDaysToKey(today, offset)}T00:00`);
@@ -196,6 +241,7 @@ export async function sendDailyEmails(now = new Date(), deps: Deps = {}): Promis
 
   /** Look someone up and email them; returns whether it was sent. Skips and failures are counted. */
   const emailPerson = async (userId: string, build: (r: Recipient) => Omit<Mail, "to">) => {
+    if (!result.mailConfigured) return false; // email is off; push may still go out
     const found = await recipient(admin, userId);
     if (!found.ok) {
       result.skipped[found.skip]++;
@@ -208,6 +254,15 @@ export async function sendDailyEmails(now = new Date(), deps: Deps = {}): Promis
       return false;
     }
     return true;
+  };
+
+  /** A push notification to everyone's devices; counted separately from email. */
+  const pushPerson = async (userId: string, payload: PushPayload) => {
+    if (!result.pushConfigured) return;
+    const o = await push(userId, payload);
+    result.pushes += o.sent;
+    result.pushFailed += o.failed;
+    if (o.firstFailure) result.firstFailure ??= `push: ${o.firstFailure}`;
   };
 
   // Reminders: tomorrow's meetups.
@@ -237,6 +292,12 @@ export async function sendDailyEmails(now = new Date(), deps: Deps = {}): Promis
         })
       );
       if (sent) result.reminders++;
+      await pushPerson(id, {
+        title: `Tomorrow: ${event.title}`,
+        body: `${when.time} at ${event.join_mode === "request" ? place.split(",")[0] : event.venue_name}`,
+        url: `/events/${event.id}`,
+        tag: `reminder-${event.id}`,
+      });
     }
   }
 
@@ -251,6 +312,12 @@ export async function sendDailyEmails(now = new Date(), deps: Deps = {}): Promis
         email.feedbackRequest({ name: r.name, eventTitle: event.title, eventUrl: eventUrl(event.id), siteUrl: SITE_URL })
       );
       if (sent) result.feedbackRequests++;
+      await pushPerson(id, {
+        title: `How was ${event.title}?`,
+        body: "Tap to answer in one tap.",
+        url: `/events/${event.id}`,
+        tag: `feedback-${event.id}`,
+      });
     }
   }
 

@@ -2,7 +2,8 @@ export type FeedFilters = {
   category?: string;
   neighborhood?: string;
   level?: string;
-  women?: boolean;
+  /** Only meetups set for one group. Unset means all of them. */
+  audience?: "Women-only" | "Men-only";
   eligible?: boolean;
   /** Set only when someone picks a view explicitly; otherwise their remembered choice applies. */
   view?: "swipe" | "list";
@@ -14,7 +15,7 @@ export function feedHref(filters: FeedFilters) {
   if (filters.category) params.set("category", filters.category);
   if (filters.neighborhood) params.set("neighborhood", filters.neighborhood);
   if (filters.level) params.set("level", filters.level);
-  if (filters.women) params.set("women", "1");
+  if (filters.audience) params.set("audience", filters.audience === "Women-only" ? "women" : "men");
   if (filters.eligible) params.set("eligible", "1");
   if (filters.view) params.set("view", filters.view);
   const qs = params.toString();

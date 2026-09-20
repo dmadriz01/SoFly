@@ -57,7 +57,7 @@ export default function GuidelinesPage() {
           <li>Be kind and inclusive. No harassment, discrimination, or unwanted advances.</li>
           <li>BayMeet is for people 18 and older.</li>
           <li>
-            Respect who a meetup is for. If it&rsquo;s marked Women-only or has an age range and that
+            Respect who a meetup is for. If it&rsquo;s marked Women-only or Men-only, or has an age range, and that
             isn&rsquo;t you, please don&rsquo;t join.
           </li>
         </ul>

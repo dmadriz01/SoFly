@@ -1,10 +1,11 @@
 // Unit tests for the pure logic (no network, no database). Run with `npm run test:unit`.
 // Uses Node's built-in TypeScript support, so it needs Node 22.6 or newer.
-import { ageLabel, ageOn, parseBirthDate, withinAgeRange } from "../lib/age.ts";
+import { ageFieldProblem, ageLabel, ageOn, parseBirthDate, resolveAgeRange, withinAgeRange } from "../lib/age.ts";
 import { parseChatUrl } from "../lib/chat.ts";
 import * as email from "../lib/email-templates.ts";
 import { buildIcs } from "../lib/ics.ts";
 import { updateOrInsert } from "../lib/supabase/save.ts";
+import { validateEvent } from "../lib/validation.ts";
 import { addDaysToKey, pacificDate, pacificLocalToUtc } from "../lib/time.ts";
 
 let passed = 0;
@@ -24,6 +25,33 @@ t("Feb 29 in a non-leap year rejected", parseBirthDate("2001", "2", "29") === nu
 t("valid birthday", parseBirthDate("1995", "7", "4") === "1995-07-04");
 t("age ranges include both ends", withinAgeRange(21, 18, 21) && withinAgeRange(21, 21, 25) && !withinAgeRange(22, 18, 21));
 t("age labels", ageLabel(null, null) === null && ageLabel(21, null) === "21+" && ageLabel(21, 25) === "21–25");
+
+// ---- custom age ranges ----
+const range = (a: string, b: string) => JSON.stringify(resolveAgeRange(a, b));
+t("ages: both blank = no restriction", range("", "") === '{"min":null,"max":null}');
+t("ages: from only", range("21", "") === '{"min":21,"max":null}');
+t("ages: 'from 18' with no limit is the same as none", range("18", "") === '{"min":null,"max":null}');
+t("ages: to only starts at 18", range("", "30") === '{"min":18,"max":30}');
+t("ages: any custom range", range("27", "34") === '{"min":27,"max":34}');
+t("ages: 18 to 30 is kept", range("18", "30") === '{"min":18,"max":30}');
+t("ages: whitespace is ignored", range(" 25 ", " 35 ") === '{"min":25,"max":35}');
+t("age field: blank is fine", ageFieldProblem("") === undefined && ageFieldProblem("  ") === undefined);
+t("age field: 18 and 120 are fine", ageFieldProblem("18") === undefined && ageFieldProblem("120") === undefined);
+t("age field: 17, 121, text and decimals are rejected", ["17", "121", "abc", "25.5", "-30"].every((v) => ageFieldProblem(v) !== undefined));
+{
+  const good = { title: "Run", category: "Running", neighborhood: "Oakland", venue_name: "Park", address: "1 Main St", starts_at: "2030-01-01T10:00", max_spots: "10", description: "", chat_url: "", skill_level: "All levels", audience: "Everyone", age_min: "", age_max: "", join_mode: "open" };
+  const errs = (o: Record<string, string>) => validateEvent({ ...good, ...o });
+  t("form: a normal event has no errors", Object.keys(errs({})).length === 0, JSON.stringify(errs({})));
+  t("form: ages 25 to 35 are accepted", Object.keys(errs({ age_min: "25", age_max: "35" })).length === 0);
+  t("form: only a minimum is accepted", Object.keys(errs({ age_min: "30" })).length === 0);
+  t("form: only a maximum is accepted", Object.keys(errs({ age_max: "40" })).length === 0);
+  t("form: an oldest age below the youngest is rejected", "age_max" in errs({ age_min: "30", age_max: "25" }));
+  t("form: the same age for both is allowed", Object.keys(errs({ age_min: "30", age_max: "30" })).length === 0);
+  t("form: under 18 is rejected", "age_min" in errs({ age_min: "17" }));
+  t("form: a non-number is rejected", "age_max" in errs({ age_max: "old" }));
+  t("form: Everyone, Women-only and Men-only are all valid", ["Everyone", "Women-only", "Men-only"].every((a) => !("audience" in errs({ audience: a }))));
+  t("form: any other audience is rejected", "audience" in errs({ audience: "Nonbinary-only" }));
+}
 
 // ---- chat links (only known apps; no look-alike hosts) ----
 t("WhatsApp link accepted", "url" in parseChatUrl("https://chat.whatsapp.com/AbC123"));

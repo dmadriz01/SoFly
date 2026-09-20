@@ -13,6 +13,9 @@ export function EventTags({ event }: { event: Rules }) {
       {event.audience === "Women-only" && (
         <span className={`${tag} bg-accent-soft text-accent-dark`}>Women-only</span>
       )}
+      {event.audience === "Men-only" && (
+        <span className={`${tag} bg-sky-100 text-sky-900`}>Men-only</span>
+      )}
       {event.join_mode === "request" && (
         <span className={`${tag} border border-line bg-white text-ink`}>Approval required</span>
       )}

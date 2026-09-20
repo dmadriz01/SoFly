@@ -181,6 +181,39 @@ async function behaviour({ db, U, oldEvent }, { migrated }) {
   r = await as("dee", `insert into public.rsvps (event_id,user_id) values ($1,$2)`, [E2, U.dee]);
   ok("age 38 blocked from 21-25", failsWith(r, "age requirement"), JSON.stringify(r));
 
+  // ---- audience and custom age ranges (event on 2027-01-15: ann is 26, bob 21, cy 31, dee 38) ----
+  const insertAudience = (audience) => as("host", `insert into public.events (host_id,title,category,venue_name,address,neighborhood,starts_at,max_spots,audience) values ($1,'aud','Yoga','v','a','Oakland','2027-01-15T20:00:00Z',5,$2) returning id`, [U.host, audience]);
+  for (const a of ["Everyone", "Women-only", "Men-only"]) {
+    r = await insertAudience(a);
+    ok(`an event can be set for "${a}"`, !r.error, JSON.stringify(r));
+  }
+  r = await insertAudience("Nonbinary-only");
+  ok("any other audience is rejected", failsWith(r, "events_audience_check"), JSON.stringify(r));
+  r = await as("host", `update public.events set audience='Men-only' where id=$1`, [E1]);
+  ok("a host can change who an event is for", !r.error && r.n === 1, JSON.stringify(r));
+
+  const E30_35 = await mkEvent("host", { title: "30-35", max: 5, amin: 30, amax: 35 });
+  r = await as("cy", `insert into public.rsvps (event_id,user_id) values ($1,$2)`, [E30_35, U.cy]);
+  ok("custom range 30-35: a 31-year-old can join", !r.error, JSON.stringify(r));
+  r = await as("ann", `insert into public.rsvps (event_id,user_id) values ($1,$2)`, [E30_35, U.ann]);
+  ok("...a 26-year-old cannot", failsWith(r, "age requirement"), JSON.stringify(r));
+  r = await as("dee", `insert into public.rsvps (event_id,user_id) values ($1,$2)`, [E30_35, U.dee]);
+  ok("...and a 38-year-old cannot", failsWith(r, "age requirement"), JSON.stringify(r));
+  const E26 = await mkEvent("host", { title: "26 exactly", max: 5, amin: 26, amax: 26 });
+  r = await as("ann", `insert into public.rsvps (event_id,user_id) values ($1,$2)`, [E26, U.ann]);
+  ok("a single-age range (26 to 26) admits exactly that age", !r.error, JSON.stringify(r));
+  r = await as("cy", `insert into public.rsvps (event_id,user_id) values ($1,$2)`, [E26, U.cy]);
+  ok("...and nobody else", failsWith(r, "age requirement"), JSON.stringify(r));
+  const E_ONLY_MAX = await mkEvent("host", { title: "18-30", max: 5, amin: 18, amax: 30 });
+  r = await as("bob", `insert into public.rsvps (event_id,user_id) values ($1,$2)`, [E_ONLY_MAX, U.bob]);
+  ok("an 18-to-30 range admits a 21-year-old", !r.error, JSON.stringify(r));
+  r = await as("cy", `insert into public.rsvps (event_id,user_id) values ($1,$2)`, [E_ONLY_MAX, U.cy]);
+  ok("...but not a 31-year-old", failsWith(r, "age requirement"), JSON.stringify(r));
+  r = await as("host", `insert into public.events (host_id,title,category,venue_name,address,neighborhood,starts_at,max_spots,age_min,age_max) values ($1,'x','Yoga','v','a','Oakland','2027-01-15T20:00:00Z',5,40,30)`, [U.host]);
+  ok("a range where the oldest is below the youngest is rejected", failsWith(r, "events_age_range_check"), JSON.stringify(r));
+  r = await as("host", `insert into public.events (host_id,title,category,venue_name,address,neighborhood,starts_at,max_spots,age_min) values ($1,'x','Yoga','v','a','Oakland','2027-01-15T20:00:00Z',5,17)`, [U.host]);
+  ok("a minimum under 18 is rejected", failsWith(r, "events_age_range_check"), JSON.stringify(r));
+
   // ---- request to join ----
   const E3 = await mkEvent("host", { title: "dinner", max: 2, mode: "request", venue: "Shared after approval", addr: "Oakland" });
   await as("host", `insert into public.event_locations (event_id,venue_name,address) values ($1,'Secret Bistro','99 Hidden Ln')`, [E3]);
@@ -358,6 +391,26 @@ async function behaviour({ db, U, oldEvent }, { migrated }) {
   ok("email settings are private", sees(r) === 0, JSON.stringify(r));
   r = await as("anon", `select * from public.user_settings`);
   ok("anon cannot read email settings", !!r.error || sees(r) === 0, JSON.stringify(r));
+
+  // ---- push subscriptions (devices that turned on push notifications) ----
+  // The server adds these with the service key (the "postgres" role stands in for it here).
+  await db.query(`insert into public.push_subscriptions (user_id,endpoint,p256dh,auth) values ($1,'https://push.example/ann-phone','key1','auth1'),($1,'https://push.example/ann-laptop','key2','auth2'),($2,'https://push.example/bob-phone','key3','auth3')`, [U.ann, U.bob]);
+  r = await as("ann", `select endpoint from public.push_subscriptions order by endpoint`);
+  ok("a person sees only their own devices", sees(r) === 2 && r.rows.every((x) => x.endpoint.includes("ann")), JSON.stringify(r));
+  r = await as("anon", `select * from public.push_subscriptions`);
+  ok("anon cannot see anyone's devices", !!r.error || sees(r) === 0, JSON.stringify(r));
+  r = await as("ann", `insert into public.push_subscriptions (user_id,endpoint,p256dh,auth) values ($1,'https://push.example/fake','k','a')`, [U.ann]);
+  ok("a client cannot add a device itself (only the server can)", denied(r), JSON.stringify(r));
+  r = await as("ann", `update public.push_subscriptions set user_id=$1 where endpoint='https://push.example/ann-phone'`, [U.bob]);
+  ok("a device cannot be handed to someone else", denied(r), JSON.stringify(r));
+  r = await as("bob", `delete from public.push_subscriptions where endpoint='https://push.example/ann-phone'`);
+  ok("nobody can remove someone else's device", !!r.error || r.n === 0, JSON.stringify(r));
+  r = await as("ann", `delete from public.push_subscriptions where endpoint='https://push.example/ann-laptop'`);
+  ok("a person can turn off one of their own devices", !r.error && r.n === 1, JSON.stringify(r));
+  r = await as("postgres", `insert into public.push_subscriptions (user_id,endpoint,p256dh,auth) values ($1,'https://push.example/ann-phone','x','y')`, [U.ann]);
+  ok("the same device can't be registered twice", !!r.error, JSON.stringify(r));
+  r = await as("postgres", `insert into public.push_subscriptions (user_id,endpoint,p256dh,auth) values ($1,$2,'x','y')`, [U.ann, "https://push.example/" + "x".repeat(2000)]);
+  ok("absurdly long device addresses are rejected", !!r.error, JSON.stringify(r));
 
   const EP = await mkEvent("host", { title: "pass me", max: 5 });
   r = await as("ann", `insert into public.event_passes (user_id,event_id) values ($1,$2)`, [U.ann, EP]);

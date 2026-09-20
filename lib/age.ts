@@ -31,3 +31,26 @@ export function ageLabel(min: number | null, max: number | null) {
   if (max == null) return `${min}+`;
   return `${min}–${max}`;
 }
+
+export const MAX_AGE = 120;
+
+/** Whether a typed age is a whole number in 18-120. Blank is fine (it means "no limit"). */
+export function ageFieldProblem(value: string): string | undefined {
+  if (value.trim() === "") return undefined;
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < MIN_AGE || n > MAX_AGE) return `Enter a whole number from ${MIN_AGE} to ${MAX_AGE}, or leave it blank.`;
+  return undefined;
+}
+
+/**
+ * Turn the two age boxes into the range stored on the event. Blank means "no limit". Because
+ * BayMeet is 18+ only, "from 18" with no upper limit is the same as no restriction, and a limit
+ * with no start begins at 18. Assumes the values already passed ageFieldProblem.
+ */
+export function resolveAgeRange(minText: string, maxText: string): { min: number | null; max: number | null } {
+  const min = minText.trim() === "" ? null : Number(minText);
+  const max = maxText.trim() === "" ? null : Number(maxText);
+  if (min === null && max === null) return { min: null, max: null };
+  if (max === null) return min === MIN_AGE ? { min: null, max: null } : { min, max: null };
+  return { min: min ?? MIN_AGE, max };
+}

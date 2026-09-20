@@ -71,7 +71,7 @@ create table public.events (
   join_mode     text not null default 'open' check (join_mode in ('open', 'request')),
   skill_level   text not null default 'All levels'
                   check (skill_level in ('All levels', 'Beginner', 'Intermediate', 'Advanced')),
-  audience      text not null default 'Everyone' check (audience in ('Everyone', 'Women-only')),
+  audience      text not null default 'Everyone' check (audience in ('Everyone', 'Women-only', 'Men-only')),
   -- Inclusive age range. null/null = anyone 18+ (BayMeet is 18+ only).
   age_min       int,
   age_max       int,
@@ -159,6 +159,17 @@ create table public.meetup_feedback (
   primary key (event_id, user_id)
 );
 
+-- A device that has turned on push notifications. Added only by the server (which checks who is
+-- asking), so a person can see and remove their own devices but never add or edit one.
+create table public.push_subscriptions (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null references public.profiles (id) on delete cascade,
+  endpoint    text not null unique check (char_length(endpoint) <= 2000),
+  p256dh      text not null check (char_length(p256dh) <= 200),
+  auth        text not null check (char_length(auth) <= 100),
+  created_at  timestamptz not null default now()
+);
+
 -- Reports about an event. Write-only from the app; you read them in the dashboard.
 create table public.reports (
   id           uuid primary key default gen_random_uuid(),
@@ -182,6 +193,7 @@ create index rsvps_event_status_idx   on public.rsvps (event_id, status);
 create index rsvps_user_id_idx        on public.rsvps (user_id);
 create index event_passes_event_id_idx on public.event_passes (event_id);
 create index meetup_feedback_user_id_idx on public.meetup_feedback (user_id);
+create index push_subscriptions_user_id_idx on public.push_subscriptions (user_id);
 create index reports_reporter_id_idx  on public.reports (reporter_id);
 create index reports_created_at_idx   on public.reports (created_at desc);
 
@@ -511,6 +523,7 @@ alter table public.rsvps            enable row level security;
 alter table public.rsvp_notes       enable row level security;
 alter table public.event_passes     enable row level security;
 alter table public.meetup_feedback  enable row level security;
+alter table public.push_subscriptions enable row level security;
 alter table public.reports          enable row level security;
 
 -- profiles: public to read, editable by their owner.
@@ -550,6 +563,12 @@ create policy "users manage their own settings"
 
 create policy "guests manage their own feedback"
   on public.meetup_feedback for all
+  to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
+
+create policy "users see and remove their own devices"
+  on public.push_subscriptions for all
   to authenticated
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
@@ -668,7 +687,7 @@ grant select on public.profiles, public.events, public.rsvps to anon, authentica
 -- Reads that need a login.
 grant select on
   public.profile_private, public.user_interests, public.user_settings, public.event_passes,
-  public.meetup_feedback,
+  public.meetup_feedback, public.push_subscriptions,
   public.rsvp_notes, public.event_locations, public.event_chat_links
   to authenticated;
 
@@ -683,6 +702,7 @@ grant insert, delete on public.event_passes to authenticated;
 grant insert (event_id, user_id, would_join_again), update (would_join_again)
   on public.meetup_feedback to authenticated;
 grant delete on public.meetup_feedback to authenticated;
+grant delete on public.push_subscriptions to authenticated;
 
 grant insert (host_id, title, category, description, venue_name, address, neighborhood,
               starts_at, max_spots, join_mode, skill_level, audience, age_min, age_max)

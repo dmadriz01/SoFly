@@ -4,14 +4,16 @@ import { waitUntil } from "@vercel/functions";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { updateOrInsert } from "@/lib/supabase/save";
 import { sendReportAlert } from "@/lib/alerts";
-import { diagnoseEmail, type Check } from "@/lib/diagnose";
+import { diagnoseEmail, diagnosePush, type Check } from "@/lib/diagnose";
 import { parseChatUrl } from "@/lib/chat";
-import { MIN_AGE, ageOn, parseBirthDate } from "@/lib/age";
-import { HIDDEN_VENUE, REPORT_REASONS, findAgeGroup, isCategory } from "@/lib/constants";
+import { MIN_AGE, ageOn, parseBirthDate, resolveAgeRange } from "@/lib/age";
+import { HIDDEN_VENUE, REPORT_REASONS, isCategory } from "@/lib/constants";
 import { notifyEventCancelled, notifyHostOfRequest, notifyRequestDecision } from "@/lib/notify";
 import { getBirthDate } from "@/lib/profile";
+import { isPushEndpoint, pushConfigured } from "@/lib/push";
 import { pacificDate, pacificLocalToUtc } from "@/lib/time";
 import { safeNext } from "@/lib/utils";
 import {
@@ -41,7 +43,7 @@ export async function createEvent(formData: FormData): Promise<CreateEventResult
   const errors = validateEvent(input);
   if (Object.keys(errors).length > 0) return { errors };
 
-  const ageGroup = findAgeGroup(input.age_group)!;
+  const ageRange = resolveAgeRange(input.age_min, input.age_max);
   // Request-to-join events keep the real venue and address private (see event_locations).
   const isRequest = input.join_mode === "request";
 
@@ -60,8 +62,8 @@ export async function createEvent(formData: FormData): Promise<CreateEventResult
       description: input.description,
       skill_level: input.skill_level,
       audience: input.audience,
-      age_min: ageGroup.min,
-      age_max: ageGroup.max,
+      age_min: ageRange.min,
+      age_max: ageRange.max,
     })
     .select("id")
     .single();
@@ -511,4 +513,70 @@ export async function sendTestEmail(): Promise<{ checks?: Check[]; error?: strin
 
   const { data: profile } = await supabase.from("profiles").select("name").eq("id", user.id).maybeSingle();
   return { checks: await diagnoseEmail({ userId: user.id, userEmail: user.email, name: profile?.name ?? "" }) };
+}
+
+/** Remember a device for push notifications. Done by the server, which checks who is really asking. */
+export async function savePushSubscription(device: {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+}): Promise<{ error?: string }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Please log in." };
+
+  if (
+    typeof device?.endpoint !== "string" ||
+    typeof device?.p256dh !== "string" ||
+    typeof device?.auth !== "string" ||
+    !isPushEndpoint(device.endpoint) ||
+    device.p256dh.length > 200 ||
+    device.auth.length > 100
+  ) {
+    return { error: "That device isn't supported." };
+  }
+
+  const admin = createAdminClient();
+  if (!admin || !pushConfigured()) return { error: "Push notifications aren't set up on the server yet." };
+
+  // Keyed by the device's address, so a phone that changes hands follows whoever is signed in.
+  const { error } = await admin
+    .from("push_subscriptions")
+    .upsert(
+      { user_id: user.id, endpoint: device.endpoint, p256dh: device.p256dh, auth: device.auth },
+      { onConflict: "endpoint" }
+    );
+  if (error) return { error: "Couldn't turn push on. Please try again." };
+  return {};
+}
+
+/** Forget a device. The database only lets people remove their own. */
+export async function removePushSubscription(endpoint: string): Promise<{ error?: string }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return {};
+  const { error } = await supabase.from("push_subscriptions").delete().eq("endpoint", endpoint);
+  if (error) return { error: "Couldn't turn push off. Please try again." };
+  return {};
+}
+
+const lastPushTest = new Map<string, number>();
+
+/** Checks every link of the push chain and sends a real test notification to the signed-in person's devices. */
+export async function sendTestPush(): Promise<{ checks?: Check[]; error?: string }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Please log in." };
+
+  const now = Date.now();
+  if (now - (lastPushTest.get(user.id) ?? 0) < 15_000) return { error: "Please wait a few seconds before trying again." };
+  lastPushTest.set(user.id, now);
+
+  return { checks: await diagnosePush({ userId: user.id }) };
 }

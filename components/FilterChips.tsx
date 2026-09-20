@@ -18,13 +18,20 @@ export function FilterChips({
 }) {
   return (
     <div className="flex flex-wrap gap-2">
-      <Link
-        href={feedHref({ ...filters, women: !filters.women })}
-        className={chip(Boolean(filters.women))}
-        aria-pressed={Boolean(filters.women)}
-      >
-        {filters.women ? "✓ " : ""}Women-only
-      </Link>
+      {(["Women-only", "Men-only"] as const).map((group) => {
+        const on = filters.audience === group;
+        return (
+          <Link
+            key={group}
+            href={feedHref({ ...filters, audience: on ? undefined : group })}
+            className={chip(on)}
+            aria-pressed={on}
+          >
+            {on ? "✓ " : ""}
+            {group}
+          </Link>
+        );
+      })}
       {showEligible && (
         <Link
           href={feedHref({ ...filters, eligible: !filters.eligible })}

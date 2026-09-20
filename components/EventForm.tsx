@@ -4,7 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { createEvent } from "@/app/actions";
 import { CHAT_APPS_HINT } from "@/lib/chat";
 import {
-  AGE_GROUPS,
+  AGE_QUICK_PICKS,
   AUDIENCES,
   CATEGORY_GROUPS,
   REQUEST_BY_DEFAULT,
@@ -54,6 +54,8 @@ export function EventForm() {
   const [pending, startTransition] = useTransition();
   const [joinMode, setJoinMode] = useState<"open" | "request">("open");
   const joinTouched = useRef(false);
+  const [ageMin, setAgeMin] = useState("");
+  const [ageMax, setAgeMax] = useState("");
 
   const cls = (name: EventField) => `field ${errors[name] ? "field-error" : ""}`;
   const aria = (name: EventField) => ({
@@ -170,7 +172,7 @@ export function EventForm() {
         </select>
       </Field>
 
-      <div className="grid gap-5 sm:grid-cols-3">
+      <div className="grid gap-5 sm:grid-cols-2">
         <Field label="Skill level" name="skill_level" error={errors.skill_level}>
           <select
             id="skill_level"
@@ -201,26 +203,92 @@ export function EventForm() {
             ))}
           </select>
         </Field>
-        <Field label="Ages" name="age_group" error={errors.age_group}>
-          <select
-            id="age_group"
-            name="age_group"
-            defaultValue="18+"
-            className={cls("age_group")}
-            {...aria("age_group")}
-          >
-            {AGE_GROUPS.map((g) => (
-              <option key={g.value} value={g.value}>
-                {g.label}
-              </option>
-            ))}
-          </select>
-        </Field>
       </div>
+
+      <fieldset>
+        <legend className="mb-1.5 block text-sm font-semibold">Ages</legend>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label htmlFor="age_min" className="mb-1 block text-xs font-medium text-muted">
+              From
+            </label>
+            <input
+              id="age_min"
+              name="age_min"
+              type="number"
+              inputMode="numeric"
+              min={18}
+              max={120}
+              step={1}
+              value={ageMin}
+              onChange={(e) => setAgeMin(e.target.value)}
+              placeholder="18"
+              className={cls("age_min")}
+              {...aria("age_min")}
+            />
+            {errors.age_min && (
+              <p id="age_min-error" className="mt-1 text-sm text-red-600">
+                {errors.age_min}
+              </p>
+            )}
+          </div>
+          <div>
+            <label htmlFor="age_max" className="mb-1 block text-xs font-medium text-muted">
+              To
+            </label>
+            <input
+              id="age_max"
+              name="age_max"
+              type="number"
+              inputMode="numeric"
+              min={18}
+              max={120}
+              step={1}
+              value={ageMax}
+              onChange={(e) => setAgeMax(e.target.value)}
+              placeholder="No limit"
+              className={cls("age_max")}
+              {...aria("age_max")}
+            />
+            {errors.age_max && (
+              <p id="age_max-error" className="mt-1 text-sm text-red-600">
+                {errors.age_max}
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {AGE_QUICK_PICKS.map((pick) => {
+            const active = ageMin === pick.min && ageMax === pick.max;
+            return (
+              <button
+                key={pick.label}
+                type="button"
+                onClick={() => {
+                  setAgeMin(pick.min);
+                  setAgeMax(pick.max);
+                }}
+                aria-pressed={active}
+                className={`tap rounded-full border px-3.5 text-sm font-medium transition ${
+                  active
+                    ? "border-accent bg-accent-soft text-accent-dark"
+                    : "border-line bg-white text-ink hover:border-accent/50"
+                }`}
+              >
+                {pick.label}
+              </button>
+            );
+          })}
+        </div>
+        <p className="mt-2 text-xs text-muted">
+          Type any ages, or tap a shortcut. Leave a box blank for no limit. BayMeet is 18+ only.
+        </p>
+      </fieldset>
       <p className="-mt-2 text-xs text-muted">
         Ages come from the birthday each person enters when they sign up, and BayMeet can&rsquo;t
         verify them, so for 21+ events at a venue please check ID at the door. BayMeet also can&rsquo;t
-        verify gender; &ldquo;Women-only&rdquo; sets expectations for who should join.
+        verify gender; &ldquo;Women-only&rdquo; and &ldquo;Men-only&rdquo; set expectations for who
+        should join.
       </p>
 
       <Field label="Venue name" name="venue_name" error={errors.venue_name}>

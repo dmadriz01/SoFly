@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { signOut } from "@/app/actions";
 import { EmailSettings } from "@/components/EmailSettings";
+import { LogoutButton } from "@/components/LogoutButton";
+import { PushSettings } from "@/components/PushSettings";
 import { FeedbackPrompt } from "@/components/FeedbackPrompt";
 import { EventCard } from "@/components/EventCard";
 import { NextUp } from "@/components/NextUp";
@@ -170,9 +171,7 @@ export default async function MePage() {
           <h1 className="text-2xl font-bold tracking-tight">My meetups</h1>
           <p className="mt-1 break-all text-sm text-muted">{user.email}</p>
         </div>
-        <form action={signOut}>
-          <button className="btn-secondary !px-4 !py-2 text-sm">Log out</button>
-        </form>
+        <LogoutButton />
       </div>
 
       {soon && (
@@ -226,7 +225,10 @@ export default async function MePage() {
 
       <section>
         <h2 className="mb-3 text-lg font-bold">Notifications</h2>
-        <EmailSettings initial={emailsOn} />
+        <div className="space-y-3">
+          <EmailSettings initial={emailsOn} />
+          <PushSettings />
+        </div>
       </section>
     </div>
   );

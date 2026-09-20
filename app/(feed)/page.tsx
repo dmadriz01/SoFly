@@ -37,7 +37,13 @@ export default async function FeedPage({
     category: isCategory(rawCategory) ? rawCategory : undefined,
     neighborhood: isNeighborhood(rawNeighborhood) ? rawNeighborhood : undefined,
     level: isSkillLevel(rawLevel) && rawLevel !== "All levels" ? rawLevel : undefined,
-    women: one(searchParams.women) === "1",
+    // ?women=1 is the older form of this link; keep it working.
+    audience:
+      one(searchParams.audience) === "men"
+        ? "Men-only"
+        : one(searchParams.audience) === "women" || one(searchParams.women) === "1"
+          ? "Women-only"
+          : undefined,
     eligible: one(searchParams.eligible) === "1",
     view: ["swipe", "list"].includes(one(searchParams.view) ?? "")
       ? (one(searchParams.view) as "swipe" | "list")
@@ -66,7 +72,7 @@ export default async function FeedPage({
   if (filters.neighborhood) query = query.eq("neighborhood", filters.neighborhood);
   // "Beginner" also matches all-levels events, which welcome beginners too.
   if (filters.level) query = query.in("skill_level", [filters.level, "All levels"]);
-  if (filters.women) query = query.eq("audience", "Women-only");
+  if (filters.audience) query = query.eq("audience", filters.audience);
 
   const { data, error } = await query;
   const fitsAge = (e: EventWithCount) =>
@@ -77,7 +83,7 @@ export default async function FeedPage({
   if (filters.eligible && birthDate) events = events.filter(fitsAge);
 
   const filtered = Boolean(
-    filters.category || filters.neighborhood || filters.level || filters.women || filters.eligible
+    filters.category || filters.neighborhood || filters.level || filters.audience || filters.eligible
   );
   // Names of approved guests, for open events only (approval-only events keep guest lists private).
   const goingNames = (e: EventWithHost) =>
@@ -159,7 +165,7 @@ export default async function FeedPage({
         requestMode: e.join_mode === "request",
         matchesInterests: matchesInterests(e),
         tags: [
-          e.audience === "Women-only" ? "Women-only" : null,
+          e.audience !== "Everyone" ? e.audience : null,
           e.skill_level !== "All levels" ? e.skill_level : null,
           age ? (e.age_max == null ? age : `Ages ${age}`) : null,
           e.join_mode === "request" ? "Approval required" : null,

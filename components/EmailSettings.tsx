@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { sendTestEmail, setEmailNotifications } from "@/app/actions";
 import type { Check } from "@/lib/diagnose";
+import { CheckList } from "./CheckList";
 
 /** One switch for all of BayMeet's emails. Login codes are always sent. */
 export function EmailSettings({ initial }: { initial: boolean }) {
@@ -70,21 +71,7 @@ export function EmailSettings({ initial }: { initial: boolean }) {
           {testing ? "Checking…" : "Send me a test email"}
         </button>
         {testError && <p className="mt-2 text-sm text-red-600">{testError}</p>}
-        {checks && (
-          <ul className="mt-3 space-y-2 text-sm" aria-live="polite">
-            {checks.map((c) => (
-              <li key={c.label} className="flex gap-2">
-                <span aria-hidden className={c.ok ? "text-emerald-600" : "text-red-600"}>
-                  {c.ok ? "✓" : "✗"}
-                </span>
-                <span>
-                  <span className="font-medium">{c.label}</span>
-                  {c.detail && <span className="block text-muted">{c.detail}</span>}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
+        {checks && <CheckList checks={checks} />}
       </div>
     </div>
   );
