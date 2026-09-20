@@ -23,7 +23,7 @@ export default async function LoginPage({
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Access BayMeet</h1>
         <p className="mt-1 text-muted">
-          No password needed for Account. We&rsquo;ll email you a code to log in.
+          No password needed for your account. We&rsquo;ll email you a code to log in.
         </p>
       </div>
       <LoginForm
