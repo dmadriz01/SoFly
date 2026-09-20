@@ -5,6 +5,13 @@
 @layer base {
   html {
     -webkit-tap-highlight-color: transparent;
+    text-size-adjust: 100%;
+  }
+  /* Visible keyboard focus everywhere (inputs have their own ring). */
+  :where(a, button, summary, [tabindex]):focus-visible {
+    outline: 2px solid theme("colors.accent.DEFAULT");
+    outline-offset: 2px;
+    border-radius: 0.5rem;
   }
   body {
     @apply bg-cream text-ink antialiased;
@@ -12,6 +19,19 @@
 }
 
 @layer components {
+  /* Apple's minimum comfortable touch target: 44pt. */
+  .tap {
+    @apply inline-flex min-h-[2.75rem] items-center justify-center;
+  }
+  .skeleton {
+    background: linear-gradient(90deg, #f1e9df 25%, #f8f2ea 37%, #f1e9df 63%);
+    background-size: 400% 100%;
+    animation: shimmer 1.4s ease infinite;
+    @apply rounded-xl;
+  }
+  .fade-up {
+    animation: fade-up 0.35s ease both;
+  }
   .field {
     @apply w-full rounded-xl border border-line bg-white px-3.5 py-3 text-base text-ink placeholder:text-muted/70 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20;
   }
@@ -38,5 +58,24 @@
   }
   .no-scrollbar::-webkit-scrollbar {
     display: none;
+  }
+}
+
+@keyframes shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Respect the "reduce motion" setting: no movement, instant state changes. */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

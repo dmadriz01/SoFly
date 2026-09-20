@@ -27,6 +27,7 @@ export default async function WelcomePage({ searchParams }: { searchParams: { ne
     return (
       <div className="mx-auto max-w-md space-y-6 pt-4">
         <div>
+          <p className="mb-1 text-xs font-bold uppercase tracking-wide text-accent-dark">Step 2 of 2</p>
           <h1 className="text-2xl font-bold tracking-tight">What are you into?</h1>
           <p className="mt-1 text-muted">
             Pick a few and we&rsquo;ll put meetups you&rsquo;ll like first. You can change these any
@@ -47,6 +48,7 @@ export default async function WelcomePage({ searchParams }: { searchParams: { ne
   return (
     <div className="mx-auto max-w-sm space-y-6 pt-4">
       <div>
+        <p className="mb-1 text-xs font-bold uppercase tracking-wide text-accent-dark">Step 1 of 2</p>
         <h1 className="text-2xl font-bold tracking-tight">Welcome to BayMeet</h1>
         <p className="mt-1 text-muted">
           Two quick things before you join in. Some meetups have age requirements, so we need your

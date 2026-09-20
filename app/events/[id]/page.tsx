@@ -3,7 +3,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CategoryBadge } from "@/components/CategoryBadge";
 import { DeleteEventButton } from "@/components/DeleteEventButton";
+import { EventActions } from "@/components/EventActions";
+import { Avatar } from "@/components/Avatar";
 import { EventTags } from "@/components/EventTags";
+import { HostCard } from "@/components/HostCard";
 import { GroupChat } from "@/components/GroupChat";
 import { ManageEvent } from "@/components/ManageEvent";
 import { ReportEvent } from "@/components/ReportEvent";
@@ -23,7 +26,7 @@ export const dynamic = "force-dynamic";
 type Status = "pending" | "approved" | "declined";
 
 type Detail = EventRow & {
-  host: { name: string } | null;
+  host: { name: string; created_at: string } | null;
   // Row-level security decides which of these each viewer can see.
   rsvps: {
     user_id: string;
@@ -61,7 +64,7 @@ export default async function EventPage({ params }: { params: { id: string } }) 
   const [{ data }, userResult] = await Promise.all([
     supabase
       .from("events")
-      .select("*, host:profiles!host_id(name), rsvps(user_id, created_at, status, profiles(name))")
+      .select("*, host:profiles!host_id(name, created_at), rsvps(user_id, created_at, status, profiles(name))")
       .eq("id", params.id)
       .maybeSingle(),
     supabase.auth.getUser(),
@@ -139,6 +142,16 @@ export default async function EventPage({ params }: { params: { id: string } }) 
         }))
     : [];
 
+  // The host's track record: meetups that already happened, and how many people came.
+  const { data: hostHistory } = await supabase
+    .from("events")
+    .select("spots_taken")
+    .eq("host_id", event.host_id)
+    .is("cancelled_at", null)
+    .lt("starts_at", new Date().toISOString());
+  const hostedCount = hostHistory?.length ?? 0;
+  const hostedJoined = (hostHistory ?? []).reduce((sum, e) => sum + (e.spots_taken as number), 0);
+
   const when = formatWhenLong(event.starts_at);
   const cancelled = Boolean(event.cancelled_at);
   const ended = new Date(event.starts_at).getTime() <= Date.now();
@@ -198,6 +211,15 @@ export default async function EventPage({ params }: { params: { id: string } }) 
         </div>
       </div>
 
+      {!isHost && (
+        <HostCard
+          name={event.host?.name?.trim() || "Someone"}
+          since={event.host?.created_at ?? null}
+          hosted={hostedCount}
+          joined={hostedJoined}
+        />
+      )}
+
       <RsvpPanel
         eventId={event.id}
         maxSpots={event.max_spots}
@@ -212,6 +234,10 @@ export default async function EventPage({ params }: { params: { id: string } }) 
         hostName={event.host?.name?.trim() || "the host"}
         myNote={(user && notes.get(user.id)) || null}
       />
+
+      {insider && !cancelled && !ended && (
+        <EventActions eventId={event.id} address={hasRealLocation ? address : null} />
+      )}
 
       {isHost && isRequest && !cancelled && (
         <RequestsPanel eventId={event.id} requests={requests} spotsLeft={spotsLeft} />
@@ -241,8 +267,9 @@ export default async function EventPage({ params }: { params: { id: string } }) 
             {attendees.map((r) => (
               <li
                 key={r.user_id}
-                className="rounded-full border border-line bg-white px-3 py-1 text-sm"
+                className="flex items-center gap-2 rounded-full border border-line bg-white py-1 pl-1 pr-3 text-sm"
               >
+                <Avatar name={r.profiles?.name ?? ""} size="sm" />
                 {firstName(r.profiles?.name)}
               </li>
             ))}

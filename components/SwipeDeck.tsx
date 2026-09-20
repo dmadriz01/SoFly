@@ -262,6 +262,7 @@ function SwipeCard({
       setDx(0);
       return;
     }
+    if (typeof navigator !== "undefined" && "vibrate" in navigator) navigator.vibrate(10);
     setLeaving(direction);
     exitTimer.current = setTimeout(() => {
       // If the action failed meanwhile, the deck asks the card to stay: reset it.

@@ -9,7 +9,7 @@ import { NeighborhoodOptions } from "./NeighborhoodOptions";
 export function FeedSelects({ filters }: { filters: FeedFilters }) {
   const router = useRouter();
   const go = (patch: Partial<FeedFilters>) => router.push(feedHref({ ...filters, ...patch }));
-  const select = "field min-w-0 w-full !py-2 text-sm";
+  const select = "field tap min-w-0 w-full !py-2 text-sm";
 
   return (
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">

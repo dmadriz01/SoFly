@@ -2,7 +2,7 @@ import Link from "next/link";
 import { feedHref, type FeedFilters } from "@/lib/feed";
 
 const chip = (active: boolean) =>
-  `shrink-0 rounded-full border px-3.5 py-1.5 text-sm font-medium transition ${
+  `tap shrink-0 rounded-full border px-4 text-sm font-medium transition ${
     active
       ? "border-accent bg-accent-soft text-accent-dark"
       : "border-line bg-white text-ink hover:border-accent/50"

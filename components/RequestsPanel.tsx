@@ -52,14 +52,14 @@ export function RequestsPanel({
                 <button
                   onClick={() => respond(r.userId, "decline")}
                   disabled={pending}
-                  className="btn-secondary !px-3.5 !py-1.5 text-sm"
+                  className="btn-secondary tap !px-3.5 !py-1.5 text-sm"
                 >
                   Decline
                 </button>
                 <button
                   onClick={() => respond(r.userId, "approve")}
                   disabled={pending || spotsLeft <= 0}
-                  className="btn-primary !px-3.5 !py-1.5 text-sm"
+                  className="btn-primary tap !px-3.5 !py-1.5 text-sm"
                 >
                   {busy === r.userId ? "…" : "Approve"}
                 </button>

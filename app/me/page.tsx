@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { signOut } from "@/app/actions";
 import { EventCard } from "@/components/EventCard";
+import { NextUp } from "@/components/NextUp";
 import { InterestsForm } from "@/components/InterestsForm";
 import { getInterests } from "@/lib/interests";
 import { getBirthDate } from "@/lib/profile";
@@ -105,6 +106,33 @@ export default async function MePage() {
     going = (data ?? []) as EventWithCount[];
   }
 
+  // The soonest upcoming meetup you're hosting or approved for.
+  const soon = [
+    ...hosting.map((e) => ({ e, role: "hosting" as const })),
+    ...going
+      .filter((e) => statusByEvent[e.id] === "approved" && e.host_id !== user.id)
+      .map((e) => ({ e, role: "going" as const })),
+  ]
+    .filter(({ e }) => !e.cancelled_at && new Date(e.starts_at).getTime() > Date.now())
+    .sort((a, b) => new Date(a.e.starts_at).getTime() - new Date(b.e.starts_at).getTime())[0];
+
+  let nextVenue: string | null = null;
+  let nextAddress: string | null = null;
+  if (soon) {
+    nextVenue = soon.e.venue_name;
+    nextAddress = soon.e.address;
+    if (soon.e.join_mode === "request") {
+      // The real place is private; you can see it because you're the host or approved.
+      const { data: loc } = await supabase
+        .from("event_locations")
+        .select("venue_name, address")
+        .eq("event_id", soon.e.id)
+        .maybeSingle();
+      nextVenue = loc?.venue_name ?? null;
+      nextAddress = loc?.address ?? null;
+    }
+  }
+
   return (
     <div className="space-y-8">
       <div className="flex items-start justify-between gap-4">
@@ -116,6 +144,18 @@ export default async function MePage() {
           <button className="btn-secondary !px-4 !py-2 text-sm">Log out</button>
         </form>
       </div>
+
+      {soon && (
+        <NextUp
+          id={soon.e.id}
+          title={soon.e.title}
+          category={soon.e.category}
+          startsAt={soon.e.starts_at}
+          venue={nextVenue}
+          address={nextAddress}
+          role={soon.role}
+        />
+      )}
 
       <Section
         title="Hosting"

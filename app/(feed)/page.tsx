@@ -1,7 +1,9 @@
+import { cookies } from "next/headers";
 import Link from "next/link";
 import { EventCard } from "@/components/EventCard";
 import { FeedSelects } from "@/components/Filters";
 import { FilterChips } from "@/components/FilterChips";
+import { Hero } from "@/components/Hero";
 import { SwipeDeck, type DeckEvent } from "@/components/SwipeDeck";
 import { ViewToggle } from "@/components/ViewToggle";
 import { ageLabel, ageOn, withinAgeRange } from "@/lib/age";
@@ -17,7 +19,11 @@ export const dynamic = "force-dynamic";
 
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 
-type EventWithHost = EventWithCount & { host: { name: string } | null };
+type EventWithHost = EventWithCount & {
+  host: { name: string } | null;
+  // Row level security only returns the people the viewer is allowed to see.
+  rsvps: { status: string; profiles: { name: string } | null }[];
+};
 
 export default async function FeedPage({
   searchParams,
@@ -33,9 +39,13 @@ export default async function FeedPage({
     level: isSkillLevel(rawLevel) && rawLevel !== "All levels" ? rawLevel : undefined,
     women: one(searchParams.women) === "1",
     eligible: one(searchParams.eligible) === "1",
-    view: one(searchParams.view) === "swipe" ? "swipe" : undefined,
+    view: ["swipe", "list"].includes(one(searchParams.view) ?? "")
+      ? (one(searchParams.view) as "swipe" | "list")
+      : undefined,
   };
-  const swipe = filters.view === "swipe";
+  // An explicit choice wins; otherwise use the view they last picked (remembered in a cookie).
+  const activeView = filters.view ?? (cookies().get("bm_view")?.value === "swipe" ? "swipe" : "list");
+  const swipe = activeView === "swipe";
 
   const supabase = createClient();
   const {
@@ -47,7 +57,7 @@ export default async function FeedPage({
 
   let query = supabase
     .from("events")
-    .select("*, host:profiles!host_id(name)")
+    .select("*, host:profiles!host_id(name), rsvps(status, profiles(name))")
     .is("cancelled_at", null)
     .gt("starts_at", new Date().toISOString())
     .order("starts_at", { ascending: true })
@@ -69,18 +79,35 @@ export default async function FeedPage({
   const filtered = Boolean(
     filters.category || filters.neighborhood || filters.level || filters.women || filters.eligible
   );
+  // Names of approved guests, for open events only (approval-only events keep guest lists private).
+  const goingNames = (e: EventWithHost) =>
+    e.join_mode === "request"
+      ? []
+      : e.rsvps
+          .filter((r) => r.status === "approved" && r.profiles?.name?.trim())
+          .map((r) => r.profiles!.name);
   const interestSet = new Set(interests ?? []);
   const matchesInterests = (e: EventWithCount) => interestSet.has(e.category);
 
   const header = (
     <>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">What&rsquo;s happening</h1>
-          <p className="mt-1 text-muted">Find people to play with around the Bay.</p>
+      {user ? (
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">What&rsquo;s happening</h1>
+            <p className="mt-1 text-muted">Find people to play with around the Bay.</p>
+          </div>
+          <ViewToggle filters={filters} active={activeView} />
         </div>
-        <ViewToggle filters={filters} />
-      </div>
+      ) : (
+        <>
+          <Hero />
+          <div className="flex items-center justify-between gap-3" id="feed">
+            <h2 className="text-lg font-bold">Happening soon</h2>
+            <ViewToggle filters={filters} active={activeView} />
+          </div>
+        </>
+      )}
       <FeedSelects filters={filters} />
       <FilterChips filters={filters} showEligible={Boolean(birthDate)} />
     </>
@@ -145,12 +172,12 @@ export default async function FeedPage({
         {header}
         <SwipeDeck
           // A new key when the filters change resets which cards were swiped away.
-          key={feedHref(filters)}
+          key={feedHref({ ...filters, view: "swipe" })}
           events={deck}
           loggedIn={Boolean(user)}
           hasProfile={Boolean(birthDate)}
-          returnTo={feedHref(filters)}
-          listHref={feedHref({ ...filters, view: undefined })}
+          returnTo={feedHref({ ...filters, view: "swipe" })}
+          listHref={feedHref({ ...filters, view: "list" })}
         />
       </div>
     );
@@ -179,7 +206,7 @@ export default async function FeedPage({
           </Link>
           {filtered && (
             <div className="mt-4">
-              <Link href={feedHref({ view: filters.view })} className="text-sm font-medium text-accent-dark underline">
+              <Link href={feedHref({ view: filters.view })} className="tap text-sm font-medium text-accent-dark underline">
                 Clear filters
               </Link>
             </div>
@@ -193,9 +220,9 @@ export default async function FeedPage({
                 Picked for you
               </h2>
               <ul className="space-y-3">
-                {suggested.map((event) => (
-                  <li key={event.id}>
-                    <EventCard event={event} />
+                {suggested.map((event, i) => (
+                  <li key={event.id} className="fade-up" style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}>
+                    <EventCard event={event} attendees={goingNames(event)} />
                   </li>
                 ))}
               </ul>
@@ -209,9 +236,9 @@ export default async function FeedPage({
                 </h2>
               )}
               <ul className="space-y-3">
-                {rest.map((event) => (
-                  <li key={event.id}>
-                    <EventCard event={event} />
+                {rest.map((event, i) => (
+                  <li key={event.id} className="fade-up" style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}>
+                    <EventCard event={event} attendees={goingNames(event)} />
                   </li>
                 ))}
               </ul>

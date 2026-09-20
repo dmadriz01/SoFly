@@ -1,26 +1,37 @@
+"use client";
+
 import Link from "next/link";
 import { feedHref, type FeedFilters } from "@/lib/feed";
 
-/** List or Swipe. Keeps the current filters. */
-export function ViewToggle({ filters }: { filters: FeedFilters }) {
-  const swipe = filters.view === "swipe";
-  const seg = (active: boolean) =>
-    `rounded-full px-4 py-1.5 text-sm font-semibold transition ${
-      active ? "bg-white text-ink shadow-sm" : "text-muted hover:text-ink"
+/** List or Swipe. Remembers the choice in a cookie so the feed opens the way you left it. */
+export function ViewToggle({ filters, active }: { filters: FeedFilters; active: "swipe" | "list" }) {
+  const remember = (view: "swipe" | "list") => {
+    try {
+      document.cookie = `bm_view=${view}; path=/; max-age=31536000; samesite=lax`;
+    } catch {
+      // Cookies blocked: the choice just won't be remembered.
+    }
+  };
+  const seg = (on: boolean) =>
+    `tap rounded-full px-4 text-sm font-semibold transition ${
+      on ? "bg-white text-ink shadow-sm" : "text-muted hover:text-ink"
     }`;
+
   return (
-    <div role="group" aria-label="View" className="inline-flex rounded-full bg-line/70 p-1">
+    <div role="group" aria-label="View" className="inline-flex shrink-0 rounded-full bg-line/70 p-1">
       <Link
-        href={feedHref({ ...filters, view: undefined })}
-        className={seg(!swipe)}
-        aria-current={!swipe ? "true" : undefined}
+        href={feedHref({ ...filters, view: "list" })}
+        onClick={() => remember("list")}
+        className={seg(active === "list")}
+        aria-current={active === "list" ? "true" : undefined}
       >
         List
       </Link>
       <Link
         href={feedHref({ ...filters, view: "swipe" })}
-        className={seg(swipe)}
-        aria-current={swipe ? "true" : undefined}
+        onClick={() => remember("swipe")}
+        className={seg(active === "swipe")}
+        aria-current={active === "swipe" ? "true" : undefined}
       >
         Swipe
       </Link>

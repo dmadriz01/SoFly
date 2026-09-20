@@ -40,7 +40,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="en">
       <body className="min-h-screen font-sans">
         <header className="mx-auto flex max-w-2xl items-center justify-between px-4 pt-5">
-          <Link href="/" className="text-xl font-bold tracking-tight">
+          <Link href="/" className="tap -ml-1 px-1 text-xl font-bold tracking-tight">
             Bay<span className="text-accent">Meet</span>
           </Link>
           <TopNav pending={pending} />
