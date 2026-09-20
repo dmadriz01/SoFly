@@ -10,7 +10,13 @@ import { HIDDEN_VENUE, REPORT_REASONS, findAgeGroup } from "@/lib/constants";
 import { getBirthDate } from "@/lib/profile";
 import { pacificDate, pacificLocalToUtc } from "@/lib/time";
 import { safeNext } from "@/lib/utils";
-import { EVENT_FIELDS, validateEvent, type EventErrors } from "@/lib/validation";
+import {
+  EVENT_FIELDS,
+  validateEvent,
+  validateMaxSpots,
+  validateRequestNote,
+  type EventErrors,
+} from "@/lib/validation";
 
 export type CreateEventResult = { errors: EventErrors; formError?: string };
 
@@ -82,7 +88,11 @@ export async function createEvent(formData: FormData): Promise<CreateEventResult
   redirect(`/events/${data.id}`);
 }
 
-export async function setRsvp(eventId: string, join: boolean): Promise<{ error?: string }> {
+export async function setRsvp(
+  eventId: string,
+  join: boolean,
+  note = ""
+): Promise<{ error?: string }> {
   const supabase = createClient();
   const {
     data: { user },
@@ -90,11 +100,24 @@ export async function setRsvp(eventId: string, join: boolean): Promise<{ error?:
   if (!user) return { error: "Please log in to join." };
 
   if (join) {
+    // Approval-only events need an intro for the host to review (the host doesn't need one).
+    const { data: event } = await supabase
+      .from("events")
+      .select("join_mode, host_id")
+      .eq("id", eventId)
+      .maybeSingle();
+    const needsNote = event?.join_mode === "request" && event.host_id !== user.id;
+    if (needsNote) {
+      const noteError = validateRequestNote(note);
+      if (noteError) return { error: noteError };
+    }
+
     const { error } = await supabase
       .from("rsvps")
       .insert({ event_id: eventId, user_id: user.id });
-    // 23505 = already joined; treat as success.
-    if (error && error.code !== "23505") {
+    // 23505 = already joined or requested; nothing more to do.
+    if (error?.code === "23505") return {};
+    if (error) {
       return {
         error: error.message.includes("cancelled")
           ? "This meetup was cancelled."
@@ -106,6 +129,17 @@ export async function setRsvp(eventId: string, join: boolean): Promise<{ error?:
                 ? "Sorry, this event just filled up."
                 : "Couldn't join. Please try again.",
       };
+    }
+
+    if (needsNote) {
+      const { error: noteInsertError } = await supabase
+        .from("rsvp_notes")
+        .insert({ event_id: eventId, user_id: user.id, note: note.trim() });
+      if (noteInsertError) {
+        // A request without its note isn't useful to the host, so undo it.
+        await supabase.from("rsvps").delete().eq("event_id", eventId).eq("user_id", user.id);
+        return { error: "Couldn't send your request. Please try again." };
+      }
     }
   } else {
     const { error } = await supabase
@@ -299,5 +333,62 @@ export async function respondToRequest(
   revalidatePath(`/events/${eventId}`);
   revalidatePath("/me");
   revalidatePath("/");
+  return {};
+}
+
+/** Host-only (enforced by RLS and a database trigger). Can't go below the number already going. */
+export async function updateMaxSpots(eventId: string, maxSpots: number): Promise<{ error?: string }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Please log in." };
+
+  const invalid = validateMaxSpots(maxSpots);
+  if (invalid) return { error: invalid };
+
+  const { data, error } = await supabase
+    .from("events")
+    .update({ max_spots: maxSpots })
+    .eq("id", eventId)
+    .select("id");
+
+  if (error) {
+    return {
+      error: error.message.includes("people going")
+        ? error.message
+        : "Couldn't update the spots. Please try again.",
+    };
+  }
+  if (!data || data.length === 0) return { error: "Only the host can change this." };
+
+  revalidatePath(`/events/${eventId}`);
+  revalidatePath("/");
+  revalidatePath("/me");
+  return {};
+}
+
+/** Host-only. Marks the event cancelled; only a moderator can reinstate it. */
+export async function cancelEvent(eventId: string): Promise<{ error?: string }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Please log in." };
+
+  const { data, error } = await supabase
+    .from("events")
+    .update({ cancelled_at: new Date().toISOString() })
+    .eq("id", eventId)
+    .is("cancelled_at", null)
+    .select("id");
+
+  if (error || !data || data.length === 0) {
+    return { error: "Couldn't cancel this meetup. Please try again." };
+  }
+
+  revalidatePath(`/events/${eventId}`);
+  revalidatePath("/");
+  revalidatePath("/me");
   return {};
 }

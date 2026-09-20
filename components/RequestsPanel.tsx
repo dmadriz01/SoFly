@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { respondToRequest } from "@/app/actions";
 
-export type PendingRequest = { userId: string; name: string };
+export type PendingRequest = { userId: string; name: string; note: string };
 
 /** The host's inbox for a request-to-join event. */
 export function RequestsPanel({
@@ -45,9 +45,10 @@ export function RequestsPanel({
       ) : (
         <ul className="divide-y divide-line">
           {requests.map((r) => (
-            <li key={r.userId} className="flex items-center justify-between gap-3 py-2.5">
-              <span className="min-w-0 truncate font-medium">{r.name}</span>
-              <span className="flex shrink-0 gap-2">
+            <li key={r.userId} className="space-y-2 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <span className="min-w-0 truncate font-medium">{r.name}</span>
+                <span className="flex shrink-0 gap-2">
                 <button
                   onClick={() => respond(r.userId, "decline")}
                   disabled={pending}
@@ -62,7 +63,15 @@ export function RequestsPanel({
                 >
                   {busy === r.userId ? "…" : "Approve"}
                 </button>
-              </span>
+                </span>
+              </div>
+              {r.note ? (
+                <p className="whitespace-pre-line rounded-xl bg-cream px-3 py-2 text-sm text-ink/90">
+                  {r.note}
+                </p>
+              ) : (
+                <p className="text-sm text-muted">No note.</p>
+              )}
             </li>
           ))}
         </ul>

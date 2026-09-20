@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useOptimistic, useState, useTransition } from "react";
 import { setRsvp } from "@/app/actions";
+import { NOTE_MAX, validateRequestNote } from "@/lib/validation";
 
 type Status = "pending" | "approved" | "declined" | null;
 
@@ -16,6 +17,9 @@ export function RsvpPanel({
   ended,
   cancelled,
   blocked,
+  isHost,
+  hostName,
+  myNote,
 }: {
   eventId: string;
   maxSpots: number;
@@ -28,9 +32,16 @@ export function RsvpPanel({
   cancelled: boolean;
   /** Why a logged-in viewer can't join: profile incomplete, or outside the age range. */
   blocked: { kind: "profile" } | { kind: "age"; label: string } | null;
+  isHost: boolean;
+  hostName: string;
+  /** The intro the viewer sent with their pending request, if any. */
+  myNote: string | null;
 }) {
   const isRequest = joinMode === "request";
   const [error, setError] = useState<string>();
+  const [writing, setWriting] = useState(false);
+  const [note, setNote] = useState("");
+  const [noteError, setNoteError] = useState<string>();
   const [pending, startTransition] = useTransition();
   const [state, setOptimistic] = useOptimistic(
     { status: myStatus, taken },
@@ -46,13 +57,20 @@ export function RsvpPanel({
   const left = Math.max(maxSpots - state.taken, 0);
   const full = left === 0 && !state.status;
 
-  function act(action: "join" | "leave") {
+  function act(action: "join" | "leave", intro = "") {
     setError(undefined);
     startTransition(async () => {
       setOptimistic(action);
-      const result = await setRsvp(eventId, action === "join");
+      const result = await setRsvp(eventId, action === "join", intro);
       if (result.error) setError(result.error);
     });
+  }
+
+  function sendRequest(e: React.FormEvent) {
+    e.preventDefault();
+    const problem = validateRequestNote(note);
+    setNoteError(problem);
+    if (!problem) act("join", note);
   }
 
   const disabled = (label: string) => (
@@ -76,6 +94,11 @@ export function RsvpPanel({
         <p className="text-sm text-muted">
           Request sent. The host will look it over, and you&rsquo;ll see their answer here.
         </p>
+        {myNote && (
+          <blockquote className="whitespace-pre-line border-l-2 border-line pl-3 text-sm text-muted">
+            {myNote}
+          </blockquote>
+        )}
         <button onClick={() => act("leave")} disabled={pending} className="btn-secondary w-full">
           Cancel request
         </button>
@@ -98,10 +121,50 @@ export function RsvpPanel({
       ) : (
         disabled(`For ages ${blocked.label}`)
       );
+  } else if (isRequest && !isHost) {
+    body = writing ? (
+      <form onSubmit={sendRequest} className="space-y-2">
+        <label htmlFor="request-note" className="block text-sm font-semibold">
+          Introduce yourself to {hostName}
+        </label>
+        <textarea
+          id="request-note"
+          rows={5}
+          maxLength={NOTE_MAX}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Who you are, what you do, why you'd like to join, and anything else the host should know."
+          className={`field text-sm ${noteError ? "field-error" : ""}`}
+        />
+        <p className="text-xs text-muted">
+          Only the host sees this. It helps them decide who to approve.
+        </p>
+        {noteError && <p className="text-sm text-red-600">{noteError}</p>}
+        <div className="flex gap-2">
+          <button type="submit" disabled={pending} className="btn-primary">
+            {pending ? "Sending…" : "Send request"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setWriting(false);
+              setNoteError(undefined);
+            }}
+            className="btn-secondary"
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
+    ) : (
+      <button onClick={() => setWriting(true)} className="btn-primary w-full">
+        Request to join
+      </button>
+    );
   } else {
     body = (
       <button onClick={() => act("join")} disabled={pending} className="btn-primary w-full">
-        {isRequest ? "Request to join" : "Join"}
+        Join
       </button>
     );
   }

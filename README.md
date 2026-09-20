@@ -110,6 +110,7 @@ Set the subject to `Your BayMeet login code` and use this body in each:
 - **Group chat links:** run [`supabase/migrations/003_chat_links.sql`](supabase/migrations/003_chat_links.sql) in the SQL editor. Hosts can add a WhatsApp, GroupMe, Discord, Telegram, Signal, Slack or Messenger invite link; only the host and people who joined can see it.
 - **Birthdays, skill levels, age and audience settings:** run [`supabase/migrations/005_profiles_and_filters.sql`](supabase/migrations/005_profiles_and_filters.sql) right before deploying the matching code. After it, joining and posting require a completed profile (name and birthday), which everyone is asked for the next time they log in. Birthdays live in a private table only the owner can read, and can't be changed once saved (fix a typo in Supabase → Table Editor → `profile_private`).
 - **Request-to-join events (coffee chats, dinners):** run [`supabase/migrations/006_request_to_join.sql`](supabase/migrations/006_request_to_join.sql) after 005. It's safe to run before deploying the matching code. Hosts can choose "I approve each person"; the real address stays private until they approve someone, and hosts see pending requests on the event page and as a badge on the Me tab.
+- **Notes on join requests and host controls:** run [`supabase/migrations/007_notes_and_host_controls.sql`](supabase/migrations/007_notes_and_host_controls.sql) after 006. Requesters write a short intro that only the host and the requester can read. Hosts can cancel their own meetups and change max spots (never below the number going).
 - **Cancelled events:** run [`supabase/migrations/004_cancelled.sql`](supabase/migrations/004_cancelled.sql). Run it **before** deploying the matching code; the new feed query needs the column. See "Moderating" below.
 - **Report email alerts:** add these in Vercel → Settings → Environment Variables (and `.env.local` locally). Mark the password **Sensitive**:
   - `ALERT_EMAIL_USER`: a Gmail address
@@ -139,7 +140,7 @@ update public.events set cancelled_at = now() where id = 'EVENT_ID';
 update public.events set cancelled_at = null where id = 'EVENT_ID';
 ```
 
-Only you can do this (the SQL editor and table editor); hosts can't cancel or un-cancel through the app. Hosts can still delete their own events.
+Hosts can cancel their own meetups from the event page, but only you can **reinstate** one, from the SQL editor or table editor. Hosts can also still delete their own events.
 
 ## Things to know
 

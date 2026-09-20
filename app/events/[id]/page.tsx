@@ -5,6 +5,7 @@ import { CategoryBadge } from "@/components/CategoryBadge";
 import { DeleteEventButton } from "@/components/DeleteEventButton";
 import { EventTags } from "@/components/EventTags";
 import { GroupChat } from "@/components/GroupChat";
+import { ManageEvent } from "@/components/ManageEvent";
 import { ReportEvent } from "@/components/ReportEvent";
 import { RequestsPanel } from "@/components/RequestsPanel";
 import { RsvpPanel } from "@/components/RsvpPanel";
@@ -100,6 +101,17 @@ export default async function EventPage({ params }: { params: { id: string } }) 
     }
   }
 
+  // Intros written with join requests. RLS returns all of them to the host, and only
+  // your own to you.
+  const notes = new Map<string, string>();
+  if (isRequest && user && (isHost || myStatus)) {
+    const { data: noteRows } = await supabase
+      .from("rsvp_notes")
+      .select("user_id, note")
+      .eq("event_id", event.id);
+    for (const n of noteRows ?? []) notes.set(n.user_id as string, n.note as string);
+  }
+
   // Can this viewer join? (Only matters once they're logged in.)
   let blocked: { kind: "profile" } | { kind: "age"; label: string } | null = null;
   if (user) {
@@ -120,7 +132,11 @@ export default async function EventPage({ params }: { params: { id: string } }) 
     ? event.rsvps
         .filter((r) => r.status === "pending")
         .sort(byJoinTime)
-        .map((r) => ({ userId: r.user_id, name: r.profiles?.name?.trim() || "Someone" }))
+        .map((r) => ({
+          userId: r.user_id,
+          name: r.profiles?.name?.trim() || "Someone",
+          note: notes.get(r.user_id) ?? "",
+        }))
     : [];
 
   const when = formatWhenLong(event.starts_at);
@@ -192,6 +208,9 @@ export default async function EventPage({ params }: { params: { id: string } }) 
         ended={ended}
         cancelled={cancelled}
         blocked={blocked}
+        isHost={isHost}
+        hostName={event.host?.name?.trim() || "the host"}
+        myNote={(user && notes.get(user.id)) || null}
       />
 
       {isHost && isRequest && !cancelled && (
@@ -241,6 +260,10 @@ export default async function EventPage({ params }: { params: { id: string } }) 
             className="h-64 w-full border-0"
           />
         </div>
+      )}
+
+      {isHost && !cancelled && (
+        <ManageEvent eventId={event.id} maxSpots={event.max_spots} spotsTaken={event.spots_taken} />
       )}
 
       {isHost ? (

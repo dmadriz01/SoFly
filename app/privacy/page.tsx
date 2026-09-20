@@ -50,8 +50,9 @@ export default function PrivacyPage() {
           description, time, venue and full address, the host&rsquo;s name, and the first names of
           people who have joined. Please don&rsquo;t put private information in a meetup. On meetups where
           the host approves each person, the exact venue and address, the list of who&rsquo;s going, and
-          any group chat link are visible only to the host and approved guests. Requests to join are
-          visible only to the host and the person who made the request.
+          any group chat link are visible only to the host and approved guests. Requests to join,
+          including the short introduction a person writes, are visible only to the host and the person
+          who made the request.
         </p>
       </section>
 
