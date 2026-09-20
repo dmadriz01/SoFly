@@ -30,10 +30,13 @@ function dayKey(d: Date) {
 
 export const pacificDate = (d = new Date()) => dayKey(d);
 
-function nextDayKey(key: string) {
+/** A YYYY-MM-DD date plus (or minus) whole days. Pure calendar math, so daylight saving can't skew it. */
+export function addDaysToKey(key: string, days: number) {
   const [y, m, d] = key.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
 }
+
+const nextDayKey = (key: string) => addDaysToKey(key, 1);
 
 /** "Today · 6:30 PM", "Tomorrow · 6:30 PM", "Sat, Sep 20 · 6:30 PM" */
 export function formatWhenShort(iso: string, now = new Date()) {

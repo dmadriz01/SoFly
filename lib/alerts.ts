@@ -1,4 +1,4 @@
-import nodemailer from "nodemailer";
+import { sendMail } from "./mailer";
 import { CONTACT_EMAIL, SITE_URL } from "./site";
 
 export type ReportAlert = {
@@ -35,33 +35,14 @@ export function buildReportEmail(r: ReportAlert) {
 }
 
 /**
- * Emails the moderator. Never throws: a failed alert must not fail the user's report.
- * Needs ALERT_EMAIL_USER and ALERT_EMAIL_APP_PASSWORD (a Gmail address and app password).
- * Goes to REPORT_ALERT_EMAIL, or the public contact email if that isn't set.
+ * Emails the moderator. Goes to REPORT_ALERT_EMAIL, or the public contact email if that isn't set.
  */
 export async function sendReportAlert(report: ReportAlert) {
-  const user = process.env.ALERT_EMAIL_USER;
-  const pass = process.env.ALERT_EMAIL_APP_PASSWORD?.replace(/\s/g, "");
   const to = process.env.REPORT_ALERT_EMAIL || CONTACT_EMAIL;
-
-  if (!user || !pass || !to) {
-    console.warn("Report alert not sent: set ALERT_EMAIL_USER, ALERT_EMAIL_APP_PASSWORD and a recipient.");
+  if (!to) {
+    console.warn("Report alert not sent: no recipient (set REPORT_ALERT_EMAIL or NEXT_PUBLIC_CONTACT_EMAIL).");
     return;
   }
-
-  try {
-    const transporter = nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 465,
-      secure: true,
-      auth: { user, pass },
-      connectionTimeout: 8000,
-      greetingTimeout: 8000,
-      socketTimeout: 10000,
-    });
-    const { subject, text } = buildReportEmail(report);
-    await transporter.sendMail({ from: `BayMeet alerts <${user}>`, to, subject, text });
-  } catch (err) {
-    console.error("Report alert failed to send:", err);
-  }
+  const { subject, text } = buildReportEmail(report);
+  await sendMail({ to, subject, text });
 }

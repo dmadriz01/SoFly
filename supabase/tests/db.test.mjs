@@ -341,6 +341,17 @@ async function behaviour({ db, U, oldEvent }, { migrated }) {
   r = await as("anon", `select * from public.user_interests`);
   ok("anon cannot read interests", !!r.error || sees(r) === 0, JSON.stringify(r));
 
+  r = await as("ann", `insert into public.user_settings (user_id,email_notifications) values ($1,false)`, [U.ann]);
+  ok("a user can turn email notifications off", !r.error, JSON.stringify(r));
+  r = await as("ann", `insert into public.user_settings (user_id,email_notifications) values ($1,true) on conflict (user_id) do update set email_notifications=excluded.email_notifications, updated_at=excluded.updated_at`, [U.ann]);
+  ok("...and back on (upsert)", !r.error, JSON.stringify(r));
+  r = await as("cy", `insert into public.user_settings (user_id,email_notifications) values ($1,false)`, [U.ann]);
+  ok("cannot change someone else's email settings", !!r.error, JSON.stringify(r));
+  r = await as("bob", `select * from public.user_settings`);
+  ok("email settings are private", sees(r) === 0, JSON.stringify(r));
+  r = await as("anon", `select * from public.user_settings`);
+  ok("anon cannot read email settings", !!r.error || sees(r) === 0, JSON.stringify(r));
+
   const EP = await mkEvent("host", { title: "pass me", max: 5 });
   r = await as("ann", `insert into public.event_passes (user_id,event_id) values ($1,$2)`, [U.ann, EP]);
   ok("a user can pass on an event", !r.error, JSON.stringify(r));

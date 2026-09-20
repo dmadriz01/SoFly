@@ -39,6 +39,13 @@ create table public.profile_private (
   created_at  timestamptz not null default now()
 );
 
+-- Email preferences. No row means the defaults (everything on). Login codes are always sent.
+create table public.user_settings (
+  user_id              uuid primary key references public.profiles (id) on delete cascade,
+  email_notifications  boolean not null default true,
+  updated_at           timestamptz not null default now()
+);
+
 -- Categories someone is into. An empty array means "skipped", so we don't ask again.
 create table public.user_interests (
   user_id     uuid primary key references public.profiles (id) on delete cascade,
@@ -411,6 +418,7 @@ create trigger rsvps_after_change
 alter table public.profiles         enable row level security;
 alter table public.profile_private  enable row level security;
 alter table public.user_interests   enable row level security;
+alter table public.user_settings    enable row level security;
 alter table public.events           enable row level security;
 alter table public.event_locations  enable row level security;
 alter table public.event_chat_links enable row level security;
@@ -444,6 +452,12 @@ create policy "users add their own private profile"
 -- user_interests and event_passes: entirely the owner's business.
 create policy "users manage their own interests"
   on public.user_interests for all
+  to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
+
+create policy "users manage their own settings"
+  on public.user_settings for all
   to authenticated
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
@@ -561,7 +575,7 @@ grant select on public.profiles, public.events, public.rsvps to anon, authentica
 
 -- Reads that need a login.
 grant select on
-  public.profile_private, public.user_interests, public.event_passes,
+  public.profile_private, public.user_interests, public.user_settings, public.event_passes,
   public.rsvp_notes, public.event_locations, public.event_chat_links
   to authenticated;
 
@@ -570,6 +584,8 @@ grant update (name) on public.profiles to authenticated;
 grant insert (user_id, birth_date) on public.profile_private to authenticated;
 grant insert (user_id, categories, updated_at), update (categories, updated_at)
   on public.user_interests to authenticated;
+grant insert (user_id, email_notifications, updated_at), update (email_notifications, updated_at)
+  on public.user_settings to authenticated;
 grant insert, delete on public.event_passes to authenticated;
 
 grant insert (host_id, title, category, description, venue_name, address, neighborhood,

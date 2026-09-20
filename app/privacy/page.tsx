@@ -57,6 +57,16 @@ export default function PrivacyPage() {
       </section>
 
       <section className="space-y-2">
+        <h2 className="text-lg font-bold">Emails we send</h2>
+        <p className="text-ink/90">
+          Besides your login code, we email you when someone asks to join your meetup, when a host answers
+          your request, when a meetup you were going to is cancelled, and the day before a meetup you&rsquo;re
+          part of. You can turn all of these off on the Me tab. Emails go only to the address you signed up
+          with, and we never share it.
+        </p>
+      </section>
+
+      <section className="space-y-2">
         <h2 className="text-lg font-bold">Cookies</h2>
         <p className="text-ink/90">
           We use one essential cookie to keep you logged in. We don&rsquo;t use advertising cookies.

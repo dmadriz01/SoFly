@@ -1,5 +1,6 @@
 "use server";
 
+import { waitUntil } from "@vercel/functions";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -7,6 +8,7 @@ import { sendReportAlert } from "@/lib/alerts";
 import { parseChatUrl } from "@/lib/chat";
 import { MIN_AGE, ageOn, parseBirthDate } from "@/lib/age";
 import { HIDDEN_VENUE, REPORT_REASONS, findAgeGroup, isCategory } from "@/lib/constants";
+import { notifyEventCancelled, notifyHostOfRequest, notifyRequestDecision } from "@/lib/notify";
 import { getBirthDate } from "@/lib/profile";
 import { pacificDate, pacificLocalToUtc } from "@/lib/time";
 import { safeNext } from "@/lib/utils";
@@ -140,6 +142,8 @@ export async function setRsvp(
         await supabase.from("rsvps").delete().eq("event_id", eventId).eq("user_id", user.id);
         return { error: "Couldn't send your request. Please try again." };
       }
+      // Tell the host, without making the requester wait for the email.
+      waitUntil(notifyHostOfRequest(eventId, user.id));
     }
   } else {
     const { error } = await supabase
@@ -331,6 +335,7 @@ export async function respondToRequest(
   }
   if (!data || data.length === 0) return { error: "That request is no longer pending." };
 
+  waitUntil(notifyRequestDecision(eventId, userId, decision === "approve"));
   revalidatePath(`/events/${eventId}`);
   revalidatePath("/me");
   revalidatePath("/");
@@ -384,6 +389,8 @@ export async function cancelEvent(eventId: string): Promise<{ error?: string }> 
   const { error } = await supabase.rpc("cancel_event", { eid: eventId });
   if (error) return { error: "Couldn't cancel this meetup. Please try again." };
 
+  waitUntil(notifyEventCancelled(eventId));
+
   revalidatePath(`/events/${eventId}`);
   revalidatePath("/");
   revalidatePath("/me");
@@ -432,5 +439,24 @@ export async function unpassEvent(eventId: string): Promise<{ error?: string }> 
   } = await supabase.auth.getUser();
   if (!user) return {};
   await supabase.from("event_passes").delete().eq("user_id", user.id).eq("event_id", eventId);
+  return {};
+}
+
+/** The on/off switch for BayMeet's emails (requests, approvals, cancellations, reminders). */
+export async function setEmailNotifications(enabled: boolean): Promise<{ error?: string }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Please log in." };
+
+  const { error } = await supabase
+    .from("user_settings")
+    .upsert(
+      { user_id: user.id, email_notifications: enabled, updated_at: new Date().toISOString() },
+      { onConflict: "user_id" }
+    );
+  if (error) return { error: "Couldn't save that. Please try again." };
+  revalidatePath("/me");
   return {};
 }

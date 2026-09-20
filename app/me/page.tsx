@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { signOut } from "@/app/actions";
+import { EmailSettings } from "@/components/EmailSettings";
 import { EventCard } from "@/components/EventCard";
 import { NextUp } from "@/components/NextUp";
 import { InterestsForm } from "@/components/InterestsForm";
@@ -78,6 +79,12 @@ export default async function MePage() {
   ]);
 
   const interests = (await getInterests(supabase, user.id)) ?? [];
+  const { data: settings } = await supabase
+    .from("user_settings")
+    .select("email_notifications")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  const emailsOn = settings?.email_notifications ?? true;
   const hosting = (hostingRes.data ?? []) as EventWithCount[];
   const myRows = (myRsvps.data ?? []) as { event_id: string; status: string }[];
   const goingIds = myRows.map((r) => r.event_id);
@@ -188,6 +195,11 @@ export default async function MePage() {
         <h2 className="mb-1 text-lg font-bold">Your interests</h2>
         <p className="mb-3 text-sm text-muted">We put meetups like these first in your feed.</p>
         <InterestsForm initial={interests} mode="settings" />
+      </section>
+
+      <section>
+        <h2 className="mb-3 text-lg font-bold">Notifications</h2>
+        <EmailSettings initial={emailsOn} />
       </section>
     </div>
   );
