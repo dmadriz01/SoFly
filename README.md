@@ -55,7 +55,7 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-To try it: go to **Me** → enter your email → click the link in the email (in the same browser) → **Post** a meetup.
+To try it: go to **Me** → enter your email → enter the code from the email (or click the link, in the same browser) → **Post** a meetup.
 
 ## Deploy to Vercel
 
@@ -88,9 +88,25 @@ Supabase's built-in sender only emails your own team members and is capped at a 
 4. Save, then request a magic link with an email that isn't yours to confirm it arrives.
 5. Optional: raise the hourly cap under **Authentication → Rate Limits**, and edit the message under **Authentication → Emails → Magic Link**.
 
+## Email templates (required for code login)
+
+Login works two ways: the user types a 6-digit code from the email, or taps the link in it. The code works on any device or browser; the link only works in the browser that requested it (it uses the PKCE flow). Supabase's default templates contain only the link, so add the code to **both** templates under **Authentication → Emails**:
+
+- **Magic Link** (sent to existing users)
+- **Confirm signup** (sent to first-time users)
+
+Set the subject to `Your BayMeet login code` and use this body in each:
+
+```html
+<h2>Your BayMeet login code</h2>
+<p>Enter this code on the login page:</p>
+<p style="font-size:28px;font-weight:bold;letter-spacing:4px">{{ .Token }}</p>
+<p>Or <a href="{{ .ConfirmationURL }}">tap here to log in</a> (only works in the browser where you requested it).</p>
+```
+
 ## Things to know
 
-- **Open the magic link in the same browser** you requested it from. Login uses the PKCE flow, which stores a one-time verifier in the browser that asked for the link.
+- **The emailed link only works in the browser that requested it.** The code always works, which is why the login page asks for it.
 - **Supabase's built-in email sender is heavily rate limited** (a few emails per hour, and only to project team members by default). It's fine for development. Before real users arrive, configure your own SMTP provider under **Project Settings → Authentication → SMTP Settings**.
 - **Times are Pacific.** The date picker on the post form is interpreted as Pacific time regardless of the poster's device time zone, and all times are displayed in Pacific.
 - **Display names** come from the optional "Your name" field on the login page, used only when an email signs up for the first time. If it's left blank, the name defaults to the part of the email before the `@`. There's no profile editor; change a name by editing the row in the `profiles` table (Supabase → Table Editor).
