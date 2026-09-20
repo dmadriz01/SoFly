@@ -332,8 +332,13 @@ async function behaviour({ db, U, oldEvent }, { migrated }) {
   // ---- interests, passes, reports ----
   r = await as("ann", `insert into public.user_interests (user_id,categories) values ($1,'{Running,Dinner}')`, [U.ann]);
   ok("a user can save interests", !r.error, JSON.stringify(r));
-  r = await as("ann", `insert into public.user_interests (user_id,categories) values ($1,'{Music}') on conflict (user_id) do update set categories=excluded.categories, updated_at=excluded.updated_at`, [U.ann]);
-  ok("saving interests again (upsert) works", !r.error, JSON.stringify(r));
+  r = await as("ann", `update public.user_interests set categories='{Music}', updated_at=now() where user_id=$1 returning user_id`, [U.ann]);
+  ok("a user can change their saved interests", !r.error && sees(r) === 1, JSON.stringify(r));
+  // This is the statement shape Supabase generates for .upsert(): it rewrites the key column too.
+  const postgrestUpsert = (table, cols, vals, key) =>
+    `insert into public.${table} (${cols}) values (${vals}) on conflict (${key}) do update set ${cols.split(",").map((c) => `${c.trim()} = excluded.${c.trim()}`).join(", ")}`;
+  r = await as("ann", postgrestUpsert("user_interests", "user_id, categories, updated_at", `'${U.ann}', '{Yoga}', now()`, "user_id"));
+  ok("a PostgREST-style upsert on interests is refused (the app updates, then inserts)", denied(r), JSON.stringify(r));
   r = await as("cy", `insert into public.user_interests (user_id,categories) values ($1,'{Yoga}')`, [U.ann]);
   ok("cannot save interests for someone else", !!r.error, JSON.stringify(r));
   r = await as("bob", `select * from public.user_interests`);
@@ -343,8 +348,10 @@ async function behaviour({ db, U, oldEvent }, { migrated }) {
 
   r = await as("ann", `insert into public.user_settings (user_id,email_notifications) values ($1,false)`, [U.ann]);
   ok("a user can turn email notifications off", !r.error, JSON.stringify(r));
-  r = await as("ann", `insert into public.user_settings (user_id,email_notifications) values ($1,true) on conflict (user_id) do update set email_notifications=excluded.email_notifications, updated_at=excluded.updated_at`, [U.ann]);
-  ok("...and back on (upsert)", !r.error, JSON.stringify(r));
+  r = await as("ann", `update public.user_settings set email_notifications=true, updated_at=now() where user_id=$1 returning user_id`, [U.ann]);
+  ok("...and back on", !r.error && sees(r) === 1, JSON.stringify(r));
+  r = await as("ann", postgrestUpsert("user_settings", "user_id, email_notifications, updated_at", `'${U.ann}', false, now()`, "user_id"));
+  ok("a PostgREST-style upsert on settings is refused too", denied(r), JSON.stringify(r));
   r = await as("cy", `insert into public.user_settings (user_id,email_notifications) values ($1,false)`, [U.ann]);
   ok("cannot change someone else's email settings", !!r.error, JSON.stringify(r));
   r = await as("bob", `select * from public.user_settings`);
@@ -393,6 +400,10 @@ async function behaviour({ db, U, oldEvent }, { migrated }) {
   ok("a guest can change their answer, and the totals follow", !r.error && t2.y === 2 && t2.t === 2, JSON.stringify(t2));
   r = await as("ann", `insert into public.meetup_feedback (event_id,user_id,would_join_again) values ($1,$2,false)`, [PAST, U.ann]);
   ok("only one answer per guest", !!r.error, JSON.stringify(r));
+  r = await as("ann", postgrestUpsert("meetup_feedback", "event_id, user_id, would_join_again", `'${PAST}', '${U.ann}', false`, "event_id, user_id"));
+  ok("a PostgREST-style upsert on feedback is refused", denied(r), JSON.stringify(r));
+  r = await as("ann", `update public.meetup_feedback set event_id=$2 where event_id=$1 and user_id=$3`, [PAST, E2, U.ann]);
+  ok("a guest cannot move their answer to a different meetup", denied(r), JSON.stringify(r));
   r = await as("cy", `insert into public.meetup_feedback (event_id,user_id,would_join_again) values ($1,$2,true)`, [PAST, U.cy]);
   ok("someone who never joined cannot rate", failsWith(r, "Only guests who joined"), JSON.stringify(r));
   r = await as("host", `insert into public.meetup_feedback (event_id,user_id,would_join_again) values ($1,$2,true)`, [PAST, U.host]);

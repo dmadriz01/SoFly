@@ -4,6 +4,7 @@ import { waitUntil } from "@vercel/functions";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { updateOrInsert } from "@/lib/supabase/save";
 import { sendReportAlert } from "@/lib/alerts";
 import { parseChatUrl } from "@/lib/chat";
 import { MIN_AGE, ageOn, parseBirthDate } from "@/lib/age";
@@ -406,12 +407,12 @@ export async function saveInterests(categories: string[], next?: string): Promis
   if (!user) redirect("/login");
 
   const clean = Array.from(new Set(categories.filter(isCategory)));
-  const { error } = await supabase
-    .from("user_interests")
-    .upsert(
-      { user_id: user.id, categories: clean, updated_at: new Date().toISOString() },
-      { onConflict: "user_id" }
-    );
+  const { error } = await updateOrInsert(
+    supabase,
+    "user_interests",
+    { user_id: user.id },
+    { categories: clean, updated_at: new Date().toISOString() }
+  );
   if (error) return { error: "Couldn't save your interests. Please try again." };
 
   revalidatePath("/", "layout");
@@ -450,12 +451,12 @@ export async function setEmailNotifications(enabled: boolean): Promise<{ error?:
   } = await supabase.auth.getUser();
   if (!user) return { error: "Please log in." };
 
-  const { error } = await supabase
-    .from("user_settings")
-    .upsert(
-      { user_id: user.id, email_notifications: enabled, updated_at: new Date().toISOString() },
-      { onConflict: "user_id" }
-    );
+  const { error } = await updateOrInsert(
+    supabase,
+    "user_settings",
+    { user_id: user.id },
+    { email_notifications: enabled, updated_at: new Date().toISOString() }
+  );
   if (error) return { error: "Couldn't save that. Please try again." };
   revalidatePath("/me");
   return {};
@@ -469,12 +470,12 @@ export async function submitFeedback(eventId: string, wouldJoinAgain: boolean): 
   } = await supabase.auth.getUser();
   if (!user) return { error: "Please log in." };
 
-  const { error } = await supabase
-    .from("meetup_feedback")
-    .upsert(
-      { event_id: eventId, user_id: user.id, would_join_again: wouldJoinAgain },
-      { onConflict: "event_id,user_id" }
-    );
+  const { error } = await updateOrInsert(
+    supabase,
+    "meetup_feedback",
+    { event_id: eventId, user_id: user.id },
+    { would_join_again: wouldJoinAgain }
+  );
   if (error) {
     return {
       error: error.message.includes("Only guests who joined")

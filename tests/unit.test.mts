@@ -4,6 +4,7 @@ import { ageLabel, ageOn, parseBirthDate, withinAgeRange } from "../lib/age.ts";
 import { parseChatUrl } from "../lib/chat.ts";
 import * as email from "../lib/email-templates.ts";
 import { buildIcs } from "../lib/ics.ts";
+import { updateOrInsert } from "../lib/supabase/save.ts";
 import { addDaysToKey, pacificDate, pacificLocalToUtc } from "../lib/time.ts";
 
 let passed = 0;
@@ -99,6 +100,40 @@ t("adding days across a year", addDaysToKey("2026-12-31", 1) === "2027-01-01");
   t("email: feedback request is private and one tap", f.subject === "How was Run?" && f.text.includes("private") && f.text.includes("https://e/1"));
   const r = email.reminder({ name: "Ana", eventTitle: "Run", when: "Saturday at 7:00 PM", place: "Lake Merritt", eventUrl: "https://e/1", calendarUrl: "https://e/1/calendar.ics", siteUrl: "https://e" });
   t("email: reminder has when and where", r.subject === "Tomorrow: Run" && r.text.includes("Lake Merritt") && r.text.includes("7:00 PM"));
+}
+
+// ---- saving your own rows (update, else insert) ----
+{
+  const fake = (script: { update: unknown[]; insert: unknown[] }) => {
+    const log: string[] = [];
+    let u = 0;
+    const client = {
+      from: () => ({
+        update: () => ({ match: () => ({ select: async () => { log.push("update"); return script.update[u++]; } }) }),
+        insert: async () => { log.push("insert"); return script.insert.shift(); },
+      }),
+    };
+    return { client: client as never, log };
+  };
+  const hit = { data: [{ user_id: "1" }], error: null };
+  const miss = { data: [], error: null };
+  const fail = { data: null, error: { code: "42501", message: "denied" } };
+
+  let f = fake({ update: [hit], insert: [] });
+  let r = await updateOrInsert(f.client, "t", { user_id: "1" }, { a: 1 });
+  t("save: an existing row is updated, not re-inserted", !r.error && f.log.join() === "update");
+  f = fake({ update: [miss], insert: [{ error: null }] });
+  r = await updateOrInsert(f.client, "t", { user_id: "1" }, { a: 1 });
+  t("save: a missing row is inserted", !r.error && f.log.join() === "update,insert");
+  f = fake({ update: [miss, hit], insert: [{ error: { code: "23505", message: "dup" } }] });
+  r = await updateOrInsert(f.client, "t", { user_id: "1" }, { a: 1 });
+  t("save: losing a race to another insert falls back to an update", !r.error && f.log.join() === "update,insert,update");
+  f = fake({ update: [fail], insert: [] });
+  r = await updateOrInsert(f.client, "t", { user_id: "1" }, { a: 1 });
+  t("save: a database error is reported, not swallowed", Boolean(r.error) && f.log.join() === "update");
+  f = fake({ update: [miss], insert: [{ error: { code: "42501", message: "denied" } }] });
+  r = await updateOrInsert(f.client, "t", { user_id: "1" }, { a: 1 });
+  t("save: an insert error is reported", Boolean(r.error));
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
