@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { parseChatUrl } from "@/lib/chat";
 import { REPORT_REASONS } from "@/lib/constants";
 import { pacificLocalToUtc } from "@/lib/time";
 import { EVENT_FIELDS, validateEvent, type EventErrors } from "@/lib/validation";
@@ -43,6 +44,12 @@ export async function createEvent(formData: FormData): Promise<CreateEventResult
 
   if (error || !data) {
     return { errors: {}, formError: "Something went wrong posting your meetup. Please try again." };
+  }
+
+  // Optional. If this fails the event still exists; the host can add the link from its page.
+  const chat = input.chat_url ? parseChatUrl(input.chat_url) : null;
+  if (chat && "url" in chat) {
+    await supabase.from("event_chat_links").insert({ event_id: data.id, url: chat.url });
   }
 
   revalidatePath("/");
@@ -137,5 +144,30 @@ export async function reportEvent(
   if (error && error.code !== "23505") {
     return { error: "Couldn't send your report. Please try again." };
   }
+  return {};
+}
+
+/** Host-only (enforced by RLS). An empty value removes the link. */
+export async function setChatLink(eventId: string, raw: string): Promise<{ error?: string }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Please log in." };
+
+  if (!raw.trim()) {
+    const { error } = await supabase.from("event_chat_links").delete().eq("event_id", eventId);
+    if (error) return { error: "Couldn't remove the link. Please try again." };
+  } else {
+    const parsed = parseChatUrl(raw);
+    if ("error" in parsed) return { error: parsed.error };
+
+    const { error } = await supabase
+      .from("event_chat_links")
+      .upsert({ event_id: eventId, url: parsed.url }, { onConflict: "event_id" });
+    if (error) return { error: "Couldn't save the link. Please try again." };
+  }
+
+  revalidatePath(`/events/${eventId}`);
   return {};
 }

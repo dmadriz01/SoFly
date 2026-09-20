@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { createEvent } from "@/app/actions";
+import { CHAT_APPS_HINT } from "@/lib/chat";
 import { CATEGORIES, NEIGHBORHOODS } from "@/lib/constants";
 import {
   EVENT_FIELDS,
@@ -190,6 +191,24 @@ export function EventForm() {
           maxLength={LIMITS.description}
           className={cls("description")}
           {...aria("description")}
+        />
+      </Field>
+
+      <Field
+        label="Group chat link (optional)"
+        name="chat_url"
+        error={errors.chat_url}
+        hint={`An invite link from ${CHAT_APPS_HINT}. Only you and people who join will see it. You can add it later too.`}
+      >
+        <input
+          id="chat_url"
+          name="chat_url"
+          type="url"
+          inputMode="url"
+          maxLength={500}
+          placeholder="https://chat.whatsapp.com/…"
+          className={cls("chat_url")}
+          {...aria("chat_url")}
         />
       </Field>
 

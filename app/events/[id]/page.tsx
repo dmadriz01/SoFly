@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CategoryBadge } from "@/components/CategoryBadge";
 import { DeleteEventButton } from "@/components/DeleteEventButton";
+import { GroupChat } from "@/components/GroupChat";
 import { ReportEvent } from "@/components/ReportEvent";
 import { RsvpPanel } from "@/components/RsvpPanel";
 import { ShareButton } from "@/components/ShareButton";
@@ -54,6 +55,17 @@ export default async function EventPage({ params }: { params: { id: string } }) 
   const user = userResult.data.user;
   const isHost = user?.id === event.host_id;
   const going = event.rsvps.some((r) => r.user_id === user?.id);
+
+  // RLS only returns this row to the host and to people who joined.
+  let chatUrl: string | null = null;
+  if (user && (isHost || going)) {
+    const { data: chat } = await supabase
+      .from("event_chat_links")
+      .select("url")
+      .eq("event_id", event.id)
+      .maybeSingle();
+    chatUrl = chat?.url ?? null;
+  }
   const attendees = [...event.rsvps].sort((a, b) => a.created_at.localeCompare(b.created_at));
   const when = formatWhenLong(event.starts_at);
   const ended = new Date(event.starts_at).getTime() <= Date.now();
@@ -99,6 +111,10 @@ export default async function EventPage({ params }: { params: { id: string } }) 
         loggedIn={Boolean(user)}
         ended={ended}
       />
+
+      {(isHost || (going && chatUrl)) && (
+        <GroupChat eventId={event.id} url={chatUrl} isHost={isHost} />
+      )}
 
       {event.description && (
         <section>

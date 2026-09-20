@@ -43,7 +43,8 @@ export default function PrivacyPage() {
         <p className="text-ink/90">
           Meetups are public, including to people who aren&rsquo;t logged in. That includes the title,
           description, time, venue and full address, the host&rsquo;s name, and the first names of
-          people who have joined. Please don&rsquo;t put private information in a meetup.
+          people who have joined. Please don&rsquo;t put private information in a meetup. A group chat
+          link, if the host adds one, is visible only to the host and people who have joined.
         </p>
       </section>
 

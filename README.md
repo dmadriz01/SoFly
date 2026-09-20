@@ -107,6 +107,7 @@ Set the subject to `Your BayMeet login code` and use this body in each:
 ## Launch setup
 
 - **Reports:** run [`supabase/migrations/002_reports.sql`](supabase/migrations/002_reports.sql) in the SQL editor. Reports are private; read them in Supabase → Table Editor → `reports`.
+- **Group chat links:** run [`supabase/migrations/003_chat_links.sql`](supabase/migrations/003_chat_links.sql) in the SQL editor. Hosts can add a WhatsApp, GroupMe, Discord, Telegram, Signal, Slack or Messenger invite link; only the host and people who joined can see it.
 - **Contact email:** set `NEXT_PUBLIC_CONTACT_EMAIL` (locally in `.env.local`, and in Vercel → Settings → Environment Variables). It powers the Feedback link and the privacy and guidelines pages.
 - **Custom domain:** set `NEXT_PUBLIC_SITE_URL` (e.g. `https://baymeet.app`) so link previews use it. Until then Vercel's production URL is used automatically.
 - **Analytics:** in Vercel, open your project → **Analytics** → **Enable**. The code is already in place.

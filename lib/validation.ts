@@ -1,4 +1,5 @@
 import { isCategory, isNeighborhood } from "./constants";
+import { parseChatUrl } from "./chat";
 import { pacificLocalToUtc } from "./time";
 
 export const EVENT_FIELDS = [
@@ -10,6 +11,7 @@ export const EVENT_FIELDS = [
   "starts_at",
   "max_spots",
   "description",
+  "chat_url",
 ] as const;
 
 export type EventField = (typeof EVENT_FIELDS)[number];
@@ -59,6 +61,11 @@ export function validateEvent(input: Record<string, string>): EventErrors {
 
   if (v("description").length > LIMITS.description)
     errors.description = `Keep it under ${LIMITS.description} characters.`;
+
+  if (v("chat_url")) {
+    const parsed = parseChatUrl(v("chat_url"));
+    if ("error" in parsed) errors.chat_url = parsed.error;
+  }
 
   return errors;
 }

@@ -25,6 +25,10 @@ export default function GuidelinesPage() {
           <li>Be clear about time, place, skill level and what to bring.</li>
           <li>No ads, selling, recruiting or promotions. Free or cost-share meetups only.</li>
           <li>If plans change, update the event or delete it so people aren&rsquo;t left waiting.</li>
+          <li>
+            Want a group chat? Add an invite link (WhatsApp, GroupMe, etc.) to your event. Only you and
+            people who join can see it. Avoid posting your phone number publicly.
+          </li>
         </ul>
       </section>
 
