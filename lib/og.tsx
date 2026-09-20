@@ -1,14 +1,7 @@
+import { BRAND } from "./brand";
 import { INTER_BOLD_BASE64 } from "./inter-bold";
 
-export const COLORS = {
-  cream: "#fbf8f3",
-  ink: "#2b2622",
-  muted: "#7d726a",
-  line: "#ebe2d7",
-  accent: "#d9552f",
-  accentDark: "#bd4523",
-  accentSoft: "#fcebe4",
-};
+export const COLORS = BRAND;
 
 export const OG_SIZE = { width: 1200, height: 630 };
 

@@ -1,7 +1,10 @@
 // Unit tests for the pure logic (no network, no database). Run with `npm run test:unit`.
 // Uses Node's built-in TypeScript support, so it needs Node 22.6 or newer.
 import { ageFieldProblem, ageLabel, ageOn, parseBirthDate, resolveAgeRange, withinAgeRange } from "../lib/age.ts";
+import fs from "node:fs";
+import path from "node:path";
 import { aboutLinks, hasAbout, parseAbout } from "../lib/about.ts";
+import { BRAND } from "../lib/brand.ts";
 import { parseChatUrl } from "../lib/chat.ts";
 import { parseHandle, socialUrl } from "../lib/social.ts";
 import * as email from "../lib/email-templates.ts";
@@ -119,6 +122,30 @@ t("weeks: only real dates are accepted", isDateKey("2026-09-21") && !isDateKey("
   const from = pacificLocalToUtc(`${day.from}T00:00`)!;
   const to = pacificLocalToUtc(`${day.to}T00:00`)!;
   t("filter: Nov 1 2026 (clocks go back) is a 25-hour day", (to.getTime() - from.getTime()) / 3.6e6 === 25);
+}
+
+// ---- brand colors: readable, and defined in one place ----
+{
+  const lum = (hex: string) => {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const contrast = (a: string, b: string) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
+  const AA = 4.5; // the standard for normal-size text
+  t("brand: white text on an accent button is readable", contrast("#ffffff", BRAND.accent) >= AA, contrast("#ffffff", BRAND.accent).toFixed(2));
+  t("brand: white text on a hovered (darker) accent button is readable", contrast("#ffffff", BRAND.accentDark) >= AA);
+  t("brand: accent-colored text on the page background is readable", contrast(BRAND.accent, BRAND.cream) >= AA, contrast(BRAND.accent, BRAND.cream).toFixed(2));
+  t("brand: accent-colored text on white cards is readable", contrast(BRAND.accent, "#ffffff") >= AA);
+  t("brand: dark accent text on the soft tint is readable", contrast(BRAND.accentDark, BRAND.accentSoft) >= AA, contrast(BRAND.accentDark, BRAND.accentSoft).toFixed(2));
+  t("brand: dark accent text on the page background is readable", contrast(BRAND.accentDark, BRAND.cream) >= AA);
+  t("brand: main text on the soft tint is readable", contrast(BRAND.ink, BRAND.accentSoft) >= AA);
+  t("brand: secondary text on the page background is readable enough (3:1+)", contrast(BRAND.muted, BRAND.cream) >= 3);
+  // the old orange must not survive anywhere in the source: everything reads from lib/brand.ts
+  const walk = (dir: string): string[] => fs.readdirSync(dir, { withFileTypes: true }).flatMap((d) => (d.isDirectory() ? (d.name === "node_modules" || d.name === ".next" ? [] : walk(path.join(dir, d.name))) : /\.(ts|tsx|css|mjs)$/.test(d.name) ? [path.join(dir, d.name)] : []));
+  const stray = ["app", "components", "lib"].flatMap((d) => walk(path.join(process.cwd(), d))).filter((f) => /d9552f|bd4523|fcebe4/i.test(fs.readFileSync(f, "utf8")));
+  t("brand: no hard-coded copy of the old orange is left in the source", stray.length === 0, stray.join(", "));
+  const cfg = fs.readFileSync(path.join(process.cwd(), "tailwind.config.ts"), "utf8");
+  t("brand: the styling config reads the shared palette, not its own copy", cfg.includes("BRAND.accent") && !/#[0-9a-fA-F]{6}/.test(cfg));
 }
 
 // ---- chat links (only known apps; no look-alike hosts) ----

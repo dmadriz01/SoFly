@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import { BRAND } from "./lib/brand";
 
 const config: Config = {
   content: [
@@ -9,14 +10,14 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        cream: "#fbf8f3",
-        ink: "#2b2622",
-        muted: "#7d726a",
-        line: "#ebe2d7",
+        cream: BRAND.cream,
+        ink: BRAND.ink,
+        muted: BRAND.muted,
+        line: BRAND.line,
         accent: {
-          DEFAULT: "#d9552f",
-          dark: "#bd4523",
-          soft: "#fcebe4",
+          DEFAULT: BRAND.accent,
+          dark: BRAND.accentDark,
+          soft: BRAND.accentSoft,
         },
       },
       fontFamily: {
