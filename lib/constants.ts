@@ -186,3 +186,34 @@ export const REQUEST_BY_DEFAULT: readonly string[] = ["Coffee Chat", "Dinner"];
 
 /** What the public sees in place of the venue and address on request-to-join events. */
 export const HIDDEN_VENUE = "Shared after approval";
+
+export const CATEGORY_EMOJI: Record<Category, string> = {
+  Basketball: "🏀",
+  Soccer: "⚽",
+  Pickleball: "🏓",
+  Tennis: "🎾",
+  Running: "🏃",
+  Hiking: "🥾",
+  Cycling: "🚴",
+  Volleyball: "🏐",
+  Climbing: "🧗",
+  Yoga: "🧘",
+  Swimming: "🏊",
+  Dance: "💃",
+  "Board Games": "🎲",
+  "Video Games": "🎮",
+  "Coffee Chat": "☕",
+  Dinner: "🍽️",
+  Conversation: "💬",
+  "Book Club": "📚",
+  "Language Exchange": "🗣️",
+  Networking: "🤝",
+  "Food & Drink": "🍻",
+  Music: "🎵",
+  "Arts & Crafts": "🎨",
+  Photography: "📷",
+  Volunteering: "🌱",
+  Other: "✨",
+};
+
+export const emojiFor = (category: string) => (isCategory(category) ? CATEGORY_EMOJI[category] : "✨");

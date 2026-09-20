@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
+import { InterestsForm } from "@/components/InterestsForm";
 import { OnboardingForm } from "@/components/OnboardingForm";
+import { getInterests } from "@/lib/interests";
 import { getBirthDate } from "@/lib/profile";
 import { createClient } from "@/lib/supabase/server";
 import { safeNext } from "@/lib/utils";
@@ -17,7 +19,24 @@ export default async function WelcomePage({ searchParams }: { searchParams: { ne
   } = await supabase.auth.getUser();
   if (!user) redirect(`/login?next=${encodeURIComponent(next)}`);
 
-  if (await getBirthDate(supabase, user.id)) redirect(next);
+  if (await getBirthDate(supabase, user.id)) {
+    // Step 2: interests. Skipping still records an (empty) answer, so this is only asked once.
+    const interests = await getInterests(supabase, user.id);
+    if (interests !== null) redirect(next);
+
+    return (
+      <div className="mx-auto max-w-md space-y-6 pt-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">What are you into?</h1>
+          <p className="mt-1 text-muted">
+            Pick a few and we&rsquo;ll put meetups you&rsquo;ll like first. You can change these any
+            time from the Me tab.
+          </p>
+        </div>
+        <InterestsForm initial={[]} next={next} mode="onboarding" />
+      </div>
+    );
+  }
 
   const { data: profile } = await supabase
     .from("profiles")

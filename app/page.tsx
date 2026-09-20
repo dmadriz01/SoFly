@@ -1,19 +1,23 @@
 import Link from "next/link";
-import { CategoryPills } from "@/components/CategoryPills";
 import { EventCard } from "@/components/EventCard";
 import { FeedSelects } from "@/components/Filters";
 import { FilterChips } from "@/components/FilterChips";
-import { ageOn, withinAgeRange } from "@/lib/age";
+import { SwipeDeck, type DeckEvent } from "@/components/SwipeDeck";
+import { ViewToggle } from "@/components/ViewToggle";
+import { ageLabel, ageOn, withinAgeRange } from "@/lib/age";
 import { isCategory, isNeighborhood, isSkillLevel } from "@/lib/constants";
-import type { FeedFilters } from "@/lib/feed";
+import { feedHref, type FeedFilters } from "@/lib/feed";
+import { getInterests } from "@/lib/interests";
 import { getBirthDate } from "@/lib/profile";
 import { createClient } from "@/lib/supabase/server";
-import { pacificDate } from "@/lib/time";
+import { formatWhenShort, pacificDate } from "@/lib/time";
 import type { EventWithCount } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+
+type EventWithHost = EventWithCount & { host: { name: string } | null };
 
 export default async function FeedPage({
   searchParams,
@@ -29,19 +33,21 @@ export default async function FeedPage({
     level: isSkillLevel(rawLevel) && rawLevel !== "All levels" ? rawLevel : undefined,
     women: one(searchParams.women) === "1",
     eligible: one(searchParams.eligible) === "1",
+    view: one(searchParams.view) === "swipe" ? "swipe" : undefined,
   };
+  const swipe = filters.view === "swipe";
 
   const supabase = createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const birthDate = user ? await getBirthDate(supabase, user.id) : null;
-  // "Fits my age" only makes sense once we know the viewer's age.
-  const canFilterByAge = Boolean(birthDate);
+  const [birthDate, interests] = user
+    ? await Promise.all([getBirthDate(supabase, user.id), getInterests(supabase, user.id)])
+    : [null, null];
 
   let query = supabase
     .from("events")
-    .select("*")
+    .select("*, host:profiles!host_id(name)")
     .is("cancelled_at", null)
     .gt("starts_at", new Date().toISOString())
     .order("starts_at", { ascending: true })
@@ -53,32 +59,114 @@ export default async function FeedPage({
   if (filters.women) query = query.eq("audience", "Women-only");
 
   const { data, error } = await query;
-  let events = (data ?? []) as EventWithCount[];
-  if (filters.eligible && birthDate) {
-    events = events.filter((e) =>
-      withinAgeRange(ageOn(birthDate, pacificDate(new Date(e.starts_at))), e.age_min, e.age_max)
-    );
-  }
+  const fitsAge = (e: EventWithCount) =>
+    !birthDate ||
+    withinAgeRange(ageOn(birthDate, pacificDate(new Date(e.starts_at))), e.age_min, e.age_max);
+
+  let events = (data ?? []) as EventWithHost[];
+  if (filters.eligible && birthDate) events = events.filter(fitsAge);
+
   const filtered = Boolean(
     filters.category || filters.neighborhood || filters.level || filters.women || filters.eligible
   );
+  const interestSet = new Set(interests ?? []);
+  const matchesInterests = (e: EventWithCount) => interestSet.has(e.category);
 
-  return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">What&rsquo;s happening</h1>
-        <p className="mt-1 text-muted">Find people to play with around the Bay.</p>
+  const header = (
+    <>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">What&rsquo;s happening</h1>
+          <p className="mt-1 text-muted">Find people to play with around the Bay.</p>
+        </div>
+        <ViewToggle filters={filters} />
       </div>
-
-      <CategoryPills filters={filters} />
-      <FilterChips filters={filters} showEligible={canFilterByAge} />
       <FeedSelects filters={filters} />
+      <FilterChips filters={filters} showEligible={Boolean(birthDate)} />
+    </>
+  );
 
-      {error ? (
+  if (error) {
+    return (
+      <div className="space-y-4">
+        {header}
         <p className="card p-4 text-sm text-muted">
           Couldn&rsquo;t load meetups right now. Please refresh in a moment.
         </p>
-      ) : events.length === 0 ? (
+      </div>
+    );
+  }
+
+  // ---- Swipe view ----
+  if (swipe) {
+    let seen = new Set<string>();
+    if (user) {
+      const [mine, passes] = await Promise.all([
+        supabase.from("rsvps").select("event_id").eq("user_id", user.id),
+        supabase.from("event_passes").select("event_id").eq("user_id", user.id),
+      ]);
+      seen = new Set([
+        ...(mine.data ?? []).map((r) => r.event_id as string),
+        ...(passes.data ?? []).map((r) => r.event_id as string),
+      ]);
+    }
+
+    // Only show what the viewer could actually join, matches for their interests first.
+    const candidates = events
+      .filter((e) => e.spots_taken < e.max_spots && e.host_id !== user?.id && !seen.has(e.id) && fitsAge(e))
+      .sort((a, b) => Number(matchesInterests(b)) - Number(matchesInterests(a)));
+
+    const deck: DeckEvent[] = candidates.map((e) => {
+      const age = ageLabel(e.age_min, e.age_max);
+      return {
+        id: e.id,
+        title: e.title,
+        category: e.category,
+        when: formatWhenShort(e.starts_at),
+        neighborhood: e.neighborhood,
+        venue: e.venue_name,
+        spotsLeft: Math.max(e.max_spots - e.spots_taken, 0),
+        maxSpots: e.max_spots,
+        blurb: e.description.slice(0, 220),
+        hostName: e.host?.name?.trim() || "the host",
+        requestMode: e.join_mode === "request",
+        matchesInterests: matchesInterests(e),
+        tags: [
+          e.audience === "Women-only" ? "Women-only" : null,
+          e.skill_level !== "All levels" ? e.skill_level : null,
+          age ? (e.age_max == null ? age : `Ages ${age}`) : null,
+          e.join_mode === "request" ? "Approval required" : null,
+        ].filter((t): t is string => Boolean(t)),
+      };
+    });
+
+    return (
+      <div className="space-y-4">
+        {header}
+        <SwipeDeck
+          // A new key when the filters change resets which cards were swiped away.
+          key={feedHref(filters)}
+          events={deck}
+          loggedIn={Boolean(user)}
+          hasProfile={Boolean(birthDate)}
+          returnTo={feedHref(filters)}
+          listHref={feedHref({ ...filters, view: undefined })}
+        />
+      </div>
+    );
+  }
+
+  // ---- List view ----
+  // With no filters on, lead with events that match the viewer's interests.
+  const suggested = !filtered && interestSet.size > 0 ? events.filter(matchesInterests).slice(0, 6) : [];
+  const suggestedIds = new Set(suggested.map((e) => e.id));
+  const rest = events.filter((e) => !suggestedIds.has(e.id));
+
+  return (
+    <div className="space-y-4">
+      {header}
+
+      {events.length === 0 ? (
         <div className="card px-6 py-12 text-center">
           <p className="text-lg font-semibold">
             {filtered ? "Nothing matches those filters yet" : "No meetups on the calendar yet"}
@@ -91,20 +179,45 @@ export default async function FeedPage({
           </Link>
           {filtered && (
             <div className="mt-4">
-              <Link href="/" className="text-sm font-medium text-accent-dark underline">
+              <Link href={feedHref({ view: filters.view })} className="text-sm font-medium text-accent-dark underline">
                 Clear filters
               </Link>
             </div>
           )}
         </div>
       ) : (
-        <ul className="space-y-3">
-          {events.map((event) => (
-            <li key={event.id}>
-              <EventCard event={event} />
-            </li>
-          ))}
-        </ul>
+        <>
+          {suggested.length > 0 && (
+            <section className="space-y-3">
+              <h2 className="text-sm font-bold uppercase tracking-wide text-accent-dark">
+                Picked for you
+              </h2>
+              <ul className="space-y-3">
+                {suggested.map((event) => (
+                  <li key={event.id}>
+                    <EventCard event={event} />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {rest.length > 0 && (
+            <section className="space-y-3">
+              {suggested.length > 0 && (
+                <h2 className="pt-2 text-sm font-bold uppercase tracking-wide text-muted">
+                  More happening
+                </h2>
+              )}
+              <ul className="space-y-3">
+                {rest.map((event) => (
+                  <li key={event.id}>
+                    <EventCard event={event} />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </>
       )}
     </div>
   );

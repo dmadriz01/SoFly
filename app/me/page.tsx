@@ -2,6 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { signOut } from "@/app/actions";
 import { EventCard } from "@/components/EventCard";
+import { InterestsForm } from "@/components/InterestsForm";
+import { getInterests } from "@/lib/interests";
 import { getBirthDate } from "@/lib/profile";
 import { createClient } from "@/lib/supabase/server";
 import type { EventWithCount } from "@/lib/types";
@@ -74,6 +76,7 @@ export default async function MePage() {
       .in("status", ["approved", "pending"]),
   ]);
 
+  const interests = (await getInterests(supabase, user.id)) ?? [];
   const hosting = (hostingRes.data ?? []) as EventWithCount[];
   const myRows = (myRsvps.data ?? []) as { event_id: string; status: string }[];
   const goingIds = myRows.map((r) => r.event_id);
@@ -140,6 +143,12 @@ export default async function MePage() {
           </>
         }
       />
+
+      <section>
+        <h2 className="mb-1 text-lg font-bold">Your interests</h2>
+        <p className="mb-3 text-sm text-muted">We put meetups like these first in your feed.</p>
+        <InterestsForm initial={interests} mode="settings" />
+      </section>
     </div>
   );
 }

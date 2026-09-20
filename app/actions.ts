@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { sendReportAlert } from "@/lib/alerts";
 import { parseChatUrl } from "@/lib/chat";
 import { MIN_AGE, ageOn, parseBirthDate } from "@/lib/age";
-import { HIDDEN_VENUE, REPORT_REASONS, findAgeGroup } from "@/lib/constants";
+import { HIDDEN_VENUE, REPORT_REASONS, findAgeGroup, isCategory } from "@/lib/constants";
 import { getBirthDate } from "@/lib/profile";
 import { pacificDate, pacificLocalToUtc } from "@/lib/time";
 import { safeNext } from "@/lib/utils";
@@ -296,7 +296,8 @@ export async function completeProfile(formData: FormData, next: string): Promise
   if (nameError) return { errors: { name: "Couldn't save your name. Please try again." } };
 
   revalidatePath("/", "layout");
-  redirect(safeNext(next));
+  // Next stop is choosing interests (the welcome page forwards on if that's already done).
+  redirect(`/welcome?next=${encodeURIComponent(safeNext(next))}`);
 }
 
 /** Host approves or declines a pending request. RLS limits this to the event's host. */
@@ -390,5 +391,50 @@ export async function cancelEvent(eventId: string): Promise<{ error?: string }> 
   revalidatePath(`/events/${eventId}`);
   revalidatePath("/");
   revalidatePath("/me");
+  return {};
+}
+
+/** Saves interests. With `next` it continues there (onboarding); without, it just returns. */
+export async function saveInterests(categories: string[], next?: string): Promise<{ error?: string }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const clean = Array.from(new Set(categories.filter(isCategory)));
+  const { error } = await supabase
+    .from("user_interests")
+    .upsert(
+      { user_id: user.id, categories: clean, updated_at: new Date().toISOString() },
+      { onConflict: "user_id" }
+    );
+  if (error) return { error: "Couldn't save your interests. Please try again." };
+
+  revalidatePath("/", "layout");
+  if (next) redirect(safeNext(next));
+  return {};
+}
+
+/** Swipe left: hide an event from this person's swipe deck. */
+export async function passEvent(eventId: string): Promise<{ error?: string }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return {};
+  const { error } = await supabase.from("event_passes").insert({ user_id: user.id, event_id: eventId });
+  // 23505 = already passed.
+  if (error && error.code !== "23505") return { error: "Couldn't save that." };
+  return {};
+}
+
+export async function unpassEvent(eventId: string): Promise<{ error?: string }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return {};
+  await supabase.from("event_passes").delete().eq("user_id", user.id).eq("event_id", eventId);
   return {};
 }
