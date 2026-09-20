@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CategoryBadge } from "./CategoryBadge";
+import { EventTags } from "./EventTags";
 import { formatWhenShort } from "@/lib/time";
 import { spotsTaken } from "@/lib/utils";
 import type { EventWithCount } from "@/lib/types";
@@ -15,8 +16,9 @@ export function EventCard({ event, past = false }: { event: EventWithCount; past
         past || cancelled ? "opacity-60" : ""
       }`}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-1.5">
         <CategoryBadge category={event.category} />
+        <EventTags event={event} />
         {cancelled && (
           <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-800">
             Cancelled

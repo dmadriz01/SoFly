@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { createEvent } from "@/app/actions";
 import { CHAT_APPS_HINT } from "@/lib/chat";
-import { CATEGORIES } from "@/lib/constants";
+import { AGE_GROUPS, AUDIENCES, CATEGORY_GROUPS, SKILL_LEVELS } from "@/lib/constants";
 import { NeighborhoodOptions } from "./NeighborhoodOptions";
 import {
   EVENT_FIELDS,
@@ -97,10 +97,14 @@ export function EventForm() {
             <option value="" disabled>
               Select…
             </option>
-            {CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
+            {CATEGORY_GROUPS.map((g) => (
+              <optgroup key={g.label} label={g.label}>
+                {g.items.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </Field>
@@ -119,6 +123,59 @@ export function EventForm() {
           </select>
         </Field>
       </div>
+
+      <div className="grid gap-5 sm:grid-cols-3">
+        <Field label="Skill level" name="skill_level" error={errors.skill_level}>
+          <select
+            id="skill_level"
+            name="skill_level"
+            defaultValue="All levels"
+            className={cls("skill_level")}
+            {...aria("skill_level")}
+          >
+            {SKILL_LEVELS.map((l) => (
+              <option key={l} value={l}>
+                {l}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Who it's for" name="audience" error={errors.audience}>
+          <select
+            id="audience"
+            name="audience"
+            defaultValue="Everyone"
+            className={cls("audience")}
+            {...aria("audience")}
+          >
+            {AUDIENCES.map((a) => (
+              <option key={a} value={a}>
+                {a}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Ages" name="age_group" error={errors.age_group}>
+          <select
+            id="age_group"
+            name="age_group"
+            defaultValue="18+"
+            className={cls("age_group")}
+            {...aria("age_group")}
+          >
+            {AGE_GROUPS.map((g) => (
+              <option key={g.value} value={g.value}>
+                {g.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </div>
+      <p className="-mt-2 text-xs text-muted">
+        Ages come from the birthday each person enters when they sign up, and BayMeet can&rsquo;t
+        verify them, so for 21+ events at a venue please check ID at the door. BayMeet also can&rsquo;t
+        verify gender; &ldquo;Women-only&rdquo; sets expectations for who should join.
+      </p>
 
       <Field label="Venue name" name="venue_name" error={errors.venue_name}>
         <input

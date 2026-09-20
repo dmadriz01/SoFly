@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { EventForm } from "@/components/EventForm";
+import { getBirthDate } from "@/lib/profile";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -10,6 +11,7 @@ export default async function NewEventPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/events/new");
+  if (!(await getBirthDate(supabase, user.id))) redirect("/welcome?next=/events/new");
 
   return (
     <div className="space-y-6">

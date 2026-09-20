@@ -1,14 +1,19 @@
-/** Build a feed URL with the given filters in the query string. */
-export function feedHref({
-  category,
-  neighborhood,
-}: {
+export type FeedFilters = {
   category?: string;
   neighborhood?: string;
-}) {
+  level?: string;
+  women?: boolean;
+  eligible?: boolean;
+};
+
+/** Build a feed URL with the given filters in the query string. */
+export function feedHref(filters: FeedFilters) {
   const params = new URLSearchParams();
-  if (category) params.set("category", category);
-  if (neighborhood) params.set("neighborhood", neighborhood);
+  if (filters.category) params.set("category", filters.category);
+  if (filters.neighborhood) params.set("neighborhood", filters.neighborhood);
+  if (filters.level) params.set("level", filters.level);
+  if (filters.women) params.set("women", "1");
+  if (filters.eligible) params.set("eligible", "1");
   const qs = params.toString();
   return qs ? `/?${qs}` : "/";
 }

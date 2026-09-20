@@ -5,7 +5,6 @@ import { createClient } from "@/lib/supabase/client";
 
 export function LoginForm({ next, initialError }: { next: string; initialError?: string }) {
   const [email, setEmail] = useState("");
-  const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "verifying">("idle");
   const [error, setError] = useState(initialError);
@@ -19,9 +18,6 @@ export function LoginForm({ next, initialError }: { next: string; initialError?:
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim(),
       options: {
-        // Only used when this email creates a new account; the database trigger
-        // copies it into profiles.name. Existing users are unaffected.
-        data: name.trim() ? { name: name.trim() } : undefined,
         emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
       },
     });
@@ -57,7 +53,7 @@ export function LoginForm({ next, initialError }: { next: string; initialError?:
       return;
     }
     // Full navigation so the server sees the new session cookie.
-    window.location.assign(next);
+    window.location.assign(`/welcome?next=${encodeURIComponent(next)}`);
   }
 
   if (status === "sent" || status === "verifying") {
@@ -135,25 +131,6 @@ export function LoginForm({ next, initialError }: { next: string; initialError?:
           onChange={(e) => setEmail(e.target.value)}
           className="field"
         />
-      </div>
-      <div>
-        <label htmlFor="name" className="mb-1.5 block text-sm font-semibold">
-          Your name <span className="font-normal text-muted">(optional)</span>
-        </label>
-        <input
-          id="name"
-          type="text"
-          autoComplete="name"
-          maxLength={50}
-          placeholder="Alex Rivera"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="field"
-        />
-        <p className="mt-1 text-xs text-muted">
-          First time here? This is what others see on events you host or join. Returning users
-          can leave it blank.
-        </p>
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <button type="submit" disabled={status === "sending"} className="btn-primary w-full">

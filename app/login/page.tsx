@@ -16,14 +16,14 @@ export default async function LoginPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (user) redirect(next);
+  if (user) redirect(`/welcome?next=${encodeURIComponent(next)}`);
 
   return (
     <div className="mx-auto max-w-sm space-y-6 pt-4">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Log in to BayMeet</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Access BayMeet</h1>
         <p className="mt-1 text-muted">
-          No password needed. We&rsquo;ll email you a link that logs you in.
+          No account or password needed. We&rsquo;ll email you a code to log in.
         </p>
       </div>
       <LoginForm

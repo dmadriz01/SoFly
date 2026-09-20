@@ -5,8 +5,11 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { sendReportAlert } from "@/lib/alerts";
 import { parseChatUrl } from "@/lib/chat";
-import { REPORT_REASONS } from "@/lib/constants";
-import { pacificLocalToUtc } from "@/lib/time";
+import { MIN_AGE, ageOn, parseBirthDate } from "@/lib/age";
+import { REPORT_REASONS, findAgeGroup } from "@/lib/constants";
+import { getBirthDate } from "@/lib/profile";
+import { pacificDate, pacificLocalToUtc } from "@/lib/time";
+import { safeNext } from "@/lib/utils";
 import { EVENT_FIELDS, validateEvent, type EventErrors } from "@/lib/validation";
 
 export type CreateEventResult = { errors: EventErrors; formError?: string };
@@ -17,6 +20,7 @@ export async function createEvent(formData: FormData): Promise<CreateEventResult
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/events/new");
+  if (!(await getBirthDate(supabase, user.id))) redirect("/welcome?next=/events/new");
 
   const input: Record<string, string> = {};
   for (const field of EVENT_FIELDS) {
@@ -26,6 +30,8 @@ export async function createEvent(formData: FormData): Promise<CreateEventResult
 
   const errors = validateEvent(input);
   if (Object.keys(errors).length > 0) return { errors };
+
+  const ageGroup = findAgeGroup(input.age_group)!;
 
   const { data, error } = await supabase
     .from("events")
@@ -39,6 +45,10 @@ export async function createEvent(formData: FormData): Promise<CreateEventResult
       starts_at: pacificLocalToUtc(input.starts_at)!.toISOString(),
       max_spots: Number(input.max_spots),
       description: input.description,
+      skill_level: input.skill_level,
+      audience: input.audience,
+      age_min: ageGroup.min,
+      age_max: ageGroup.max,
     })
     .select("id")
     .single();
@@ -74,9 +84,13 @@ export async function setRsvp(eventId: string, join: boolean): Promise<{ error?:
       return {
         error: error.message.includes("cancelled")
           ? "This meetup was cancelled."
-          : error.message.includes("full")
-            ? "Sorry, this event just filled up."
-            : "Couldn't join. Please try again.",
+          : error.message.includes("birthday")
+            ? "Finish your profile first: we need your birthday to join meetups."
+            : error.message.includes("age requirement")
+              ? "This meetup has an age requirement you don't meet."
+              : error.message.includes("full")
+                ? "Sorry, this event just filled up."
+                : "Couldn't join. Please try again.",
       };
     }
   } else {
@@ -191,4 +205,48 @@ export async function setChatLink(eventId: string, raw: string): Promise<{ error
 
   revalidatePath(`/events/${eventId}`);
   return {};
+}
+
+export type CompleteProfileResult = {
+  errors: { name?: string; birthdate?: string };
+};
+
+/** First-login onboarding: display name and (private) birthday. Redirects to `next` on success. */
+export async function completeProfile(formData: FormData, next: string): Promise<CompleteProfileResult> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const field = (k: string) => {
+    const v = formData.get(k);
+    return typeof v === "string" ? v.trim() : "";
+  };
+
+  const errors: CompleteProfileResult["errors"] = {};
+  const name = field("name");
+  if (!name) errors.name = "Enter your name.";
+  else if (name.length > 50) errors.name = "Keep it under 50 characters.";
+
+  const birth = parseBirthDate(field("birth_year"), field("birth_month"), field("birth_day"));
+  if (!birth) errors.birthdate = "Enter your full birthday.";
+  else if (ageOn(birth, pacificDate()) < MIN_AGE) {
+    errors.birthdate = `BayMeet is for people ${MIN_AGE} and older.`;
+  }
+  if (Object.keys(errors).length > 0) return { errors };
+
+  const { error: birthError } = await supabase
+    .from("profile_private")
+    .insert({ user_id: user.id, birth_date: birth });
+  // 23505 = already set (e.g. a double submit). The birthday is locked once saved.
+  if (birthError && birthError.code !== "23505") {
+    return { errors: { birthdate: "Couldn't save that. Please try again." } };
+  }
+
+  const { error: nameError } = await supabase.from("profiles").update({ name }).eq("id", user.id);
+  if (nameError) return { errors: { name: "Couldn't save your name. Please try again." } };
+
+  revalidatePath("/", "layout");
+  redirect(safeNext(next));
 }

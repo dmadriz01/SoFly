@@ -1,4 +1,4 @@
-import { isCategory, isNeighborhood } from "./constants";
+import { findAgeGroup, isAudience, isCategory, isNeighborhood, isSkillLevel } from "./constants";
 import { parseChatUrl } from "./chat";
 import { pacificLocalToUtc } from "./time";
 
@@ -12,6 +12,9 @@ export const EVENT_FIELDS = [
   "max_spots",
   "description",
   "chat_url",
+  "skill_level",
+  "audience",
+  "age_group",
 ] as const;
 
 export type EventField = (typeof EVENT_FIELDS)[number];
@@ -61,6 +64,10 @@ export function validateEvent(input: Record<string, string>): EventErrors {
 
   if (v("description").length > LIMITS.description)
     errors.description = `Keep it under ${LIMITS.description} characters.`;
+
+  if (!isSkillLevel(v("skill_level"))) errors.skill_level = "Pick a skill level.";
+  if (!isAudience(v("audience"))) errors.audience = "Pick who it's for.";
+  if (!findAgeGroup(v("age_group"))) errors.age_group = "Pick an age group.";
 
   if (v("chat_url")) {
     const parsed = parseChatUrl(v("chat_url"));

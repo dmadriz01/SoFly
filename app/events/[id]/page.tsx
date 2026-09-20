@@ -3,13 +3,16 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CategoryBadge } from "@/components/CategoryBadge";
 import { DeleteEventButton } from "@/components/DeleteEventButton";
+import { EventTags } from "@/components/EventTags";
 import { GroupChat } from "@/components/GroupChat";
 import { ReportEvent } from "@/components/ReportEvent";
 import { RsvpPanel } from "@/components/RsvpPanel";
 import { ShareButton } from "@/components/ShareButton";
+import { ageLabel, ageOn, withinAgeRange } from "@/lib/age";
+import { getBirthDate } from "@/lib/profile";
 import { createPublicClient } from "@/lib/supabase/public";
 import { createClient } from "@/lib/supabase/server";
-import { formatWhenLong } from "@/lib/time";
+import { formatWhenLong, pacificDate } from "@/lib/time";
 import type { EventRow } from "@/lib/types";
 import { firstName } from "@/lib/utils";
 
@@ -69,6 +72,19 @@ export default async function EventPage({ params }: { params: { id: string } }) 
       .maybeSingle();
     chatUrl = chat?.url ?? null;
   }
+
+  // Can this viewer join? (Only matters once they're logged in.)
+  let blocked: { kind: "profile" } | { kind: "age"; label: string } | null = null;
+  if (user) {
+    const birthDate = await getBirthDate(supabase, user.id);
+    if (!birthDate) blocked = { kind: "profile" };
+    else if (event.age_min != null || event.age_max != null) {
+      const age = ageOn(birthDate, pacificDate(new Date(event.starts_at)));
+      if (!withinAgeRange(age, event.age_min, event.age_max)) {
+        blocked = { kind: "age", label: ageLabel(event.age_min, event.age_max) ?? "" };
+      }
+    }
+  }
   const attendees = [...event.rsvps].sort((a, b) => a.created_at.localeCompare(b.created_at));
   const when = formatWhenLong(event.starts_at);
   const cancelled = Boolean(event.cancelled_at);
@@ -95,7 +111,10 @@ export default async function EventPage({ params }: { params: { id: string } }) 
       )}
 
       <header>
-        <CategoryBadge category={event.category} />
+        <div className="flex flex-wrap items-center gap-1.5">
+          <CategoryBadge category={event.category} />
+          <EventTags event={event} />
+        </div>
         <h1 className="mt-2 text-2xl font-bold leading-tight tracking-tight">{event.title}</h1>
         <p className="mt-1 text-sm text-muted">Hosted by {event.host?.name || "someone"}</p>
       </header>
@@ -122,6 +141,7 @@ export default async function EventPage({ params }: { params: { id: string } }) 
         loggedIn={Boolean(user)}
         ended={ended}
         cancelled={cancelled}
+        blocked={blocked}
       />
 
       {!cancelled && (isHost || (going && chatUrl)) && (

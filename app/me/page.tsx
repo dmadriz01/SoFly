@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { signOut } from "@/app/actions";
 import { EventCard } from "@/components/EventCard";
+import { getBirthDate } from "@/lib/profile";
 import { createClient } from "@/lib/supabase/server";
 import type { EventWithCount } from "@/lib/types";
 
@@ -57,6 +58,7 @@ export default async function MePage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/me");
+  if (!(await getBirthDate(supabase, user.id))) redirect("/welcome?next=/me");
 
   const [hostingRes, myRsvps] = await Promise.all([
     supabase.from("events").select("*, rsvps(count)").eq("host_id", user.id),

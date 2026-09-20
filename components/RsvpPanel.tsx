@@ -12,6 +12,7 @@ export function RsvpPanel({
   loggedIn,
   ended,
   cancelled,
+  blocked,
 }: {
   eventId: string;
   maxSpots: number;
@@ -20,6 +21,8 @@ export function RsvpPanel({
   loggedIn: boolean;
   ended: boolean;
   cancelled: boolean;
+  /** Why a logged-in viewer can't join: profile incomplete, or outside the age range. */
+  blocked: { kind: "profile" } | { kind: "age"; label: string } | null;
 }) {
   const [error, setError] = useState<string>();
   const [pending, startTransition] = useTransition();
@@ -69,6 +72,17 @@ export function RsvpPanel({
         Join
       </Link>
     );
+  } else if (blocked && !state.going) {
+    button =
+      blocked.kind === "profile" ? (
+        <Link href={`/welcome?next=/events/${eventId}`} className="btn-primary w-full">
+          Finish your profile to join
+        </Link>
+      ) : (
+        <button disabled className="btn-primary w-full">
+          For ages {blocked.label}
+        </button>
+      );
   } else {
     button = (
       <button

@@ -108,6 +108,7 @@ Set the subject to `Your BayMeet login code` and use this body in each:
 
 - **Reports:** run [`supabase/migrations/002_reports.sql`](supabase/migrations/002_reports.sql) in the SQL editor. Reports are private; read them in Supabase → Table Editor → `reports`.
 - **Group chat links:** run [`supabase/migrations/003_chat_links.sql`](supabase/migrations/003_chat_links.sql) in the SQL editor. Hosts can add a WhatsApp, GroupMe, Discord, Telegram, Signal, Slack or Messenger invite link; only the host and people who joined can see it.
+- **Birthdays, skill levels, age and audience settings:** run [`supabase/migrations/005_profiles_and_filters.sql`](supabase/migrations/005_profiles_and_filters.sql) right before deploying the matching code. After it, joining and posting require a completed profile (name and birthday), which everyone is asked for the next time they log in. Birthdays live in a private table only the owner can read, and can't be changed once saved (fix a typo in Supabase → Table Editor → `profile_private`).
 - **Cancelled events:** run [`supabase/migrations/004_cancelled.sql`](supabase/migrations/004_cancelled.sql). Run it **before** deploying the matching code; the new feed query needs the column. See "Moderating" below.
 - **Report email alerts:** add these in Vercel → Settings → Environment Variables (and `.env.local` locally). Mark the password **Sensitive**:
   - `ALERT_EMAIL_USER`: a Gmail address

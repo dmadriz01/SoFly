@@ -24,6 +24,11 @@ export default function GuidelinesPage() {
           </li>
           <li>Be clear about time, place, skill level and what to bring.</li>
           <li>No ads, selling, recruiting or promotions. Free or cost-share meetups only.</li>
+          <li>
+            Use the skill level, age and audience settings honestly. They help the right people find
+            your meetup. BayMeet can&rsquo;t verify ages or gender, so for 21+ events at a venue,
+            check ID at the door.
+          </li>
           <li>If plans change, update the event or delete it so people aren&rsquo;t left waiting.</li>
           <li>
             Want a group chat? Add an invite link (WhatsApp, GroupMe, etc.) to your event. Only you and
@@ -38,6 +43,10 @@ export default function GuidelinesPage() {
           <li>Only join if you plan to go. If you can&rsquo;t make it, tap Leave so someone else can have your spot.</li>
           <li>Be kind and inclusive. No harassment, discrimination, or unwanted advances.</li>
           <li>BayMeet is for people 18 and older.</li>
+          <li>
+            Respect who a meetup is for. If it&rsquo;s marked Women-only or has an age range and that
+            isn&rsquo;t you, please don&rsquo;t join.
+          </li>
         </ul>
       </section>
 

@@ -1,14 +1,9 @@
 import Link from "next/link";
 import { CATEGORIES } from "@/lib/constants";
-import { feedHref } from "@/lib/feed";
+import { feedHref, type FeedFilters } from "@/lib/feed";
 
-export function CategoryPills({
-  category,
-  neighborhood,
-}: {
-  category?: string;
-  neighborhood?: string;
-}) {
+export function CategoryPills({ filters }: { filters: FeedFilters }) {
+  const { category } = filters;
   const pill = (active: boolean) =>
     `shrink-0 rounded-full border px-3.5 py-1.5 text-sm font-medium transition ${
       active
@@ -20,7 +15,7 @@ export function CategoryPills({
     <div className="no-scrollbar -mx-4 overflow-x-auto px-4">
       <div className="flex w-max gap-2">
         <Link
-          href={feedHref({ neighborhood })}
+          href={feedHref({ ...filters, category: undefined })}
           className={pill(!category)}
           aria-current={!category ? "true" : undefined}
         >
@@ -29,7 +24,7 @@ export function CategoryPills({
         {CATEGORIES.map((c) => (
           <Link
             key={c}
-            href={feedHref({ category: c, neighborhood })}
+            href={feedHref({ ...filters, category: c })}
             className={pill(category === c)}
             aria-current={category === c ? "true" : undefined}
           >

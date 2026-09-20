@@ -28,6 +28,8 @@ function dayKey(d: Date) {
   return `${p.year}-${p.month}-${p.day}`;
 }
 
+export const pacificDate = (d = new Date()) => dayKey(d);
+
 function nextDayKey(key: string) {
   const [y, m, d] = key.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);

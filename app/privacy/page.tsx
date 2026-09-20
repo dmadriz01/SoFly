@@ -26,6 +26,11 @@ export default function PrivacyPage() {
             before the @.
           </li>
           <li>
+            <strong>Your birthday</strong>, which we ask for when you first log in, to check the age
+            requirements on meetups. It&rsquo;s private: other users never see it, it&rsquo;s used
+            only to check age requirements, and it can&rsquo;t be changed once saved.
+          </li>
+          <li>
             <strong>What you post and do:</strong> meetups you host, and meetups you join.
           </li>
           <li>

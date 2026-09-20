@@ -1,21 +1,70 @@
-export const CATEGORIES = [
-  "Basketball",
-  "Soccer",
-  "Pickleball",
-  "Tennis",
-  "Running",
-  "Hiking",
-  "Cycling",
-  "Volleyball",
-  "Climbing",
-  "Board Games",
-  "Video Games",
-  "Yoga",
-  "Swimming",
-  "Other",
+// Grouped for the post form's dropdown; the feed's filter pills use the flat CATEGORIES list.
+export const CATEGORY_GROUPS = [
+  {
+    label: "Sports & fitness",
+    items: [
+      "Basketball",
+      "Soccer",
+      "Pickleball",
+      "Tennis",
+      "Running",
+      "Hiking",
+      "Cycling",
+      "Volleyball",
+      "Climbing",
+      "Yoga",
+      "Swimming",
+      "Dance",
+    ],
+  },
+  { label: "Games", items: ["Board Games", "Video Games"] },
+  {
+    label: "Social & interests",
+    items: [
+      "Coffee Chat",
+      "Dinner",
+      "Conversation",
+      "Book Club",
+      "Language Exchange",
+      "Networking",
+      "Food & Drink",
+      "Music",
+      "Arts & Crafts",
+      "Photography",
+      "Volunteering",
+    ],
+  },
+  { label: "Other", items: ["Other"] },
 ] as const;
 
-export type Category = (typeof CATEGORIES)[number];
+export type Category = (typeof CATEGORY_GROUPS)[number]["items"][number];
+
+export const CATEGORIES: readonly Category[] = CATEGORY_GROUPS.flatMap((g) => g.items);
+
+export const SKILL_LEVELS = ["All levels", "Beginner", "Intermediate", "Advanced"] as const;
+export type SkillLevel = (typeof SKILL_LEVELS)[number];
+
+export const AUDIENCES = ["Everyone", "Women-only"] as const;
+export type Audience = (typeof AUDIENCES)[number];
+
+/**
+ * Age restrictions hosts can pick. Ranges are inclusive at both ends (a 21-year-old fits
+ * both 18-21 and 21-25). null/null means anyone 18+, since BayMeet is 18+ only.
+ * Add a row to offer another group; the database stores plain min/max ages.
+ */
+export const AGE_GROUPS: { value: string; label: string; min: number | null; max: number | null }[] = [
+  { value: "18+", label: "Anyone 18+", min: null, max: null },
+  { value: "21+", label: "21+", min: 21, max: null },
+  { value: "25+", label: "25+", min: 25, max: null },
+  { value: "30+", label: "30+", min: 30, max: null },
+  { value: "40+", label: "40+", min: 40, max: null },
+  { value: "50+", label: "50+", min: 50, max: null },
+  { value: "18-21", label: "Ages 18–21", min: 18, max: 21 },
+  { value: "21-25", label: "Ages 21–25", min: 21, max: 25 },
+  { value: "25-30", label: "Ages 25–30", min: 25, max: 30 },
+  { value: "30-40", label: "Ages 30–40", min: 30, max: 40 },
+  { value: "40-50", label: "Ages 40–50", min: 40, max: 50 },
+];
 
 // Existing values ("SF - Mission", "Oakland", "Marin", ...) are kept exactly so older events
 // still match. Cities are the 100 incorporated Bay Area cities outside San Francisco, by county.
@@ -87,10 +136,22 @@ export const CATEGORY_STYLES: Record<Category, string> = {
   Cycling: "bg-teal-100 text-teal-900",
   Volleyball: "bg-rose-100 text-rose-900",
   Climbing: "bg-stone-200 text-stone-800",
-  "Board Games": "bg-violet-100 text-violet-900",
-  "Video Games": "bg-indigo-100 text-indigo-900",
   Yoga: "bg-pink-100 text-pink-900",
   Swimming: "bg-cyan-100 text-cyan-900",
+  Dance: "bg-purple-200 text-purple-900",
+  "Board Games": "bg-violet-100 text-violet-900",
+  "Video Games": "bg-indigo-100 text-indigo-900",
+  "Coffee Chat": "bg-amber-200 text-amber-950",
+  Dinner: "bg-red-200 text-red-950",
+  Conversation: "bg-orange-100 text-orange-900",
+  "Book Club": "bg-purple-100 text-purple-900",
+  "Language Exchange": "bg-blue-100 text-blue-900",
+  Networking: "bg-zinc-200 text-zinc-800",
+  "Food & Drink": "bg-red-100 text-red-900",
+  Music: "bg-fuchsia-100 text-fuchsia-900",
+  "Arts & Crafts": "bg-neutral-200 text-neutral-800",
+  Photography: "bg-gray-200 text-gray-800",
+  Volunteering: "bg-green-200 text-green-950",
   Other: "bg-slate-100 text-slate-700",
 };
 
@@ -106,3 +167,11 @@ export const REPORT_REASONS = [
   "Fake or misleading",
   "Other",
 ] as const;
+
+export const isSkillLevel = (v: unknown): v is SkillLevel =>
+  typeof v === "string" && (SKILL_LEVELS as readonly string[]).includes(v);
+
+export const isAudience = (v: unknown): v is Audience =>
+  typeof v === "string" && (AUDIENCES as readonly string[]).includes(v);
+
+export const findAgeGroup = (value: unknown) => AGE_GROUPS.find((g) => g.value === value);
