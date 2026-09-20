@@ -109,10 +109,25 @@
     min-height: 0;
     width: 100%;
     padding-top: 0.5rem;
-    padding-bottom: calc(4.9rem + env(safe-area-inset-bottom));
+    /* No room is reserved for the bottom bar: it takes its own place below (see next rule), so the
+       card and buttons can never end up underneath it, whatever size the phone or its toolbars are. */
+    padding-bottom: 0.25rem;
+  }
+  /* On the swipe screen the tab bar stops being pinned to the screen edge and becomes the last
+     item in the page's column. It keeps its own height (including the home-indicator space). */
+  html.swipe-lock nav[aria-label="Main"].fixed {
+    position: static;
+    flex: none;
+    width: 100%;
   }
   html.swipe-lock footer {
     display: none;
+  }
+  /* On the very shortest screens the logo row goes too, so the card keeps its room. */
+  @media (max-height: 559px) {
+    html.swipe-lock header {
+      display: none;
+    }
   }
   html.swipe-lock .swipe-screen {
     display: flex;

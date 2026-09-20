@@ -193,8 +193,9 @@ export function SwipeDeck({
         </div>
       ) : (
         <>
-          <p className="pb-2 text-center text-xs text-muted">
-            Swipe right to join · left to pass · {visible.length} left
+          <p className="pb-2 text-center text-xs text-muted [@media(max-height:639px)]:pb-1">
+            <span className="[@media(max-height:639px)]:hidden">Swipe right to join · left to pass · </span>
+            {visible.length} left
           </p>
 
           <div className="relative min-h-0 flex-1" data-testid="deck">
@@ -212,7 +213,7 @@ export function SwipeDeck({
             })}
           </div>
 
-          <div className="flex items-center justify-center gap-5 pb-1 pt-3">
+          <div className="flex shrink-0 items-center justify-center gap-6 pb-1 pt-2">
             <RoundButton label="Pass" size="lg" onClick={() => commit(top, "left")} tone="pass">
               ✕
             </RoundButton>
@@ -221,10 +222,10 @@ export function SwipeDeck({
               aria-label={`Details for ${top.title}`}
               className="flex flex-col items-center gap-1 text-[0.7rem] font-medium text-muted"
             >
-              <span className="flex h-12 w-12 items-center justify-center rounded-full border border-line bg-white text-lg text-ink shadow-sm">
+              <span className="flex h-11 w-11 items-center justify-center rounded-full border border-line bg-white text-lg text-ink shadow-sm">
                 ⓘ
               </span>
-              Details
+              <span className="[@media(max-height:639px)]:hidden">Details</span>
             </Link>
             <RoundButton label={top.requestMode ? "Request" : "Join"} size="lg" onClick={() => commit(top, "right")} tone="join">
               ✓
@@ -301,13 +302,13 @@ function RoundButton({
   return (
     <button type="button" onClick={onClick} aria-label={label} className="flex flex-col items-center gap-1 text-[0.7rem] font-medium text-muted">
       <span
-        className={`flex h-16 w-16 items-center justify-center rounded-full text-2xl font-bold shadow-md transition active:scale-95 ${
+        className={`flex h-14 w-14 items-center justify-center rounded-full text-xl font-bold shadow-md transition active:scale-95 ${
           tone === "join" ? "bg-accent text-white" : "border border-line bg-white text-ink"
         }`}
       >
         {children}
       </span>
-      {label}
+      <span className="[@media(max-height:639px)]:hidden">{label}</span>
     </button>
   );
 }
