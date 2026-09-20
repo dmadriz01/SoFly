@@ -337,7 +337,7 @@ export async function respondToRequest(
   return {};
 }
 
-/** Host-only (enforced by RLS and a database trigger). Can't go below the number already going. */
+/** Host-only (row level security). The database rejects going below the number already going. */
 export async function updateMaxSpots(eventId: string, maxSpots: number): Promise<{ error?: string }> {
   const supabase = createClient();
   const {
@@ -356,9 +356,11 @@ export async function updateMaxSpots(eventId: string, maxSpots: number): Promise
 
   if (error) {
     return {
-      error: error.message.includes("people going")
-        ? error.message
-        : "Couldn't update the spots. Please try again.",
+      error: error.message.includes("events_spots_within_capacity")
+        ? "That's fewer than the number of people already going."
+        : error.message.includes("events_max_spots_range")
+          ? (validateMaxSpots(maxSpots) ?? "Choose a number from 1 to 200.")
+          : "Couldn't update the spots. Please try again.",
     };
   }
   if (!data || data.length === 0) return { error: "Only the host can change this." };
@@ -377,16 +379,10 @@ export async function cancelEvent(eventId: string): Promise<{ error?: string }> 
   } = await supabase.auth.getUser();
   if (!user) return { error: "Please log in." };
 
-  const { data, error } = await supabase
-    .from("events")
-    .update({ cancelled_at: new Date().toISOString() })
-    .eq("id", eventId)
-    .is("cancelled_at", null)
-    .select("id");
-
-  if (error || !data || data.length === 0) {
-    return { error: "Couldn't cancel this meetup. Please try again." };
-  }
+  // cancelled_at can't be written directly (only a moderator can clear it), so hosts go through
+  // this database function, which checks they own the event.
+  const { error } = await supabase.rpc("cancel_event", { eid: eventId });
+  if (error) return { error: "Couldn't cancel this meetup. Please try again." };
 
   revalidatePath(`/events/${eventId}`);
   revalidatePath("/");

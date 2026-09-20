@@ -16,10 +16,9 @@ You need Node 18.17+ and a free [Supabase](https://supabase.com) account.
 ### 2. Create the database
 
 1. In your project, open **SQL Editor → New query**.
-2. Paste the entire contents of [`supabase/migrations/001_init.sql`](supabase/migrations/001_init.sql).
-3. Click **Run**. You should see "Success. No rows returned."
+2. Paste the entire contents of [`supabase/schema.sql`](supabase/schema.sql) and click **Run**. You should see "Success. No rows returned."
 
-This creates the `profiles`, `events` and `rsvps` tables, all Row Level Security policies, the trigger that creates a profile for each new user, and a trigger that stops an event from being over-booked.
+That one file creates every table, index, security rule and trigger the app needs. (Already have a BayMeet database from earlier? Skip this and see "Upgrading an existing database" below.)
 
 ### 3. Configure auth redirect URLs
 
@@ -104,24 +103,39 @@ Set the subject to `Your BayMeet login code` and use this body in each:
 <p>Or <a href="{{ .ConfirmationURL }}">tap here to log in</a> (only works in the browser where you requested it).</p>
 ```
 
+## Database
+
+`supabase/schema.sql` is the complete, current schema: use it for any new project. The numbered files in `supabase/migrations/` are the same schema built up in steps, kept so an existing database can be upgraded. Paste only the ones you haven't run yet, in order. Run each before deploying the code that uses it. (The app keeps working in between, with one exception: after `009`, hosts can't cancel their own events until the newest code is deployed.)
+
+| Migration | What it adds |
+|---|---|
+| `001_init` | events, RSVPs, profiles, and the security rules |
+| `002_reports` | the "report this meetup" table |
+| `003_chat_links` | group chat links, visible only to the host and guests |
+| `004_cancelled` | moderator-cancelled events |
+| `005_profiles_and_filters` | private birthdays; skill level, audience and age settings |
+| `006_request_to_join` | approval-only events, private addresses, spot counts |
+| `007_notes_and_host_controls` | intro notes on requests; hosts can cancel and change spots |
+| `008_interests_and_passes` | interests picker and swipe passes |
+| `009_hardening_and_cleanup` | tightened privileges, cleaner policies and functions, extra limits and indexes |
+
+**Changing the database?** Update `schema.sql` and add a migration, then run `npm run test:db`. It builds a database both ways, runs about 230 checks on each (who can see and do what), and fails if the two ever differ.
+
 ## Launch setup
 
-- **Reports:** run [`supabase/migrations/002_reports.sql`](supabase/migrations/002_reports.sql) in the SQL editor. Reports are private; read them in Supabase → Table Editor → `reports`.
-- **Group chat links:** run [`supabase/migrations/003_chat_links.sql`](supabase/migrations/003_chat_links.sql) in the SQL editor. Hosts can add a WhatsApp, GroupMe, Discord, Telegram, Signal, Slack or Messenger invite link; only the host and people who joined can see it.
-- **Birthdays, skill levels, age and audience settings:** run [`supabase/migrations/005_profiles_and_filters.sql`](supabase/migrations/005_profiles_and_filters.sql) right before deploying the matching code. After it, joining and posting require a completed profile (name and birthday), which everyone is asked for the next time they log in. Birthdays live in a private table only the owner can read, and can't be changed once saved (fix a typo in Supabase → Table Editor → `profile_private`).
-- **Request-to-join events (coffee chats, dinners):** run [`supabase/migrations/006_request_to_join.sql`](supabase/migrations/006_request_to_join.sql) after 005. It's safe to run before deploying the matching code. Hosts can choose "I approve each person"; the real address stays private until they approve someone, and hosts see pending requests on the event page and as a badge on the Me tab.
-- **Notes on join requests and host controls:** run [`supabase/migrations/007_notes_and_host_controls.sql`](supabase/migrations/007_notes_and_host_controls.sql) after 006. Requesters write a short intro that only the host and the requester can read. Hosts can cancel their own meetups and change max spots (never below the number going).
-- **Interests and swipe passes:** run [`supabase/migrations/008_interests_and_passes.sql`](supabase/migrations/008_interests_and_passes.sql). It powers the interests picker (asked once after login, editable on the Me tab) and remembers events you swiped away. Safe to run before deploying; the app degrades gracefully until it is run.
-- **Cancelled events:** run [`supabase/migrations/004_cancelled.sql`](supabase/migrations/004_cancelled.sql). Run it **before** deploying the matching code; the new feed query needs the column. See "Moderating" below.
 - **Report email alerts:** add these in Vercel → Settings → Environment Variables (and `.env.local` locally). Mark the password **Sensitive**:
   - `ALERT_EMAIL_USER`: a Gmail address
   - `ALERT_EMAIL_APP_PASSWORD`: a Google app password ([myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)); reusing the one from Supabase SMTP is fine
   - `REPORT_ALERT_EMAIL`: where alerts go (optional; defaults to `NEXT_PUBLIC_CONTACT_EMAIL`)
 
   Redeploy afterward. If these aren't set, reports are still saved; only the email is skipped.
+
 - **Contact email:** set `NEXT_PUBLIC_CONTACT_EMAIL` (locally in `.env.local`, and in Vercel → Settings → Environment Variables). It powers the Feedback link and the privacy and guidelines pages.
+
 - **Custom domain:** set `NEXT_PUBLIC_SITE_URL` (e.g. `https://baymeet.app`) so link previews use it. Until then Vercel's production URL is used automatically.
+
 - **Analytics:** in Vercel, open your project → **Analytics** → **Enable**. The code is already in place.
+
 - **Link previews:** check them after deploying by pasting an event URL into the [LinkedIn Post Inspector](https://www.linkedin.com/post-inspector/). Platforms cache previews, so re-scrape after changes.
 
 ## Moderating
@@ -148,7 +162,7 @@ Hosts can cancel their own meetups from the event page, but only you can **reins
 - **The emailed link only works in the browser that requested it.** The code always works, which is why the login page asks for it.
 - **Supabase's built-in email sender is heavily rate limited** (a few emails per hour, and only to project team members by default). It's fine for development. Before real users arrive, configure your own SMTP provider under **Project Settings → Authentication → SMTP Settings**.
 - **Times are Pacific.** The date picker on the post form is interpreted as Pacific time regardless of the poster's device time zone, and all times are displayed in Pacific.
-- **Display names** come from the optional "Your name" field on the login page, used only when an email signs up for the first time. If it's left blank, the name defaults to the part of the email before the `@`. There's no profile editor; change a name by editing the row in the `profiles` table (Supabase → Table Editor).
+- **Display names** are chosen on the welcome screen right after first login (name and birthday), and can be changed by editing the row in the `profiles` table (Supabase → Table Editor). Birthdays are private and can't be changed once saved.
 
 ## Project layout
 
@@ -160,5 +174,7 @@ lib/time.ts           Pacific-time formatting and parsing
 lib/validation.ts     Post-form rules, shared by client and server
 lib/supabase/         Browser and server Supabase clients
 middleware.ts         Refreshes the Supabase session cookie
-supabase/migrations/  SQL schema, RLS policies, triggers
+supabase/schema.sql      The complete database schema (use this for a new project)
+supabase/migrations/    The same schema in upgrade steps, for existing databases
+supabase/tests/         `npm run test:db`: security and behaviour checks on the schema
 ```
