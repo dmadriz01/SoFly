@@ -29,6 +29,9 @@
     animation: shimmer 1.4s ease infinite;
     @apply rounded-xl;
   }
+  .swipe-screen {
+    @apply flex flex-col gap-3;
+  }
   .fade-up {
     animation: fade-up 0.35s ease both;
   }
@@ -77,5 +80,44 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* While the swipe screen is showing on a phone, the page itself never scrolls: it is just the card.
+   (On larger screens the page behaves normally.) */
+@media (max-width: 767px) {
+  html.swipe-lock,
+  html.swipe-lock body {
+    height: 100dvh;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  html.swipe-lock body {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  html.swipe-lock header {
+    flex: none;
+  }
+  html.swipe-lock main {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    width: 100%;
+    padding-top: 0.5rem;
+    padding-bottom: calc(4.9rem + env(safe-area-inset-bottom));
+  }
+  html.swipe-lock footer {
+    display: none;
+  }
+  html.swipe-lock .swipe-screen {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
   }
 }

@@ -5,6 +5,9 @@ export type FeedFilters = {
   /** Only meetups set for one group. Unset means all of them. */
   audience?: "Women-only" | "Men-only";
   eligible?: boolean;
+  /** Browse by date: the Monday of a week (YYYY-MM-DD), and optionally one day within it. */
+  week?: string;
+  day?: string;
   /** Set only when someone picks a view explicitly; otherwise their remembered choice applies. */
   view?: "swipe" | "list";
 };
@@ -17,6 +20,8 @@ export function feedHref(filters: FeedFilters) {
   if (filters.level) params.set("level", filters.level);
   if (filters.audience) params.set("audience", filters.audience === "Women-only" ? "women" : "men");
   if (filters.eligible) params.set("eligible", "1");
+  if (filters.week) params.set("week", filters.week);
+  if (filters.day) params.set("day", filters.day);
   if (filters.view) params.set("view", filters.view);
   const qs = params.toString();
   return qs ? `/?${qs}` : "/";

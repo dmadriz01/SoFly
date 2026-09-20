@@ -9,6 +9,7 @@ import { buildIcs } from "../lib/ics.ts";
 import { updateOrInsert } from "../lib/supabase/save.ts";
 import { validateEvent, validateRequestNote } from "../lib/validation.ts";
 import { addDaysToKey, pacificDate, pacificLocalToUtc } from "../lib/time.ts";
+import { dateRangeKeys, dayLabel, isDateKey, resolveDateFilter, weekDays, weekRangeLabel, weekStartKey } from "../lib/weeks.ts";
 
 let passed = 0;
 let failed = 0;
@@ -88,6 +89,37 @@ t("social: even a stored oddity can't break out of the address", socialUrl("inst
 t("note: empty is fine (the host sees your profile anyway)", validateRequestNote("") === undefined && validateRequestNote("   ") === undefined);
 t("note: a short note is fine", validateRequestNote("Hi!") === undefined);
 t("note: 500 characters is fine, 501 is not", validateRequestNote("x".repeat(500)) === undefined && validateRequestNote("x".repeat(501)) !== undefined);
+
+// ---- browsing by week ----
+t("weeks: a Wednesday belongs to the week starting the Monday before", weekStartKey("2026-09-23") === "2026-09-21");
+t("weeks: a Monday starts its own week", weekStartKey("2026-09-21") === "2026-09-21");
+t("weeks: a Sunday belongs to the week that started six days earlier", weekStartKey("2026-09-27") === "2026-09-21");
+t("weeks: across a month and a year", weekStartKey("2027-01-01") === "2026-12-28");
+t("weeks: across the fall daylight-saving change (Nov 1, 2026)", weekStartKey("2026-11-01") === "2026-10-26" && weekDays("2026-10-26").map((d) => d.key).join() === "2026-10-26,2026-10-27,2026-10-28,2026-10-29,2026-10-30,2026-10-31,2026-11-01");
+t("weeks: across the spring daylight-saving change (Mar 14, 2027)", weekDays(weekStartKey("2027-03-14")).length === 7 && weekDays("2027-03-08")[6].key === "2027-03-14");
+t("weeks: seven days, Monday first", weekDays("2026-09-21").map((d) => d.name).join() === "Mon,Tue,Wed,Thu,Fri,Sat,Sun" && weekDays("2026-09-21")[0].day === 21);
+t("weeks: labels within a month and across two", weekRangeLabel("2026-09-21") === "Sep 21 – 27" && weekRangeLabel("2026-09-28") === "Sep 28 – Oct 4" && dayLabel("2026-09-21") === "Mon, Sep 21");
+t("weeks: only real dates are accepted", isDateKey("2026-09-21") && !isDateKey("2026-02-30") && !isDateKey("2026-13-01") && !isDateKey("tomorrow") && !isDateKey("2026-9-1") && !isDateKey(undefined) && !isDateKey("2026-09-21T00:00"));
+{
+  const today = "2026-09-23"; // a Wednesday; this week starts 2026-09-21
+  const r = (w?: string, d?: string) => JSON.stringify(resolveDateFilter({ week: w, day: d }, today));
+  t("filter: nothing given -> no date filter", r() === "{}");
+  t("filter: a day picks its week too", r(undefined, "2026-09-25") === '{"week":"2026-09-21","day":"2026-09-25"}');
+  t("filter: today is allowed", r(undefined, "2026-09-23") === '{"week":"2026-09-21","day":"2026-09-23"}');
+  t("filter: yesterday is not (it's the past)", r(undefined, "2026-09-22") === "{}");
+  t("filter: a week is normalized to its Monday", r("2026-09-30") === '{"week":"2026-09-28"}');
+  t("filter: the current week is allowed", r("2026-09-21") === '{"week":"2026-09-21"}');
+  t("filter: a past week is ignored", r("2026-09-14") === "{}");
+  t("filter: more than 26 weeks ahead is ignored", r("2027-09-01") === "{}" && r("2027-03-22") !== "{}");
+  t("filter: garbage is ignored, not an error", r("banana", "2026-02-30") === "{}");
+  t("filter: a valid day beats a mismatched week", r("2026-10-05", "2026-09-25") === '{"week":"2026-09-21","day":"2026-09-25"}');
+  t("filter: bounds for a day and for a week", JSON.stringify(dateRangeKeys({ day: "2026-09-25" })) === '{"from":"2026-09-25","to":"2026-09-26"}' && JSON.stringify(dateRangeKeys({ week: "2026-09-21" })) === '{"from":"2026-09-21","to":"2026-09-28"}' && dateRangeKeys({}) === null);
+  // the real bounds, in Pacific time, on the day daylight saving ends
+  const day = dateRangeKeys({ day: "2026-11-01" })!;
+  const from = pacificLocalToUtc(`${day.from}T00:00`)!;
+  const to = pacificLocalToUtc(`${day.to}T00:00`)!;
+  t("filter: Nov 1 2026 (clocks go back) is a 25-hour day", (to.getTime() - from.getTime()) / 3.6e6 === 25);
+}
 
 // ---- chat links (only known apps; no look-alike hosts) ----
 t("WhatsApp link accepted", "url" in parseChatUrl("https://chat.whatsapp.com/AbC123"));

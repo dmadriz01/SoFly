@@ -597,6 +597,33 @@ const fromSchema = await buildFromSchema();
 console.log("built from schema.sql");
 await behaviour(fromSchema, { migrated: false });
 
+// Recent migrations must be safe to run again: an "already exists" error mid-way once left it unclear
+// whether an earlier run had finished. Run them a second time, and from a half-finished state, and
+// require the same database as a clean install.
+label = "rerun";
+{
+  const RECENT = MIGRATIONS.filter((f) => /^01[0-4]/.test(f));
+  const clean = await catalog((await buildFromSchema()).db);
+  const same = (x) => x.length === clean.length && x.every((line, i) => line === clean[i]);
+
+  const twice = await buildFromMigrations();
+  let error = "";
+  try { for (const f of RECENT) await twice.db.exec(read("migrations", f)); } catch (e) { error = `${e.message}`; }
+  ok(`running migrations ${RECENT[0].slice(0, 3)}-${RECENT.at(-1).slice(0, 3)} a second time causes no error`, error === "", error);
+  ok("...and changes nothing (same database as a clean install)", same(await catalog(twice.db)));
+
+  // A run that created the table but stopped before the rest (what the "already exists" error implies).
+  const half = await newDb();
+  await addUsers(half);
+  for (const f of MIGRATIONS.filter((m) => m < "014")) await half.exec(read("migrations", f));
+  const tableOnly = read("migrations", MIGRATIONS.find((f) => f.startsWith("014"))).match(/create table if not exists public\.profile_bios \([\s\S]*?\n\);/)[0];
+  await half.exec(tableOnly);
+  let halfError = "";
+  try { await half.exec(read("migrations", MIGRATIONS.find((f) => f.startsWith("014")))); } catch (e) { halfError = e.message; }
+  ok("014 finishes the job when only the table already exists", halfError === "", halfError);
+  ok("...leaving the same database as a clean install", same(await catalog(half)));
+}
+
 label = "drift";
 const a = await catalog((await buildFromMigrations()).db);
 const b = await catalog((await buildFromSchema()).db);

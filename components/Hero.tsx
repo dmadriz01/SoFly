@@ -20,15 +20,12 @@ export function Hero() {
           Browse meetups
         </a>
       </div>
-      <ul className="mt-6 grid gap-2 text-sm text-ink/80 sm:grid-cols-3">
+      <ul className="mt-6 grid gap-2 text-sm text-ink/80 sm:grid-cols-2">
         <li className="flex gap-2">
           <span aria-hidden>🤝</span>Meet people who like what you like
         </li>
         <li className="flex gap-2">
           <span aria-hidden>🔒</span>Hosts approve small dinners, and addresses stay private
-        </li>
-        <li className="flex gap-2">
-          <span aria-hidden>✉️</span>No password. Just an email code
         </li>
       </ul>
     </section>

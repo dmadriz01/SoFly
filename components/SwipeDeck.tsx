@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { passEvent, setRsvp, unpassEvent } from "@/app/actions";
 import { CATEGORY_STYLES, emojiFor, isCategory } from "@/lib/constants";
@@ -30,9 +31,16 @@ type SheetState =
   | { kind: "note"; event: DeckEvent };
 type ToastState = null | { text: string; undo?: () => void };
 
-const THRESHOLD = 90; // px of horizontal drag that counts as a decision
-const EXIT_MS = 260;
+const THRESHOLD = 90; // px dragged sideways that counts as a decision
+const FLICK_SPEED = 0.6; // px per ms: a quick flick counts even if it didn't go far
+const FLICK_MIN = 30; // ...as long as it went at least this far
+const EXIT_MS = 280;
 
+/**
+ * The swipe screen: one card floats on screen with the next waiting behind it. Drag it left to
+ * pass or right to join. There is no scrolling and no vertical browsing; the only way forward is a
+ * decision. (While this is on screen the page itself can't scroll on a phone; see globals.css.)
+ */
 export function SwipeDeck({
   events,
   loggedIn,
@@ -51,16 +59,28 @@ export function SwipeDeck({
   listHref: string;
 }) {
   const [gone, setGone] = useState<Set<string>>(() => new Set());
+  const [leaving, setLeaving] = useState<{ id: string; direction: Direction } | null>(null);
   const [sheet, setSheet] = useState<SheetState>(null);
   const [toast, setToast] = useState<ToastState>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout>>();
-  const scroller = useRef<HTMLDivElement>(null);
+  const exitTimer = useRef<ReturnType<typeof setTimeout>>();
   // Mirrors `gone` so async callbacks can tell whether a card has already been removed.
   const goneRef = useRef<Set<string>>(new Set());
   // Cards whose join failed while they were still animating out: they must not be removed.
   const keep = useRef<Set<string>>(new Set());
 
-  useEffect(() => () => clearTimeout(toastTimer.current), []);
+  // Keep the page still while cards are on screen (phones only; the rule lives in globals.css).
+  useEffect(() => {
+    document.documentElement.classList.add("swipe-lock");
+    return () => document.documentElement.classList.remove("swipe-lock");
+  }, []);
+  useEffect(
+    () => () => {
+      clearTimeout(toastTimer.current);
+      clearTimeout(exitTimer.current);
+    },
+    []
+  );
 
   const hide = (id: string) => {
     goneRef.current.add(id);
@@ -71,32 +91,16 @@ export function SwipeDeck({
     setGone(new Set(goneRef.current));
   };
 
-  /** A card finished animating out. Returns false if it should stay (its action failed). */
-  function exited(id: string): boolean {
-    if (keep.current.delete(id)) return false;
-    hide(id);
-    return true;
-  }
-
-  /** The action behind a swipe failed: put the card back, whether or not it has left yet. */
-  function bringBack(id: string) {
-    if (goneRef.current.has(id)) restore(id);
-    else keep.current.add(id);
-  }
-
-  /** Bring a card back and scroll to it (otherwise the browser keeps you on the card you were on). */
-  function restore(id: string) {
-    show(id);
-    setTimeout(() => {
-      const el = document.getElementById(`deck-card-${id}`);
-      if (el && scroller.current) scroller.current.scrollTo({ top: el.offsetTop, behavior: "smooth" });
-    }, 60);
-  }
-
   function flash(text: string, undo?: () => void) {
     clearTimeout(toastTimer.current);
     setToast({ text, undo });
     toastTimer.current = setTimeout(() => setToast(null), 6000);
+  }
+
+  /** The action behind a swipe failed: put the card back, whether or not it has left yet. */
+  function bringBack(id: string) {
+    if (goneRef.current.has(id)) show(id);
+    else keep.current.add(id);
   }
 
   /** Called when a card is swiped or a button is pressed. "rejected" springs the card back. */
@@ -104,7 +108,7 @@ export function SwipeDeck({
     if (direction === "left") {
       if (loggedIn) void passEvent(event.id);
       flash(`Passed on ${event.title}`, () => {
-        restore(event.id);
+        show(event.id);
         if (loggedIn) void unpassEvent(event.id);
       });
       return "accepted";
@@ -119,7 +123,7 @@ export function SwipeDeck({
       return "rejected";
     }
     if (event.requestMode) {
-      // The host needs an intro, so ask for it before anything is sent.
+      // The host approves each person, so offer a note before anything is sent.
       setSheet({ kind: "note", event });
       return "rejected";
     }
@@ -131,12 +135,29 @@ export function SwipeDeck({
         flash(result.error);
       } else {
         flash(`You're in: ${event.title}`, () => {
-          restore(event.id);
+          show(event.id);
           void setRsvp(event.id, false);
         });
       }
     })();
     return "accepted";
+  }
+
+  /** A swipe or button press on the top card. Returns whether it went through. */
+  function commit(event: DeckEvent, direction: Direction): boolean {
+    if (leaving) return false;
+    if (decide(event, direction) === "rejected") return false;
+    if (typeof navigator !== "undefined" && "vibrate" in navigator) navigator.vibrate(10);
+    setLeaving({ id: event.id, direction });
+    exitTimer.current = setTimeout(() => {
+      // If the action failed meanwhile, the card stays: just bring it back into place.
+      if (keep.current.delete(event.id)) setLeaving(null);
+      else {
+        hide(event.id);
+        setLeaving(null);
+      }
+    }, EXIT_MS);
+    return true;
   }
 
   async function sendRequest(event: DeckEvent, note: string): Promise<string | undefined> {
@@ -149,16 +170,14 @@ export function SwipeDeck({
   }
 
   const visible = events.filter((e) => !gone.has(e.id));
+  const top = visible[0];
+  // Only two cards are ever drawn: the one you're deciding on, and the next one waiting behind it.
+  const stack = visible.slice(0, 2);
 
   return (
-    <div>
-      <p className="mb-2 text-center text-xs text-muted">
-        Swipe right to join · left to pass · up or down to browse
-        {visible.length > 0 && ` · ${visible.length} left`}
-      </p>
-
+    <div className="relative mx-auto flex min-h-0 w-full max-w-md flex-1 flex-col md:h-[40rem] md:flex-none">
       {visible.length === 0 ? (
-        <div className="card px-6 py-12 text-center">
+        <div className="card m-auto w-full px-6 py-12 text-center">
           <p className="text-lg font-semibold">You&rsquo;re all caught up</p>
           <p className="mx-auto mt-1 max-w-xs text-muted">
             No more meetups to show right now. Try different filters, or post your own.
@@ -173,24 +192,52 @@ export function SwipeDeck({
           </div>
         </div>
       ) : (
-        <div
-          ref={scroller}
-          className="relative snap-y snap-mandatory overflow-y-auto overscroll-contain"
-          style={{ height: "min(36rem, calc(100dvh - 16rem))", minHeight: "26rem" }}
-        >
-          {visible.map((event) => (
-            <div key={event.id} id={`deck-card-${event.id}`} className="h-full snap-start snap-always pb-2">
-              <SwipeCard event={event} onDecide={decide} onExited={exited} />
-            </div>
-          ))}
-        </div>
+        <>
+          <p className="pb-2 text-center text-xs text-muted">
+            Swipe right to join · left to pass · {visible.length} left
+          </p>
+
+          <div className="relative min-h-0 flex-1" data-testid="deck">
+            {[...stack].reverse().map((event) => {
+              const depth = event.id === top.id ? 0 : 1;
+              return (
+                <SwipeCard
+                  key={event.id}
+                  event={event}
+                  depth={depth}
+                  leaving={leaving?.id === event.id ? leaving.direction : null}
+                  onCommit={(direction) => commit(event, direction)}
+                />
+              );
+            })}
+          </div>
+
+          <div className="flex items-center justify-center gap-5 pb-1 pt-3">
+            <RoundButton label="Pass" size="lg" onClick={() => commit(top, "left")} tone="pass">
+              ✕
+            </RoundButton>
+            <Link
+              href={`/events/${top.id}`}
+              aria-label={`Details for ${top.title}`}
+              className="flex flex-col items-center gap-1 text-[0.7rem] font-medium text-muted"
+            >
+              <span className="flex h-12 w-12 items-center justify-center rounded-full border border-line bg-white text-lg text-ink shadow-sm">
+                ⓘ
+              </span>
+              Details
+            </Link>
+            <RoundButton label={top.requestMode ? "Request" : "Join"} size="lg" onClick={() => commit(top, "right")} tone="join">
+              ✓
+            </RoundButton>
+          </div>
+        </>
       )}
 
       {toast && (
         <div
           role="status"
           aria-live="polite"
-          className="fixed inset-x-4 bottom-24 z-30 mx-auto flex max-w-md items-center justify-between gap-3 rounded-xl bg-ink px-4 py-3 text-sm text-white shadow-lg md:bottom-8"
+          className="absolute inset-x-2 top-1 z-30 mx-auto flex max-w-sm items-center justify-between gap-3 rounded-xl bg-ink px-4 py-3 text-sm text-white shadow-lg"
         >
           <span className="min-w-0 truncate">{toast.text}</span>
           {toast.undo && (
@@ -199,7 +246,7 @@ export function SwipeDeck({
                 toast.undo?.();
                 setToast(null);
               }}
-              className="shrink-0 font-semibold text-accent-soft underline"
+              className="tap shrink-0 px-1 font-semibold text-accent-soft underline"
             >
               Undo
             </button>
@@ -210,10 +257,7 @@ export function SwipeDeck({
       {sheet?.kind === "login" && (
         <Sheet title="Log in to join" onClose={() => setSheet(null)}>
           <p className="text-muted">Log in with your email to join meetups. It only takes a moment.</p>
-          <Link
-            href={`/login?next=${encodeURIComponent(returnTo)}`}
-            className="btn-primary mt-4 w-full"
-          >
+          <Link href={`/login?next=${encodeURIComponent(returnTo)}`} className="btn-primary mt-4 w-full">
             Log in
           </Link>
         </Sheet>
@@ -223,10 +267,7 @@ export function SwipeDeck({
           <p className="text-muted">
             We need your birthday before you can join, since some meetups have age requirements.
           </p>
-          <Link
-            href={`/welcome?next=${encodeURIComponent(returnTo)}`}
-            className="btn-primary mt-4 w-full"
-          >
+          <Link href={`/welcome?next=${encodeURIComponent(returnTo)}`} className="btn-primary mt-4 w-full">
             Finish profile
           </Link>
         </Sheet>
@@ -243,176 +284,215 @@ export function SwipeDeck({
   );
 }
 
+function RoundButton({
+  label,
+  size,
+  tone,
+  onClick,
+  children,
+}: {
+  label: string;
+  size: "lg";
+  tone: "pass" | "join";
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  void size;
+  return (
+    <button type="button" onClick={onClick} aria-label={label} className="flex flex-col items-center gap-1 text-[0.7rem] font-medium text-muted">
+      <span
+        className={`flex h-16 w-16 items-center justify-center rounded-full text-2xl font-bold shadow-md transition active:scale-95 ${
+          tone === "join" ? "bg-accent text-white" : "border border-line bg-white text-ink"
+        }`}
+      >
+        {children}
+      </span>
+      {label}
+    </button>
+  );
+}
+
 function SwipeCard({
   event,
-  onDecide,
-  onExited,
+  depth,
+  leaving,
+  onCommit,
 }: {
   event: DeckEvent;
-  onDecide: (event: DeckEvent, direction: Direction) => "accepted" | "rejected";
-  onExited: (id: string) => boolean;
+  /** 0 is the card you're deciding on; 1 is the one waiting behind it. */
+  depth: 0 | 1;
+  leaving: Direction | null;
+  /** Returns false if the decision didn't go through (the card springs back). */
+  onCommit: (direction: Direction) => boolean;
 }) {
+  const router = useRouter();
   const [dx, setDx] = useState(0);
+  const [dy, setDy] = useState(0);
   const [dragging, setDragging] = useState(false);
-  const [leaving, setLeaving] = useState<Direction | null>(null);
-  const drag = useRef<{ x: number; y: number; axis: "x" | "y" | null } | null>(null);
-  const exitTimer = useRef<ReturnType<typeof setTimeout>>();
+  const drag = useRef<{ x: number; y: number; startedAt: number; lastX: number; lastT: number; speed: number } | null>(null);
 
-  useEffect(() => () => clearTimeout(exitTimer.current), []);
-
-  function commit(direction: Direction) {
-    if (leaving) return;
-    if (onDecide(event, direction) === "rejected") {
+  // A card that came back (its action failed) returns to the middle.
+  useEffect(() => {
+    if (!leaving) {
       setDx(0);
-      return;
+      setDy(0);
     }
-    if (typeof navigator !== "undefined" && "vibrate" in navigator) navigator.vibrate(10);
-    setLeaving(direction);
-    exitTimer.current = setTimeout(() => {
-      // If the action failed meanwhile, the deck asks the card to stay: reset it.
-      if (!onExited(event.id)) {
-        setLeaving(null);
-        setDx(0);
-      }
-    }, EXIT_MS);
-  }
+  }, [leaving]);
 
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
-    if (leaving || (e.target as HTMLElement).closest("a, button")) return;
-    drag.current = { x: e.clientX, y: e.clientY, axis: null };
+    if (depth !== 0 || leaving) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    drag.current = { x: e.clientX, y: e.clientY, startedAt: Date.now(), lastX: e.clientX, lastT: e.timeStamp, speed: 0 };
+    setDragging(true);
   }
 
   function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
     const d = drag.current;
     if (!d) return;
-    const moveX = e.clientX - d.x;
-    const moveY = e.clientY - d.y;
-    if (!d.axis) {
-      if (Math.abs(moveX) > 8 && Math.abs(moveX) > Math.abs(moveY) * 1.2) {
-        d.axis = "x";
-        e.currentTarget.setPointerCapture(e.pointerId);
-        setDragging(true);
-      } else if (Math.abs(moveY) > 8) {
-        d.axis = "y"; // a vertical scroll; leave it to the browser
-      }
-    }
-    if (d.axis === "x") setDx(moveX);
+    const dt = e.timeStamp - d.lastT;
+    if (dt > 0) d.speed = (e.clientX - d.lastX) / dt;
+    d.lastX = e.clientX;
+    d.lastT = e.timeStamp;
+    setDx(e.clientX - d.x);
+    setDy(e.clientY - d.y);
   }
 
-  function onPointerEnd(e: React.PointerEvent<HTMLDivElement>, cancelled: boolean) {
+  function finish(e: React.PointerEvent<HTMLDivElement>, cancelled: boolean) {
     const d = drag.current;
     drag.current = null;
     setDragging(false);
-    if (d?.axis !== "x") return;
-    if (!cancelled && Math.abs(dx) > THRESHOLD) commit(dx > 0 ? "right" : "left");
-    else setDx(0);
-  }
-
-  function onKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
-    if (e.key === "ArrowRight") {
-      e.preventDefault();
-      commit("right");
-    } else if (e.key === "ArrowLeft") {
-      e.preventDefault();
-      commit("left");
+    if (!d) return;
+    // Work from where the finger actually lifted, not from the last drawn frame: on a fast flick the
+    // screen may not have redrawn since the final movement, so the stored position would be stale.
+    const dx = e.clientX - d.x;
+    const dy = e.clientY - d.y;
+    const moved = Math.hypot(dx, dy);
+    if (cancelled) {
+      setDx(0);
+      setDy(0);
+      return;
+    }
+    // A tap (barely moved, quickly) opens the meetup instead of deciding on it.
+    if (moved < 8 && Date.now() - d.startedAt < 400) {
+      setDx(0);
+      setDy(0);
+      router.push(`/events/${event.id}`);
+      return;
+    }
+    const lastSegment = e.timeStamp - d.lastT;
+    const speed = lastSegment > 0 ? (e.clientX - d.lastX) / lastSegment : d.speed;
+    const flicked = (Math.abs(d.speed) > FLICK_SPEED || Math.abs(speed) > FLICK_SPEED) && Math.abs(dx) > FLICK_MIN;
+    if (Math.abs(dx) > THRESHOLD || flicked) {
+      const direction: Direction = dx > 0 ? "right" : "left";
+      if (!onCommit(direction)) {
+        setDx(0);
+        setDy(0);
+      }
+    } else {
+      setDx(0);
+      setDy(0);
     }
   }
 
-  const x = leaving ? (leaving === "right" ? 140 : -140) : 0;
-  const style: React.CSSProperties = leaving
-    ? {
-        transform: `translateX(${x}%) rotate(${leaving === "right" ? 14 : -14}deg)`,
-        opacity: 0,
-        transition: `transform ${EXIT_MS}ms ease, opacity ${EXIT_MS}ms ease`,
-      }
-    : {
-        transform: `translateX(${dx}px) rotate(${dx * 0.04}deg)`,
-        transition: dragging ? "none" : "transform 200ms ease",
-      };
+  function onKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (depth !== 0) return;
+    if (e.key === "ArrowRight") {
+      e.preventDefault();
+      onCommit("right");
+    } else if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      onCommit("left");
+    }
+  }
 
-  const cardStyle = isCategory(event.category) ? CATEGORY_STYLES[event.category] : "bg-slate-100";
+  const front = depth === 0;
+  const transform = leaving
+    ? `translate(${leaving === "right" ? 140 : -140}%, ${dy * 0.3}px) rotate(${leaving === "right" ? 18 : -18}deg)`
+    : front
+      ? `translate(${dx}px, ${dy * 0.3}px) rotate(${dx * 0.05}deg)`
+      : "translateY(14px) scale(0.94)";
+  const style: React.CSSProperties = {
+    transform,
+    opacity: leaving ? 0 : front ? 1 : 0.92,
+    transition: dragging ? "none" : `transform ${EXIT_MS}ms cubic-bezier(.2,.8,.2,1), opacity ${EXIT_MS}ms ease`,
+    zIndex: front ? 2 : 1,
+    // The card handles every touch itself, so the browser never tries to scroll or zoom under it.
+    touchAction: "none",
+  };
+
+  const heroStyle = isCategory(event.category) ? CATEGORY_STYLES[event.category] : "bg-slate-100";
   const joinOpacity = dx > 0 ? Math.min(dx / THRESHOLD, 1) : 0;
   const passOpacity = dx < 0 ? Math.min(-dx / THRESHOLD, 1) : 0;
 
   return (
     <div
-      role="group"
-      aria-label={`${event.title}. Press right arrow to ${event.requestMode ? "request to join" : "join"}, left arrow to pass.`}
-      tabIndex={0}
+      role={front ? "group" : undefined}
+      aria-hidden={front ? undefined : true}
+      aria-label={front ? `${event.title}. Press right arrow to ${event.requestMode ? "request to join" : "join"}, left arrow to pass.` : undefined}
+      tabIndex={front ? 0 : -1}
       onKeyDown={onKeyDown}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
-      onPointerUp={(e) => onPointerEnd(e, false)}
-      onPointerCancel={(e) => onPointerEnd(e, true)}
+      onPointerUp={(e) => finish(e, false)}
+      onPointerCancel={(e) => finish(e, true)}
       style={style}
-      className="relative flex h-full touch-pan-y select-none flex-col overflow-hidden rounded-3xl border border-line bg-white shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+      data-depth={depth}
+      className={`absolute inset-0 select-none outline-none [-webkit-touch-callout:none] [-webkit-user-select:none] ${
+        front ? "cursor-grab active:cursor-grabbing" : "pointer-events-none"
+      }`}
     >
-      <div className={`flex items-center justify-center py-6 text-6xl ${cardStyle}`} aria-hidden>
-        {emojiFor(event.category)}
-      </div>
-
-      <div className="flex-1 space-y-2 overflow-hidden p-5">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-sm font-semibold text-muted">{event.category}</span>
-          {event.matchesInterests && (
-            <span className="rounded-full bg-accent-soft px-2.5 py-0.5 text-xs font-semibold text-accent-dark">
-              Matches your interests
-            </span>
-          )}
-          {event.tags.map((t) => (
-            <span
-              key={t}
-              className="rounded-full border border-line px-2.5 py-0.5 text-xs font-semibold text-ink"
-            >
-              {t}
-            </span>
-          ))}
+      <div className="flex h-full flex-col overflow-hidden rounded-3xl border border-line bg-white shadow-lg">
+        {/* The picture shrinks on shorter phones to make room for the words. */}
+        <div
+          className={`flex flex-[0_1_26%] min-h-[4.5rem] items-center justify-center text-6xl [@media(max-height:639px)]:min-h-[2.75rem] [@media(max-height:639px)]:text-4xl ${heroStyle}`}
+          aria-hidden
+        >
+          {emojiFor(event.category)}
         </div>
-        <h2 className="text-2xl font-bold leading-tight tracking-tight">{event.title}</h2>
-        <p className="font-semibold text-accent-dark">{event.when}</p>
-        <p className="text-sm text-muted">
-          {event.neighborhood} · {event.requestMode ? "Address shared after approval" : event.venue}
-        </p>
-        {event.blurb && <p className="line-clamp-3 text-sm text-ink/80">{event.blurb}</p>}
-        <p className="text-xs text-muted">
-          {event.spotsLeft} of {event.maxSpots} spots left · hosted by {event.hostName}
-        </p>
-      </div>
 
-      <div className="flex items-center justify-between gap-2 border-t border-line p-3">
-        <button
-          type="button"
-          onClick={() => commit("left")}
-          className="btn-secondary !px-5 !py-2.5 text-sm"
-        >
-          ✕ Pass
-        </button>
-        <Link
-          href={`/events/${event.id}`}
-          className="text-sm font-medium text-muted underline hover:text-ink"
-        >
-          Details
-        </Link>
-        <button
-          type="button"
-          onClick={() => commit("right")}
-          className="btn-primary !px-5 !py-2.5 text-sm"
-        >
-          {event.requestMode ? "Request" : "Join"} ✓
-        </button>
+        {/* Each line is either shown whole or left out: on shorter phones the extras drop away
+            rather than being sliced in half. */}
+        <div className="flex min-h-0 flex-1 flex-col gap-1.5 p-4 [@media(max-height:639px)]:gap-1 [@media(max-height:639px)]:p-3">
+          <div className="flex shrink-0 flex-nowrap items-center gap-1.5 overflow-hidden whitespace-nowrap [@media(max-height:639px)]:hidden">
+            <span className="text-sm font-semibold text-muted">{event.category}</span>
+            {[...(event.matchesInterests ? ["Matches your interests"] : []), ...event.tags].slice(0, 2).map((t, i) => (
+              <span
+                key={t}
+                className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                  i === 0 && event.matchesInterests ? "bg-accent-soft text-accent-dark" : "border border-line text-ink"
+                }`}
+              >
+                {t}
+              </span>
+            ))}
+          </div>
+          <h2 className="line-clamp-2 shrink-0 text-2xl font-bold leading-tight tracking-tight [@media(max-height:639px)]:text-xl">
+            {event.title}
+          </h2>
+          <p className="shrink-0 font-semibold text-accent-dark">{event.when}</p>
+          <p className="line-clamp-1 shrink-0 text-sm text-muted">
+            {event.neighborhood} · {event.requestMode ? "Address shared after approval" : event.venue}
+          </p>
+          {event.blurb && (
+            <p className="line-clamp-2 shrink-0 text-sm text-ink/80 [@media(max-height:759px)]:hidden">{event.blurb}</p>
+          )}
+          <p className="mt-auto shrink-0 text-xs text-muted">
+            {event.spotsLeft} of {event.maxSpots} spots left · hosted by {event.hostName}
+          </p>
+        </div>
       </div>
 
       <span
         aria-hidden
         style={{ opacity: joinOpacity }}
-        className="pointer-events-none absolute left-5 top-5 -rotate-12 rounded-lg border-4 border-emerald-600 px-3 py-1 text-2xl font-extrabold text-emerald-600"
+        className="pointer-events-none absolute left-5 top-5 -rotate-12 rounded-lg border-4 border-emerald-600 bg-white/70 px-3 py-1 text-2xl font-extrabold text-emerald-600"
       >
         {event.requestMode ? "REQUEST" : "JOIN"}
       </span>
       <span
         aria-hidden
         style={{ opacity: passOpacity }}
-        className="pointer-events-none absolute right-5 top-5 rotate-12 rounded-lg border-4 border-slate-500 px-3 py-1 text-2xl font-extrabold text-slate-500"
+        className="pointer-events-none absolute right-5 top-5 rotate-12 rounded-lg border-4 border-slate-500 bg-white/70 px-3 py-1 text-2xl font-extrabold text-slate-500"
       >
         PASS
       </span>
@@ -446,7 +526,7 @@ function Sheet({
       >
         <h2 className="mb-2 text-lg font-bold">{title}</h2>
         {children}
-        <button onClick={onClose} className="mt-3 w-full text-center text-sm font-medium text-muted underline">
+        <button onClick={onClose} className="tap mt-2 w-full text-center text-sm font-medium text-muted underline">
           Not now
         </button>
       </div>
@@ -485,12 +565,12 @@ function NoteSheet({
     <Sheet title={`Add a note for ${event.hostName}`} onClose={onClose}>
       <form onSubmit={submit} className="space-y-2">
         <p className="text-sm text-muted">
-          {event.title} needs the host&rsquo;s approval. A note is optional; they&rsquo;ll see your
-          profile either way.
+          {event.title} needs the host&rsquo;s approval. A note is optional; they&rsquo;ll see your profile
+          either way.
         </p>
         <textarea
           autoFocus
-          rows={5}
+          rows={4}
           maxLength={NOTE_MAX}
           value={note}
           onChange={(e) => setNote(e.target.value)}

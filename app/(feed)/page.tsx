@@ -2,10 +2,12 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { EventCard } from "@/components/EventCard";
 import { FeedSelects } from "@/components/Filters";
+import { FiltersSheet } from "@/components/FiltersSheet";
 import { FilterChips } from "@/components/FilterChips";
 import { Hero } from "@/components/Hero";
 import { SwipeDeck, type DeckEvent } from "@/components/SwipeDeck";
 import { ViewToggle } from "@/components/ViewToggle";
+import { WeekStrip } from "@/components/WeekStrip";
 import { ageLabel, ageOn, withinAgeRange } from "@/lib/age";
 import { isCategory, isNeighborhood, isSkillLevel } from "@/lib/constants";
 import { feedHref, type FeedFilters } from "@/lib/feed";
@@ -13,12 +15,14 @@ import { getInterests } from "@/lib/interests";
 import { hasAbout } from "@/lib/about";
 import { getAbout, getBirthDate } from "@/lib/profile";
 import { createClient } from "@/lib/supabase/server";
-import { formatWhenShort, pacificDate } from "@/lib/time";
+import { addDaysToKey, formatWhenShort, pacificDate, pacificLocalToUtc } from "@/lib/time";
 import type { EventWithCount } from "@/lib/types";
+import { dateRangeKeys, dayLabel, resolveDateFilter, weekStartKey } from "@/lib/weeks";
 
 export const dynamic = "force-dynamic";
 
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+const nextWeek = (weekStart: string) => addDaysToKey(weekStart, 7);
 
 type EventWithHost = EventWithCount & {
   host: { name: string } | null;
@@ -50,6 +54,12 @@ export default async function FeedPage({
       ? (one(searchParams.view) as "swipe" | "list")
       : undefined,
   };
+  // Browse by date: a week, or one day within it (Pacific time). Anything invalid is ignored.
+  const today = pacificDate();
+  const dateFilter = resolveDateFilter({ week: one(searchParams.week), day: one(searchParams.day) }, today);
+  filters.week = dateFilter.week;
+  filters.day = dateFilter.day;
+
   // An explicit choice wins; otherwise use the view they last picked (remembered in a cookie).
   const activeView = filters.view ?? (cookies().get("bm_view")?.value === "swipe" ? "swipe" : "list");
   const swipe = activeView === "swipe";
@@ -74,6 +84,11 @@ export default async function FeedPage({
   // "Beginner" also matches all-levels events, which welcome beginners too.
   if (filters.level) query = query.in("skill_level", [filters.level, "All levels"]);
   if (filters.audience) query = query.eq("audience", filters.audience);
+  const range = dateRangeKeys(dateFilter);
+  const bounds = range
+    ? { from: pacificLocalToUtc(`${range.from}T00:00`), to: pacificLocalToUtc(`${range.to}T00:00`) }
+    : null;
+  if (bounds?.from && bounds.to) query = query.gte("starts_at", bounds.from.toISOString()).lt("starts_at", bounds.to.toISOString());
 
   const { data, error } = await query;
   const fitsAge = (e: EventWithCount) =>
@@ -83,9 +98,37 @@ export default async function FeedPage({
   let events = (data ?? []) as EventWithHost[];
   if (filters.eligible && birthDate) events = events.filter(fitsAge);
 
+  const dateFiltered = Boolean(filters.week || filters.day);
   const filtered = Boolean(
-    filters.category || filters.neighborhood || filters.level || filters.audience || filters.eligible
+    filters.category || filters.neighborhood || filters.level || filters.audience || filters.eligible || dateFiltered
   );
+
+  // The calendar strip: how many meetups on each day of the week on screen, under the same other filters.
+  const shownWeek = filters.week ?? weekStartKey(today);
+  const weekFrom = pacificLocalToUtc(`${shownWeek}T00:00`);
+  const weekTo = pacificLocalToUtc(`${nextWeek(shownWeek)}T00:00`);
+  const counts: Record<string, number> = {};
+  if (weekFrom && weekTo) {
+    let cq = supabase
+      .from("events")
+      .select("starts_at, age_min, age_max")
+      .is("cancelled_at", null)
+      .gt("starts_at", new Date().toISOString())
+      .gte("starts_at", weekFrom.toISOString())
+      .lt("starts_at", weekTo.toISOString())
+      .limit(300);
+    if (filters.category) cq = cq.eq("category", filters.category);
+    if (filters.neighborhood) cq = cq.eq("neighborhood", filters.neighborhood);
+    if (filters.level) cq = cq.in("skill_level", [filters.level, "All levels"]);
+    if (filters.audience) cq = cq.eq("audience", filters.audience);
+    const { data: weekRows } = await cq;
+    for (const row of (weekRows ?? []) as Pick<EventWithCount, "starts_at" | "age_min" | "age_max">[]) {
+      if (filters.eligible && birthDate && !fitsAge(row as EventWithCount)) continue;
+      const key = pacificDate(new Date(row.starts_at));
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+  }
+  const strip = <WeekStrip filters={filters} today={today} shownWeek={shownWeek} counts={counts} />;
   // Names of approved guests, for open events only (approval-only events keep guest lists private).
   const goingNames = (e: EventWithHost) =>
     e.join_mode === "request"
@@ -102,7 +145,7 @@ export default async function FeedPage({
         <div className="flex items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">What&rsquo;s happening</h1>
-            <p className="mt-1 text-muted">Find people to play with around the Bay.</p>
+            <p className="mt-1 text-muted">Find people to connect with!</p>
           </div>
           <ViewToggle filters={filters} active={activeView} />
         </div>
@@ -115,6 +158,7 @@ export default async function FeedPage({
           </div>
         </>
       )}
+      {strip}
       <FeedSelects filters={filters} />
       <FilterChips filters={filters} showEligible={Boolean(birthDate)} />
     </>
@@ -174,9 +218,22 @@ export default async function FeedPage({
       };
     });
 
+    const activeFilters = [filters.category, filters.neighborhood, filters.level, filters.audience, filters.eligible, dateFiltered]
+      .filter(Boolean).length;
+
     return (
-      <div className="space-y-4">
-        {header}
+      <div className="swipe-screen">
+        <div className="flex items-center justify-between gap-2">
+          <h1 className="text-xl font-bold tracking-tight [@media(max-width:359px)]:hidden">Discover</h1>
+          <div className="flex items-center gap-2">
+            <FiltersSheet count={activeFilters}>
+              {strip}
+              <FeedSelects filters={filters} />
+              <FilterChips filters={filters} showEligible={Boolean(birthDate)} />
+            </FiltersSheet>
+            <ViewToggle filters={filters} active={activeView} />
+          </div>
+        </div>
         <SwipeDeck
           // A new key when the filters change resets which cards were swiped away.
           key={feedHref({ ...filters, view: "swipe" })}
@@ -204,7 +261,11 @@ export default async function FeedPage({
       {events.length === 0 ? (
         <div className="card px-6 py-12 text-center">
           <p className="text-lg font-semibold">
-            {filtered ? "Nothing matches those filters yet" : "No meetups on the calendar yet"}
+            {dateFiltered
+              ? `Nothing ${filters.day ? `on ${dayLabel(filters.day)}` : "that week"} yet`
+              : filtered
+                ? "Nothing matches those filters yet"
+                : "No meetups on the calendar yet"}
           </p>
           <p className="mx-auto mt-1 max-w-xs text-muted">
             Someone has to get the ball rolling. Might as well be you.
@@ -217,6 +278,14 @@ export default async function FeedPage({
               <Link href={feedHref({ view: filters.view })} className="tap text-sm font-medium text-accent-dark underline">
                 Clear filters
               </Link>
+              {dateFiltered && (
+                <Link
+                  href={feedHref({ ...filters, week: undefined, day: undefined })}
+                  className="tap ml-3 text-sm font-medium text-accent-dark underline"
+                >
+                  Clear date
+                </Link>
+              )}
             </div>
           )}
         </div>

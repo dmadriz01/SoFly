@@ -1,8 +1,9 @@
 -- BayMeet: email notification preferences.
--- Paste into the SQL editor and run once (after 001-009). Safe to run before deploying.
+-- Paste into the SQL editor and run it (after 001-009). It is safe to run again, so if you are
+-- unsure whether an earlier run finished, just run it once more.
 
 -- Email preferences. No row means the defaults (everything on). Login codes are always sent.
-create table public.user_settings (
+create table if not exists public.user_settings (
   user_id              uuid primary key references public.profiles (id) on delete cascade,
   email_notifications  boolean not null default true,
   updated_at           timestamptz not null default now()
@@ -10,6 +11,7 @@ create table public.user_settings (
 
 alter table public.user_settings enable row level security;
 
+drop policy if exists "users manage their own settings" on public.user_settings;
 create policy "users manage their own settings"
   on public.user_settings for all
   to authenticated

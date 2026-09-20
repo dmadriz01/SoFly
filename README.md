@@ -206,6 +206,9 @@ Hosts can cancel their own meetups from the event page, but only you can **reins
 
 ## Things to know
 
+- **Browsing by date.** The feed has a week calendar: arrows move a week at a time, tapping a day shows just that day, and days show how many meetups are on. The chosen week or day is in the address, so it can be shared. Weeks run Monday to Sunday in Pacific time, up to 26 weeks ahead.
+- **The swipe screen.** On a phone, tapping **Swipe** (top right) turns the page into a single floating card: drag right to join, left to pass, tap for details. It doesn't scroll at all; filters live behind the **Filters** button. On larger screens it's a normal page with the same card.
+- **Migrations 010-014 can be run again safely.** If an earlier run stopped partway (for example with "already exists"), just run the file once more and it finishes the job.
 - **The emailed link only works in the browser that requested it.** The code always works, which is why the login page asks for it.
 - **Supabase's built-in email sender is heavily rate limited** (a few emails per hour, and only to project team members by default). It's fine for development. Before real users arrive, configure your own SMTP provider under **Project Settings → Authentication → SMTP Settings**.
 - **Times are Pacific.** The date picker on the post form is interpreted as Pacific time regardless of the poster's device time zone, and all times are displayed in Pacific.

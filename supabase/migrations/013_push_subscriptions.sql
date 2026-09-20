@@ -1,9 +1,10 @@
 -- BayMeet: devices that turned on push notifications.
--- Paste into the SQL editor and run once (after 001-012). Safe to run before deploying.
+-- Paste into the SQL editor and run it (after 001-012). It is safe to run again, so if you are
+-- unsure whether an earlier run finished, just run it once more.
 
 -- A device that has turned on push notifications. Added only by the server (which checks who is
 -- asking), so a person can see and remove their own devices but never add or edit one.
-create table public.push_subscriptions (
+create table if not exists public.push_subscriptions (
   id          uuid primary key default gen_random_uuid(),
   user_id     uuid not null references public.profiles (id) on delete cascade,
   endpoint    text not null unique check (char_length(endpoint) <= 2000),
@@ -12,10 +13,11 @@ create table public.push_subscriptions (
   created_at  timestamptz not null default now()
 );
 
-create index push_subscriptions_user_id_idx on public.push_subscriptions (user_id);
+create index if not exists push_subscriptions_user_id_idx on public.push_subscriptions (user_id);
 
 alter table public.push_subscriptions enable row level security;
 
+drop policy if exists "users see and remove their own devices" on public.push_subscriptions;
 create policy "users see and remove their own devices"
   on public.push_subscriptions for all
   to authenticated
