@@ -138,7 +138,7 @@ export function EventForm() {
         label="Full address"
         name="address"
         error={errors.address}
-        hint="Used to show a map on your event page."
+        hint="Shown publicly, with a map. Please use a public place, not your home."
       >
         <input
           id="address"

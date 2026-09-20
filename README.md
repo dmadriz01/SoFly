@@ -104,6 +104,14 @@ Set the subject to `Your BayMeet login code` and use this body in each:
 <p>Or <a href="{{ .ConfirmationURL }}">tap here to log in</a> (only works in the browser where you requested it).</p>
 ```
 
+## Launch setup
+
+- **Reports:** run [`supabase/migrations/002_reports.sql`](supabase/migrations/002_reports.sql) in the SQL editor. Reports are private; read them in Supabase → Table Editor → `reports`.
+- **Contact email:** set `NEXT_PUBLIC_CONTACT_EMAIL` (locally in `.env.local`, and in Vercel → Settings → Environment Variables). It powers the Feedback link and the privacy and guidelines pages.
+- **Custom domain:** set `NEXT_PUBLIC_SITE_URL` (e.g. `https://baymeet.app`) so link previews use it. Until then Vercel's production URL is used automatically.
+- **Analytics:** in Vercel, open your project → **Analytics** → **Enable**. The code is already in place.
+- **Link previews:** check them after deploying by pasting an event URL into the [LinkedIn Post Inspector](https://www.linkedin.com/post-inspector/). Platforms cache previews, so re-scrape after changes.
+
 ## Things to know
 
 - **The emailed link only works in the browser that requested it.** The code always works, which is why the login page asks for it.
@@ -114,7 +122,7 @@ Set the subject to `Your BayMeet login code` and use this body in each:
 ## Project layout
 
 ```
-app/                  Pages, server actions (app/actions.ts), auth callback
+app/                  Pages, server actions (app/actions.ts), auth callback, icons and link-preview images
 components/           UI components (cards, filters, RSVP panel, forms, nav)
 lib/constants.ts      Categories, neighborhoods, badge colors
 lib/time.ts           Pacific-time formatting and parsing

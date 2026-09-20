@@ -61,3 +61,10 @@ export const isCategory = (v: unknown): v is Category =>
 
 export const isNeighborhood = (v: unknown): v is Neighborhood =>
   typeof v === "string" && (NEIGHBORHOODS as readonly string[]).includes(v);
+
+export const REPORT_REASONS = [
+  "Spam or scam",
+  "Unsafe or inappropriate",
+  "Fake or misleading",
+  "Other",
+] as const;

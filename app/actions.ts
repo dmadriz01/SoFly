@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { REPORT_REASONS } from "@/lib/constants";
 import { pacificLocalToUtc } from "@/lib/time";
 import { EVENT_FIELDS, validateEvent, type EventErrors } from "@/lib/validation";
 
@@ -111,4 +112,30 @@ export async function signOut() {
   await supabase.auth.signOut();
   revalidatePath("/", "layout");
   redirect("/");
+}
+
+export async function reportEvent(
+  eventId: string,
+  reason: string,
+  details: string
+): Promise<{ error?: string }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Please log in to report a meetup." };
+
+  if (!(REPORT_REASONS as readonly string[]).includes(reason)) {
+    return { error: "Pick a reason." };
+  }
+  const trimmed = details.trim().slice(0, 500);
+
+  const { error } = await supabase
+    .from("reports")
+    .insert({ event_id: eventId, reporter_id: user.id, reason, details: trimmed });
+  // 23505 = this user already reported this event; treat as success.
+  if (error && error.code !== "23505") {
+    return { error: "Couldn't send your report. Please try again." };
+  }
+  return {};
 }

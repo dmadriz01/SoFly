@@ -1,8 +1,12 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CategoryBadge } from "@/components/CategoryBadge";
 import { DeleteEventButton } from "@/components/DeleteEventButton";
+import { ReportEvent } from "@/components/ReportEvent";
 import { RsvpPanel } from "@/components/RsvpPanel";
+import { ShareButton } from "@/components/ShareButton";
+import { createPublicClient } from "@/lib/supabase/public";
 import { createClient } from "@/lib/supabase/server";
 import { formatWhenLong } from "@/lib/time";
 import type { EventRow } from "@/lib/types";
@@ -14,6 +18,24 @@ type Detail = EventRow & {
   host: { name: string } | null;
   rsvps: { user_id: string; created_at: string; profiles: { name: string } | null }[];
 };
+
+export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
+  const { data } = await createPublicClient()
+    .from("events")
+    .select("title, venue_name, neighborhood, starts_at")
+    .eq("id", params.id)
+    .maybeSingle();
+  if (!data) return { title: "Meetup not found" };
+
+  const when = formatWhenLong(data.starts_at);
+  const description = `${when.day} · ${when.time} · ${data.neighborhood}, ${data.venue_name}`;
+  return {
+    title: data.title,
+    description,
+    openGraph: { title: data.title, description, type: "website" },
+    twitter: { card: "summary_large_image", title: data.title, description },
+  };
+}
 
 export default async function EventPage({ params }: { params: { id: string } }) {
   const supabase = createClient();
@@ -39,9 +61,15 @@ export default async function EventPage({ params }: { params: { id: string } }) 
 
   return (
     <article className="space-y-5">
-      <Link href="/" className="text-sm font-medium text-muted hover:text-ink">
-        ← All meetups
-      </Link>
+      <div className="flex items-center justify-between">
+        <Link href="/" className="text-sm font-medium text-muted hover:text-ink">
+          ← All meetups
+        </Link>
+        <ShareButton
+          title={event.title}
+          text={`${event.title}: ${when.day} · ${when.time}, ${event.neighborhood}`}
+        />
+      </div>
 
       <header>
         <CategoryBadge category={event.category} />
@@ -109,7 +137,11 @@ export default async function EventPage({ params }: { params: { id: string } }) 
         />
       </div>
 
-      {isHost && <DeleteEventButton eventId={event.id} />}
+      {isHost ? (
+        <DeleteEventButton eventId={event.id} />
+      ) : (
+        <ReportEvent eventId={event.id} loggedIn={Boolean(user)} />
+      )}
     </article>
   );
 }
