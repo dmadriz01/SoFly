@@ -57,11 +57,21 @@ export default function PrivacyPage() {
       </section>
 
       <section className="space-y-2">
+        <h2 className="text-lg font-bold">Feedback</h2>
+        <p className="text-ink/90">
+          After a meetup, guests can answer one question: would you join a meetup like this again? Your
+          individual answer is private, even from the host. Only totals are shown, for example
+          &ldquo;9 of 10 guests would join again&rdquo; on a host&rsquo;s profile card. There are no written
+          reviews.
+        </p>
+      </section>
+
+      <section className="space-y-2">
         <h2 className="text-lg font-bold">Emails we send</h2>
         <p className="text-ink/90">
           Besides your login code, we email you when someone asks to join your meetup, when a host answers
-          your request, when a meetup you were going to is cancelled, and the day before a meetup you&rsquo;re
-          part of. You can turn all of these off on the Me tab. Emails go only to the address you signed up
+          your request, when a meetup you were going to is cancelled, the day before a meetup you&rsquo;re part of, and
+          the day after to ask how it went. You can turn all of these off on the Me tab. Emails go only to the address you signed up
           with, and we never share it.
         </p>
       </section>

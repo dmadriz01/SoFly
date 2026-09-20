@@ -102,42 +102,67 @@ export function notifyEventCancelled(eventId: string) {
   });
 }
 
-/**
- * Emails the host and approved guests of every meetup happening tomorrow (Pacific time).
- * Runs once a day from a scheduled job, so each meetup falls into exactly one run.
- */
-export async function sendTomorrowReminders(now = new Date()) {
-  const admin = createAdminClient();
-  if (!admin) return { sent: 0, note: "SUPABASE_SERVICE_ROLE_KEY is not set" };
+type EventRow = {
+  id: string;
+  title: string;
+  starts_at: string;
+  host_id: string;
+  join_mode: string;
+  venue_name: string;
+  address: string;
+};
 
-  const tomorrow = addDaysToKey(pacificDate(now), 1);
-  const from = pacificLocalToUtc(`${tomorrow}T00:00`);
-  const to = pacificLocalToUtc(`${addDaysToKey(tomorrow, 1)}T00:00`);
-  if (!from || !to) return { sent: 0, note: "could not work out tomorrow's window" };
-
-  const { data: events } = await admin
+/** Active meetups starting in [from, to). */
+async function eventsBetween(admin: SupabaseClient, from: Date, to: Date): Promise<EventRow[]> {
+  const { data } = await admin
     .from("events")
     .select("id, title, starts_at, host_id, join_mode, venue_name, address")
     .is("cancelled_at", null)
     .gte("starts_at", from.toISOString())
     .lt("starts_at", to.toISOString());
+  return (data ?? []) as EventRow[];
+}
 
-  let sent = 0;
+async function approvedGuestIds(admin: SupabaseClient, eventId: string): Promise<string[]> {
+  const { data } = await admin.from("rsvps").select("user_id").eq("event_id", eventId).eq("status", "approved");
+  return (data ?? []).map((g) => g.user_id as string);
+}
+
+/**
+ * The once-a-day emails, all in Pacific time so each meetup falls into exactly one run:
+ *   - reminders, to the host and approved guests of every meetup happening tomorrow
+ *   - "how was it?", to the approved guests of every meetup that happened yesterday
+ */
+export async function sendDailyEmails(now = new Date()) {
+  const admin = createAdminClient();
+  if (!admin) return { reminders: 0, feedbackRequests: 0, note: "SUPABASE_SERVICE_ROLE_KEY is not set" };
+
+  const today = pacificDate(now);
+  const day = (offset: number) => pacificLocalToUtc(`${addDaysToKey(today, offset)}T00:00`);
+  const [yesterday, tomorrow, dayAfter] = [day(-1), day(1), day(2)];
+  const startOfToday = day(0);
+  if (!yesterday || !startOfToday || !tomorrow || !dayAfter) {
+    return { reminders: 0, feedbackRequests: 0, note: "could not work out the day windows" };
+  }
+
+  let reminders = 0;
+  let feedbackRequests = 0;
   const CAP = 250; // stays well inside a Gmail account's daily sending limit
-  for (const event of events ?? []) {
+  const capped = () => reminders + feedbackRequests >= CAP;
+
+  // Reminders: tomorrow's meetups.
+  for (const event of await eventsBetween(admin, tomorrow, dayAfter)) {
     let place = `${event.venue_name}, ${event.address}`;
     if (event.join_mode === "request") {
       // Everyone emailed here is the host or approved, so they're allowed to know.
       const { data: loc } = await admin.from("event_locations").select("venue_name, address").eq("event_id", event.id).maybeSingle();
       place = loc ? `${loc.venue_name}, ${loc.address}` : "See the meetup page for the address";
     }
-
-    const { data: guests } = await admin.from("rsvps").select("user_id").eq("event_id", event.id).eq("status", "approved");
-    const ids = Array.from(new Set([event.host_id as string, ...(guests ?? []).map((g) => g.user_id as string)]));
     const when = formatWhenLong(event.starts_at);
+    const ids = Array.from(new Set([event.host_id, ...(await approvedGuestIds(admin, event.id))]));
 
     for (const id of ids) {
-      if (sent >= CAP) return { sent, note: "stopped at the daily cap" };
+      if (capped()) return { reminders, feedbackRequests, note: "stopped at the daily cap" };
       const r = await recipient(admin, id);
       if (!r) continue;
       const ok = await sendMail({
@@ -152,8 +177,24 @@ export async function sendTomorrowReminders(now = new Date()) {
           siteUrl: SITE_URL,
         }),
       });
-      if (ok) sent++;
+      if (ok) reminders++;
     }
   }
-  return { sent, events: events?.length ?? 0 };
+
+  // Feedback requests: yesterday's meetups, to guests (the host doesn't rate their own).
+  for (const event of await eventsBetween(admin, yesterday, startOfToday)) {
+    const ids = (await approvedGuestIds(admin, event.id)).filter((id) => id !== event.host_id);
+    for (const id of ids) {
+      if (capped()) return { reminders, feedbackRequests, note: "stopped at the daily cap" };
+      const r = await recipient(admin, id);
+      if (!r) continue;
+      const ok = await sendMail({
+        to: r.email,
+        ...email.feedbackRequest({ name: r.name, eventTitle: event.title, eventUrl: eventUrl(event.id), siteUrl: SITE_URL }),
+      });
+      if (ok) feedbackRequests++;
+    }
+  }
+
+  return { reminders, feedbackRequests };
 }

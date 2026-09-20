@@ -119,12 +119,13 @@ Set the subject to `Your BayMeet login code` and use this body in each:
 | `008_interests_and_passes` | interests picker and swipe passes |
 | `009_hardening_and_cleanup` | tightened privileges, cleaner policies and functions, extra limits and indexes |
 | `010_email_settings` | each person's on/off switch for BayMeet's emails |
+| `011_meetup_feedback` | guests' private "would you join again?" answers, shown only as totals |
 
 **Changing the database?** Update `schema.sql` and add a migration, then run `npm test`. `test:db` builds a database both ways, runs about 240 checks on each (who can see and do what), and fails if the two ever differ. `test:unit` covers ages, dates, calendar files, chat-link safety and the emails.
 
 ## Email notifications
 
-BayMeet emails people when: someone asks to join their approval-only meetup, a host answers a request, a meetup they were going to is cancelled, and the day before a meetup they're part of. Each person can switch them off on the Me tab. Login codes are separate and always sent.
+BayMeet emails people when: someone asks to join their approval-only meetup, a host answers a request, a meetup they were going to is cancelled, the day before a meetup they're part of, and the day after (a one-tap "how was it?"). Each person can switch them off on the Me tab. Login codes are separate and always sent.
 
 To turn it on (all optional; without these the app works exactly as before, just without the emails):
 
@@ -134,7 +135,7 @@ To turn it on (all optional; without these the app works exactly as before, just
    - `SUPABASE_SERVICE_ROLE_KEY`: the key from step 2. Mark it **Sensitive**.
    - `CRON_SECRET`: any long random string (run `openssl rand -hex 24`). Mark it **Sensitive**.
    - Confirm `ALERT_EMAIL_USER` and `ALERT_EMAIL_APP_PASSWORD` are set. Emails are sent from that Gmail account.
-4. Redeploy. The daily reminder job (`vercel.json`) then runs at 9am Pacific. In Vercel, **Settings → Cron Jobs** lists it and has a **Run** button to test it.
+4. Redeploy. The daily job (`vercel.json`) then runs at 9am Pacific, sending reminders and feedback requests. In Vercel, **Settings → Cron Jobs** lists it and has a **Run** button to test it.
 
 Notes: emails come from your Gmail address and may land in spam at first. Gmail limits sending to a few hundred a day, and the reminder job stops at 250 per run. On Vercel's free plan a cron job can run only once a day, at some point within the scheduled hour.
 

@@ -460,3 +460,34 @@ export async function setEmailNotifications(enabled: boolean): Promise<{ error?:
   revalidatePath("/me");
   return {};
 }
+
+/** A guest's private "would you join this meetup again?" answer. The database checks they're allowed. */
+export async function submitFeedback(eventId: string, wouldJoinAgain: boolean): Promise<{ error?: string }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Please log in." };
+
+  const { error } = await supabase
+    .from("meetup_feedback")
+    .upsert(
+      { event_id: eventId, user_id: user.id, would_join_again: wouldJoinAgain },
+      { onConflict: "event_id,user_id" }
+    );
+  if (error) {
+    return {
+      error: error.message.includes("Only guests who joined")
+        ? "Only guests who joined this meetup can rate it."
+        : error.message.includes("once the meetup has started")
+          ? "You can rate it once it has started."
+          : error.message.includes("cancelled")
+            ? "This meetup was cancelled."
+            : "Couldn't save that. Please try again.",
+    };
+  }
+
+  revalidatePath(`/events/${eventId}`);
+  revalidatePath("/me");
+  return {};
+}

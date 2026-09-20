@@ -77,6 +77,10 @@ create table public.events (
   age_max       int,
   -- Set by the host (via cancel_event) or a moderator. Only a moderator can clear it.
   cancelled_at  timestamptz,
+  -- Guests' "would join again" answers, as running totals. Kept up to date by a trigger; the API
+  -- can't write them. (The individual answers are private, see meetup_feedback.)
+  feedback_yes    int  not null default 0,
+  feedback_total  int  not null default 0,
   created_at    timestamptz not null default now(),
 
   constraint events_title_length         check (char_length(title) between 1 and 100),
@@ -87,6 +91,7 @@ create table public.events (
   constraint events_neighborhood_length  check (char_length(neighborhood) between 1 and 40),
   constraint events_max_spots_range      check (max_spots between 1 and 200),
   constraint events_spots_within_capacity check (spots_taken between 0 and max_spots),
+  constraint events_feedback_within_total check (feedback_yes between 0 and feedback_total),
   constraint events_age_range_check      check (
     (age_min is null or age_min between 18 and 120)
     and (age_max is null or (age_min is not null and age_max >= age_min and age_max <= 120))
@@ -144,6 +149,16 @@ create table public.event_passes (
   primary key (user_id, event_id)
 );
 
+-- A guest's private answer to "would you join this meetup again?". Only the guest can read their
+-- own answer; everyone else sees just the totals on events. No comments, so nothing to moderate.
+create table public.meetup_feedback (
+  event_id          uuid not null references public.events (id) on delete cascade,
+  user_id           uuid not null references public.profiles (id) on delete cascade,
+  would_join_again  boolean not null,
+  created_at        timestamptz not null default now(),
+  primary key (event_id, user_id)
+);
+
 -- Reports about an event. Write-only from the app; you read them in the dashboard.
 create table public.reports (
   id           uuid primary key default gen_random_uuid(),
@@ -166,6 +181,7 @@ create index events_upcoming_idx      on public.events (starts_at) where cancell
 create index rsvps_event_status_idx   on public.rsvps (event_id, status);
 create index rsvps_user_id_idx        on public.rsvps (user_id);
 create index event_passes_event_id_idx on public.event_passes (event_id);
+create index meetup_feedback_user_id_idx on public.meetup_feedback (user_id);
 create index reports_reporter_id_idx  on public.reports (reporter_id);
 create index reports_created_at_idx   on public.reports (created_at desc);
 
@@ -411,6 +427,75 @@ create trigger rsvps_after_change
   for each row execute function private.rsvps_after_change();
 
 
+-- Feedback: only guests who joined, only once the meetup has started, never the host.
+create function private.feedback_before_insert()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  host_uid  uuid;
+  begins    timestamptz;
+  cancelled timestamptz;
+begin
+  select host_id, starts_at, cancelled_at into host_uid, begins, cancelled
+  from public.events
+  where id = new.event_id;
+
+  if new.user_id = host_uid then
+    raise exception 'Hosts can''t rate their own meetup';
+  end if;
+  if cancelled is not null then
+    raise exception 'This meetup was cancelled';
+  end if;
+  if begins > now() then
+    raise exception 'You can give feedback once the meetup has started';
+  end if;
+  if not exists (
+    select 1 from public.rsvps
+    where event_id = new.event_id and user_id = new.user_id and status = 'approved'
+  ) then
+    raise exception 'Only guests who joined can give feedback';
+  end if;
+
+  return new;
+end;
+$$;
+
+create trigger meetup_feedback_before_insert
+  before insert on public.meetup_feedback
+  for each row execute function private.feedback_before_insert();
+
+-- Keep events.feedback_yes / feedback_total equal to the answers given.
+create function private.feedback_after_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  eid uuid;
+begin
+  if tg_op = 'DELETE' then
+    eid := old.event_id;
+  else
+    eid := new.event_id;
+  end if;
+
+  update public.events
+  set feedback_total = (select count(*) from public.meetup_feedback where event_id = eid),
+      feedback_yes   = (select count(*) from public.meetup_feedback where event_id = eid and would_join_again)
+  where id = eid;
+
+  return null;
+end;
+$$;
+
+create trigger meetup_feedback_after_change
+  after insert or update or delete on public.meetup_feedback
+  for each row execute function private.feedback_after_change();
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 5. Row level security: which rows each person can see or change
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -425,6 +510,7 @@ alter table public.event_chat_links enable row level security;
 alter table public.rsvps            enable row level security;
 alter table public.rsvp_notes       enable row level security;
 alter table public.event_passes     enable row level security;
+alter table public.meetup_feedback  enable row level security;
 alter table public.reports          enable row level security;
 
 -- profiles: public to read, editable by their owner.
@@ -458,6 +544,12 @@ create policy "users manage their own interests"
 
 create policy "users manage their own settings"
   on public.user_settings for all
+  to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
+
+create policy "guests manage their own feedback"
+  on public.meetup_feedback for all
   to authenticated
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
@@ -576,6 +668,7 @@ grant select on public.profiles, public.events, public.rsvps to anon, authentica
 -- Reads that need a login.
 grant select on
   public.profile_private, public.user_interests, public.user_settings, public.event_passes,
+  public.meetup_feedback,
   public.rsvp_notes, public.event_locations, public.event_chat_links
   to authenticated;
 
@@ -587,6 +680,9 @@ grant insert (user_id, categories, updated_at), update (categories, updated_at)
 grant insert (user_id, email_notifications, updated_at), update (email_notifications, updated_at)
   on public.user_settings to authenticated;
 grant insert, delete on public.event_passes to authenticated;
+grant insert (event_id, user_id, would_join_again), update (would_join_again)
+  on public.meetup_feedback to authenticated;
+grant delete on public.meetup_feedback to authenticated;
 
 grant insert (host_id, title, category, description, venue_name, address, neighborhood,
               starts_at, max_spots, join_mode, skill_level, audience, age_min, age_max)

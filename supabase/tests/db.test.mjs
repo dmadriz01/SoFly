@@ -375,6 +375,67 @@ async function behaviour({ db, U, oldEvent }, { migrated }) {
   r = await as("cy", `insert into public.reports (event_id,reporter_id,reason,details) values ($1,$2,'Other',$3)`, [EP, U.cy, "d".repeat(501)]);
   ok("report details over 500 characters rejected", !!r.error, JSON.stringify(r));
 
+  // ---- meetup feedback ("would you join again?") ----
+  const mkPast = async (title, mode = "open") =>
+    (await one(`insert into public.events (host_id,title,category,venue_name,address,neighborhood,starts_at,max_spots,join_mode)
+      values ($1,$2,'Yoga','v','a','Oakland','2020-01-01T20:00:00Z',10,$3) returning id`, [U.host, title, mode])).id;
+  const PAST = await mkPast("past meetup");
+  await db.query(`insert into public.rsvps (event_id,user_id) values ($1,$2),($1,$3)`, [PAST, U.ann, U.bob]);
+  const totals = async (id) => one(`select feedback_yes y, feedback_total t from public.events where id=$1`, [id]);
+
+  r = await as("ann", `insert into public.meetup_feedback (event_id,user_id,would_join_again) values ($1,$2,true)`, [PAST, U.ann]);
+  ok("a guest can give feedback once the meetup has started", !r.error, JSON.stringify(r));
+  await as("bob", `insert into public.meetup_feedback (event_id,user_id,would_join_again) values ($1,$2,false)`, [PAST, U.bob]);
+  const t1 = await totals(PAST);
+  ok("the public totals add up (1 yes of 2)", t1.y === 1 && t1.t === 2, JSON.stringify(t1));
+  r = await as("bob", `update public.meetup_feedback set would_join_again=true where event_id=$1 and user_id=$2`, [PAST, U.bob]);
+  const t2 = await totals(PAST);
+  ok("a guest can change their answer, and the totals follow", !r.error && t2.y === 2 && t2.t === 2, JSON.stringify(t2));
+  r = await as("ann", `insert into public.meetup_feedback (event_id,user_id,would_join_again) values ($1,$2,false)`, [PAST, U.ann]);
+  ok("only one answer per guest", !!r.error, JSON.stringify(r));
+  r = await as("cy", `insert into public.meetup_feedback (event_id,user_id,would_join_again) values ($1,$2,true)`, [PAST, U.cy]);
+  ok("someone who never joined cannot rate", failsWith(r, "Only guests who joined"), JSON.stringify(r));
+  r = await as("host", `insert into public.meetup_feedback (event_id,user_id,would_join_again) values ($1,$2,true)`, [PAST, U.host]);
+  ok("the host cannot rate their own meetup", failsWith(r, "own meetup"), JSON.stringify(r));
+  r = await as("ann", `insert into public.meetup_feedback (event_id,user_id,would_join_again) values ($1,$2,true)`, [E2, U.ann]);
+  ok("nobody can rate a meetup that hasn't happened yet", !!r.error, JSON.stringify(r));
+  r = await as("bob", `insert into public.meetup_feedback (event_id,user_id,would_join_again) values ($1,$2,true)`, [E2, U.bob]);
+  ok("...even a guest who has joined it", failsWith(r, "once the meetup has started"), JSON.stringify(r));
+  r = await as("ann", `insert into public.meetup_feedback (event_id,user_id,would_join_again) values ($1,$2,true)`, [PAST, U.bob]);
+  ok("cannot answer on someone else's behalf", !!r.error, JSON.stringify(r));
+
+  const PAST_REQ = await mkPast("past dinner", "request");
+  await db.query(`insert into public.rsvps (event_id,user_id) values ($1,$2),($1,$3)`, [PAST_REQ, U.cy, U.dee]);
+  await db.query(`update public.rsvps set status='declined' where event_id=$1 and user_id=$2`, [PAST_REQ, U.dee]);
+  r = await as("cy", `insert into public.meetup_feedback (event_id,user_id,would_join_again) values ($1,$2,true)`, [PAST_REQ, U.cy]);
+  ok("a pending request cannot rate", failsWith(r, "Only guests who joined"), JSON.stringify(r));
+  r = await as("dee", `insert into public.meetup_feedback (event_id,user_id,would_join_again) values ($1,$2,true)`, [PAST_REQ, U.dee]);
+  ok("a declined request cannot rate", failsWith(r, "Only guests who joined"), JSON.stringify(r));
+
+  const PAST_CANCELLED = await mkPast("past but cancelled");
+  await db.query(`insert into public.rsvps (event_id,user_id) values ($1,$2)`, [PAST_CANCELLED, U.ann]);
+  await db.query(`update public.events set cancelled_at=now() where id=$1`, [PAST_CANCELLED]);
+  r = await as("ann", `insert into public.meetup_feedback (event_id,user_id,would_join_again) values ($1,$2,true)`, [PAST_CANCELLED, U.ann]);
+  ok("a cancelled meetup cannot be rated", failsWith(r, "cancelled"), JSON.stringify(r));
+
+  r = await as("ann", `select * from public.meetup_feedback`);
+  ok("a guest sees only their own answer", sees(r) === 1 && r.rows[0].user_id === U.ann, JSON.stringify(r));
+  r = await as("host", `select * from public.meetup_feedback`);
+  ok("the host cannot see individual answers", !!r.error || sees(r) === 0, JSON.stringify(r));
+  r = await as("anon", `select * from public.meetup_feedback`);
+  ok("anon cannot see answers", !!r.error || sees(r) === 0, JSON.stringify(r));
+  r = await as("anon", `select feedback_yes, feedback_total from public.events where id=$1`, [PAST]);
+  ok("...but the public totals are visible", !r.error && r.rows[0].feedback_total === 2, JSON.stringify(r));
+  for (const [col, val] of [["feedback_yes", "9"], ["feedback_total", "9"]]) {
+    r = await as("host", `update public.events set ${col}=${val} where id=$1`, [PAST]);
+    ok(`the host cannot edit events.${col}`, denied(r), JSON.stringify(r));
+  }
+  r = await as("ann", `delete from public.meetup_feedback where event_id=$1`, [PAST]);
+  const t3 = await totals(PAST);
+  ok("a guest can withdraw their answer, and the totals follow", !r.error && t3.t === 1 && t3.y === 1, JSON.stringify(t3));
+  await db.query(`delete from public.events where id=$1`, [PAST]);
+  ok("deleting an event removes its feedback", (await one(`select count(*)::int c from public.meetup_feedback where event_id=$1`, [PAST])).c === 0);
+
   // ---- cleanup and cascades ----
   await as("host", `delete from public.events where id=$1`, [EP]);
   ok("deleting an event clears its passes and reports", (await one(`select (select count(*) from public.event_passes where event_id=$1) + (select count(*) from public.reports where event_id=$1) as c`, [EP])).c == 0);

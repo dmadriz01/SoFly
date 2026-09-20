@@ -13,6 +13,9 @@ export type EventRow = {
   join_mode: "open" | "request";
   /** Approved people only. Maintained by the database. */
   spots_taken: number;
+  /** Guests who said they'd join again, and how many answered. Public totals only. */
+  feedback_yes: number;
+  feedback_total: number;
   skill_level: string;
   audience: string;
   /** Age range, inclusive. null/null = anyone 18+. */

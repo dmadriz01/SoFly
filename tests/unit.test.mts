@@ -95,6 +95,8 @@ t("adding days across a year", addDaysToKey("2026-12-31", 1) === "2027-01-01");
 
   const c = email.eventCancelled({ name: "Ana", eventTitle: "Run", when: "Saturday at 7:00 PM", eventUrl: "https://e/1", siteUrl: "https://e" });
   t("email: cancellation names the time", c.subject === "Cancelled: Run" && c.text.includes("Saturday at 7:00 PM"));
+  const f = email.feedbackRequest({ name: "Ana", eventTitle: "Run", eventUrl: "https://e/1", siteUrl: "https://e" });
+  t("email: feedback request is private and one tap", f.subject === "How was Run?" && f.text.includes("private") && f.text.includes("https://e/1"));
   const r = email.reminder({ name: "Ana", eventTitle: "Run", when: "Saturday at 7:00 PM", place: "Lake Merritt", eventUrl: "https://e/1", calendarUrl: "https://e/1/calendar.ics", siteUrl: "https://e" });
   t("email: reminder has when and where", r.subject === "Tomorrow: Run" && r.text.includes("Lake Merritt") && r.text.includes("7:00 PM"));
 }

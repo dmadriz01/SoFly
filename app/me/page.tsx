@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { signOut } from "@/app/actions";
 import { EmailSettings } from "@/components/EmailSettings";
+import { FeedbackPrompt } from "@/components/FeedbackPrompt";
 import { EventCard } from "@/components/EventCard";
 import { NextUp } from "@/components/NextUp";
 import { InterestsForm } from "@/components/InterestsForm";
@@ -140,6 +141,28 @@ export default async function MePage() {
     }
   }
 
+  // Meetups you went to in the last two weeks and haven't rated yet.
+  const twoWeeksAgo = Date.now() - 14 * 24 * 3600e3;
+  const recent = going
+    .filter(
+      (e) =>
+        statusByEvent[e.id] === "approved" &&
+        e.host_id !== user.id &&
+        !e.cancelled_at &&
+        new Date(e.starts_at).getTime() < Date.now() &&
+        new Date(e.starts_at).getTime() > twoWeeksAgo
+    )
+    .slice(0, 3);
+  let toRate = recent;
+  if (recent.length > 0) {
+    const { data: answered } = await supabase
+      .from("meetup_feedback")
+      .select("event_id")
+      .in("event_id", recent.map((e) => e.id));
+    const done = new Set((answered ?? []).map((a) => a.event_id as string));
+    toRate = recent.filter((e) => !done.has(e.id));
+  }
+
   return (
     <div className="space-y-8">
       <div className="flex items-start justify-between gap-4">
@@ -163,6 +186,10 @@ export default async function MePage() {
           role={soon.role}
         />
       )}
+
+      {toRate.map((e) => (
+        <FeedbackPrompt key={e.id} eventId={e.id} title={e.title} initial={null} />
+      ))}
 
       <Section
         title="Hosting"

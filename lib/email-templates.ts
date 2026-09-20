@@ -134,3 +134,18 @@ export function reminder(a: {
   });
   return { subject: `Tomorrow: ${title.slice(0, 70)}`, ...body };
 }
+
+/** The day after: one-tap feedback. */
+export function feedbackRequest(a: { name: string; eventTitle: string; eventUrl: string; siteUrl: string }): Email {
+  const title = oneLine(a.eventTitle);
+  const body = layout({
+    heading: `How was ${title}?`,
+    paragraphs: [
+      `Hi ${a.name}, thanks for joining. Would you join a meetup like this again?`,
+      "It takes one tap. Your answer is private: only the total is shown, never who said what.",
+    ],
+    cta: { label: "Tell us", url: a.eventUrl },
+    siteUrl: a.siteUrl,
+  });
+  return { subject: `How was ${title.slice(0, 70)}?`, ...body };
+}

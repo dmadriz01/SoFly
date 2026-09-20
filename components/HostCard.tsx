@@ -6,11 +6,16 @@ export function HostCard({
   since,
   hosted,
   joined,
+  feedbackYes,
+  feedbackTotal,
 }: {
   name: string;
   since: string | null;
   hosted: number;
   joined: number;
+  /** Guests' "would join again" answers across the host's past meetups. */
+  feedbackYes: number;
+  feedbackTotal: number;
 }) {
   const member = since
     ? new Date(since).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "America/Los_Angeles" })
@@ -30,6 +35,12 @@ export function HostCard({
           {record}
           {member && ` · Member since ${member}`}
         </p>
+        {/* Only shown with a few answers behind it, so it's never one person's opinion. */}
+        {feedbackTotal >= 3 && (
+          <p className="mt-0.5 text-sm font-medium text-ink">
+            👍 {feedbackYes} of {feedbackTotal} guests would join again
+          </p>
+        )}
       </div>
     </div>
   );

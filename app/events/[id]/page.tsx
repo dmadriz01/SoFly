@@ -6,6 +6,7 @@ import { DeleteEventButton } from "@/components/DeleteEventButton";
 import { EventActions } from "@/components/EventActions";
 import { Avatar } from "@/components/Avatar";
 import { EventTags } from "@/components/EventTags";
+import { FeedbackPrompt } from "@/components/FeedbackPrompt";
 import { HostCard } from "@/components/HostCard";
 import { GroupChat } from "@/components/GroupChat";
 import { ManageEvent } from "@/components/ManageEvent";
@@ -145,16 +146,30 @@ export default async function EventPage({ params }: { params: { id: string } }) 
   // The host's track record: meetups that already happened, and how many people came.
   const { data: hostHistory } = await supabase
     .from("events")
-    .select("spots_taken")
+    .select("spots_taken, feedback_yes, feedback_total")
     .eq("host_id", event.host_id)
     .is("cancelled_at", null)
     .lt("starts_at", new Date().toISOString());
   const hostedCount = hostHistory?.length ?? 0;
   const hostedJoined = (hostHistory ?? []).reduce((sum, e) => sum + (e.spots_taken as number), 0);
+  const hostYes = (hostHistory ?? []).reduce((sum, e) => sum + (e.feedback_yes as number), 0);
+  const hostAnswers = (hostHistory ?? []).reduce((sum, e) => sum + (e.feedback_total as number), 0);
 
   const when = formatWhenLong(event.starts_at);
   const cancelled = Boolean(event.cancelled_at);
   const ended = new Date(event.starts_at).getTime() <= Date.now();
+
+  // After the meetup, guests are asked whether they'd join again (their own answer is private).
+  let myAnswer: boolean | null = null;
+  const canRate = going && ended && !cancelled && !isHost;
+  if (canRate) {
+    const { data: answer } = await supabase
+      .from("meetup_feedback")
+      .select("would_join_again")
+      .eq("event_id", event.id)
+      .maybeSingle();
+    myAnswer = (answer?.would_join_again as boolean | undefined) ?? null;
+  }
   const spotsLeft = Math.max(event.max_spots - event.spots_taken, 0);
   const mapSrc = `https://maps.google.com/maps?q=${encodeURIComponent(address)}&output=embed`;
 
@@ -217,8 +232,12 @@ export default async function EventPage({ params }: { params: { id: string } }) 
           since={event.host?.created_at ?? null}
           hosted={hostedCount}
           joined={hostedJoined}
+          feedbackYes={hostYes}
+          feedbackTotal={hostAnswers}
         />
       )}
+
+      {canRate && <FeedbackPrompt eventId={event.id} title={event.title} initial={myAnswer} />}
 
       <RsvpPanel
         eventId={event.id}
