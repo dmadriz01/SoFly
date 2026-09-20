@@ -1,7 +1,7 @@
 import { ageLabel } from "@/lib/age";
 import type { EventRow } from "@/lib/types";
 
-type Rules = Pick<EventRow, "skill_level" | "audience" | "age_min" | "age_max">;
+type Rules = Pick<EventRow, "skill_level" | "audience" | "age_min" | "age_max" | "join_mode">;
 
 const tag = "inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold";
 
@@ -12,6 +12,9 @@ export function EventTags({ event }: { event: Rules }) {
     <>
       {event.audience === "Women-only" && (
         <span className={`${tag} bg-accent-soft text-accent-dark`}>Women-only</span>
+      )}
+      {event.join_mode === "request" && (
+        <span className={`${tag} border border-line bg-white text-ink`}>Approval required</span>
       )}
       {event.skill_level && event.skill_level !== "All levels" && (
         <span className={`${tag} border border-line bg-white text-ink`}>{event.skill_level}</span>

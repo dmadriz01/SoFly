@@ -5,7 +5,19 @@ import { formatWhenShort } from "@/lib/time";
 import { spotsTaken } from "@/lib/utils";
 import type { EventWithCount } from "@/lib/types";
 
-export function EventCard({ event, past = false }: { event: EventWithCount; past?: boolean }) {
+export function EventCard({
+  event,
+  past = false,
+  pendingRequests = 0,
+  myStatus,
+}: {
+  event: EventWithCount;
+  past?: boolean;
+  /** Requests waiting on the host (shown on the host's own cards). */
+  pendingRequests?: number;
+  /** The viewer's own request status, when it isn't simply "going". */
+  myStatus?: string;
+}) {
   const left = Math.max(event.max_spots - spotsTaken(event), 0);
   const cancelled = Boolean(event.cancelled_at);
 
@@ -19,6 +31,16 @@ export function EventCard({ event, past = false }: { event: EventWithCount; past
       <div className="flex flex-wrap items-center gap-1.5">
         <CategoryBadge category={event.category} />
         <EventTags event={event} />
+        {pendingRequests > 0 && (
+          <span className="rounded-full bg-accent px-2.5 py-0.5 text-xs font-semibold text-white">
+            {pendingRequests} {pendingRequests === 1 ? "request" : "requests"} waiting
+          </span>
+        )}
+        {myStatus === "pending" && (
+          <span className="rounded-full bg-accent-soft px-2.5 py-0.5 text-xs font-semibold text-accent-dark">
+            Requested
+          </span>
+        )}
         {cancelled && (
           <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-800">
             Cancelled
@@ -32,7 +54,7 @@ export function EventCard({ event, past = false }: { event: EventWithCount; past
         {formatWhenShort(event.starts_at)}
       </p>
       <p className="mt-0.5 text-sm text-muted">
-        {event.neighborhood} · {event.venue_name}
+        {event.neighborhood} · {event.join_mode === "request" ? "Address shared after approval" : event.venue_name}
       </p>
       {!cancelled && (
         <p className={`mt-3 text-xs font-medium ${left === 0 ? "text-muted" : "text-ink"}`}>

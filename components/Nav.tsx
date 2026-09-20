@@ -47,7 +47,18 @@ const ITEMS = [
   },
 ];
 
-export function BottomNav() {
+function Badge({ count }: { count: number }) {
+  return (
+    <span
+      aria-label={`${count} pending ${count === 1 ? "request" : "requests"}`}
+      className="absolute -right-2 -top-1.5 min-w-[1.1rem] rounded-full bg-accent px-1 text-center text-[0.65rem] font-bold leading-[1.1rem] text-white"
+    >
+      {count > 9 ? "9+" : count}
+    </span>
+  );
+}
+
+export function BottomNav({ pending = 0 }: { pending?: number }) {
   const pathname = usePathname();
   return (
     <nav
@@ -66,7 +77,10 @@ export function BottomNav() {
                   active ? "text-accent" : "text-muted"
                 }`}
               >
-                {item.icon}
+                <span className="relative">
+                  {item.icon}
+                  {item.href === "/me" && pending > 0 && <Badge count={pending} />}
+                </span>
                 {item.label}
               </Link>
             </li>
@@ -77,7 +91,7 @@ export function BottomNav() {
   );
 }
 
-export function TopNav() {
+export function TopNav({ pending = 0 }: { pending?: number }) {
   const pathname = usePathname();
   return (
     <nav aria-label="Main" className="hidden items-center gap-1 md:flex">
@@ -93,6 +107,11 @@ export function TopNav() {
             }`}
           >
             {item.label}
+            {item.href === "/me" && pending > 0 && (
+              <span className="ml-1.5 rounded-full bg-accent px-1.5 py-0.5 text-xs font-bold text-white">
+                {pending}
+              </span>
+            )}
           </Link>
         );
       })}

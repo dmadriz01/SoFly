@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Analytics } from "@vercel/analytics/react";
 import { Footer } from "@/components/Footer";
 import { BottomNav, TopNav } from "@/components/Nav";
+import { getPendingRequestCount } from "@/lib/requests";
 import { SITE_NAME, SITE_URL, TAGLINE } from "@/lib/site";
 import "./globals.css";
 
@@ -33,7 +34,8 @@ export const viewport: Viewport = {
   themeColor: "#fbf8f3",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const pending = await getPendingRequestCount();
   return (
     <html lang="en">
       <body className="min-h-screen font-sans">
@@ -41,11 +43,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Link href="/" className="text-xl font-bold tracking-tight">
             Bay<span className="text-accent">Meet</span>
           </Link>
-          <TopNav />
+          <TopNav pending={pending} />
         </header>
         <main className="mx-auto max-w-2xl px-4 pb-10 pt-6">{children}</main>
         <Footer />
-        <BottomNav />
+        <BottomNav pending={pending} />
         <Analytics />
       </body>
     </html>

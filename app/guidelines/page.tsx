@@ -29,6 +29,11 @@ export default function GuidelinesPage() {
             your meetup. BayMeet can&rsquo;t verify ages or gender, so for 21+ events at a venue,
             check ID at the door.
           </li>
+          <li>
+            Hosting a coffee chat or dinner? You can choose to approve each person. Only approved
+            people see the exact address, so decide who joins based on how comfortable you feel, and
+            never share the address publicly.
+          </li>
           <li>If plans change, update the event or delete it so people aren&rsquo;t left waiting.</li>
           <li>
             Want a group chat? Add an invite link (WhatsApp, GroupMe, etc.) to your event. Only you and
@@ -40,6 +45,10 @@ export default function GuidelinesPage() {
       <section className="space-y-2">
         <h2 className="text-lg font-bold">Joining</h2>
         <ul className="list-disc space-y-1.5 pl-5 text-ink/90">
+          <li>
+            Some meetups ask you to request to join. The host decides who comes, and they don&rsquo;t
+            owe you a reason. Please take a &ldquo;no&rdquo; graciously.
+          </li>
           <li>Only join if you plan to go. If you can&rsquo;t make it, tap Leave so someone else can have your spot.</li>
           <li>Be kind and inclusive. No harassment, discrimination, or unwanted advances.</li>
           <li>BayMeet is for people 18 and older.</li>

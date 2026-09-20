@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { sendReportAlert } from "@/lib/alerts";
 import { parseChatUrl } from "@/lib/chat";
 import { MIN_AGE, ageOn, parseBirthDate } from "@/lib/age";
-import { REPORT_REASONS, findAgeGroup } from "@/lib/constants";
+import { HIDDEN_VENUE, REPORT_REASONS, findAgeGroup } from "@/lib/constants";
 import { getBirthDate } from "@/lib/profile";
 import { pacificDate, pacificLocalToUtc } from "@/lib/time";
 import { safeNext } from "@/lib/utils";
@@ -32,6 +32,8 @@ export async function createEvent(formData: FormData): Promise<CreateEventResult
   if (Object.keys(errors).length > 0) return { errors };
 
   const ageGroup = findAgeGroup(input.age_group)!;
+  // Request-to-join events keep the real venue and address private (see event_locations).
+  const isRequest = input.join_mode === "request";
 
   const { data, error } = await supabase
     .from("events")
@@ -40,8 +42,9 @@ export async function createEvent(formData: FormData): Promise<CreateEventResult
       title: input.title,
       category: input.category,
       neighborhood: input.neighborhood,
-      venue_name: input.venue_name,
-      address: input.address,
+      venue_name: isRequest ? HIDDEN_VENUE : input.venue_name,
+      address: isRequest ? input.neighborhood : input.address,
+      join_mode: input.join_mode,
       starts_at: pacificLocalToUtc(input.starts_at)!.toISOString(),
       max_spots: Number(input.max_spots),
       description: input.description,
@@ -55,6 +58,17 @@ export async function createEvent(formData: FormData): Promise<CreateEventResult
 
   if (error || !data) {
     return { errors: {}, formError: "Something went wrong posting your meetup. Please try again." };
+  }
+
+  if (isRequest) {
+    const { error: locationError } = await supabase
+      .from("event_locations")
+      .insert({ event_id: data.id, venue_name: input.venue_name, address: input.address });
+    if (locationError) {
+      // Without the private location the event would be useless, so undo it.
+      await supabase.from("events").delete().eq("id", data.id);
+      return { errors: {}, formError: "Something went wrong posting your meetup. Please try again." };
+    }
   }
 
   // Optional. If this fails the event still exists; the host can add the link from its page.
@@ -249,4 +263,41 @@ export async function completeProfile(formData: FormData, next: string): Promise
 
   revalidatePath("/", "layout");
   redirect(safeNext(next));
+}
+
+/** Host approves or declines a pending request. RLS limits this to the event's host. */
+export async function respondToRequest(
+  eventId: string,
+  userId: string,
+  decision: "approve" | "decline"
+): Promise<{ error?: string }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Please log in." };
+
+  const { data, error } = await supabase
+    .from("rsvps")
+    .update({ status: decision === "approve" ? "approved" : "declined" })
+    .eq("event_id", eventId)
+    .eq("user_id", userId)
+    .eq("status", "pending")
+    .select("user_id");
+
+  if (error) {
+    return {
+      error: error.message.includes("full")
+        ? "You're out of spots. Decline someone or free one up first."
+        : error.message.includes("cancelled")
+          ? "This meetup was cancelled."
+          : "Couldn't update that request. Please try again.",
+    };
+  }
+  if (!data || data.length === 0) return { error: "That request is no longer pending." };
+
+  revalidatePath(`/events/${eventId}`);
+  revalidatePath("/me");
+  revalidatePath("/");
+  return {};
 }

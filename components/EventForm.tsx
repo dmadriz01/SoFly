@@ -1,9 +1,15 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { createEvent } from "@/app/actions";
 import { CHAT_APPS_HINT } from "@/lib/chat";
-import { AGE_GROUPS, AUDIENCES, CATEGORY_GROUPS, SKILL_LEVELS } from "@/lib/constants";
+import {
+  AGE_GROUPS,
+  AUDIENCES,
+  CATEGORY_GROUPS,
+  REQUEST_BY_DEFAULT,
+  SKILL_LEVELS,
+} from "@/lib/constants";
 import { NeighborhoodOptions } from "./NeighborhoodOptions";
 import {
   EVENT_FIELDS,
@@ -46,6 +52,8 @@ export function EventForm() {
   const [errors, setErrors] = useState<EventErrors>({});
   const [formError, setFormError] = useState<string>();
   const [pending, startTransition] = useTransition();
+  const [joinMode, setJoinMode] = useState<"open" | "request">("open");
+  const joinTouched = useRef(false);
 
   const cls = (name: EventField) => `field ${errors[name] ? "field-error" : ""}`;
   const aria = (name: EventField) => ({
@@ -93,7 +101,19 @@ export function EventForm() {
 
       <div className="grid gap-5 sm:grid-cols-2">
         <Field label="Category" name="category" error={errors.category}>
-          <select id="category" name="category" defaultValue="" className={cls("category")} {...aria("category")}>
+          <select
+            id="category"
+            name="category"
+            defaultValue=""
+            className={cls("category")}
+            onChange={(e) => {
+              // Coffee chats and dinners default to approving each person, until the host chooses.
+              if (!joinTouched.current) {
+                setJoinMode(REQUEST_BY_DEFAULT.includes(e.target.value) ? "request" : "open");
+              }
+            }}
+            {...aria("category")}
+          >
             <option value="" disabled>
               Select…
             </option>
@@ -123,6 +143,32 @@ export function EventForm() {
           </select>
         </Field>
       </div>
+
+      <Field
+        label="Who can join"
+        name="join_mode"
+        error={errors.join_mode}
+        hint={
+          joinMode === "request"
+            ? "People ask to join and you approve each one. The exact address stays hidden until you approve them."
+            : "People join instantly, up to your max spots."
+        }
+      >
+        <select
+          id="join_mode"
+          name="join_mode"
+          value={joinMode}
+          onChange={(e) => {
+            joinTouched.current = true;
+            setJoinMode(e.target.value as "open" | "request");
+          }}
+          className={cls("join_mode")}
+          {...aria("join_mode")}
+        >
+          <option value="open">Anyone can join</option>
+          <option value="request">I approve each person</option>
+        </select>
+      </Field>
 
       <div className="grid gap-5 sm:grid-cols-3">
         <Field label="Skill level" name="skill_level" error={errors.skill_level}>

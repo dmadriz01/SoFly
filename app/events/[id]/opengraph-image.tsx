@@ -12,7 +12,7 @@ export default async function Image({ params }: { params: { id: string } }) {
     loadBoldFont(),
     createPublicClient()
       .from("events")
-      .select("title, category, venue_name, neighborhood, starts_at, max_spots, cancelled_at, rsvps(count)")
+      .select("title, category, venue_name, neighborhood, starts_at, max_spots, cancelled_at, spots_taken")
       .eq("id", params.id)
       .maybeSingle(),
   ]);
@@ -41,8 +41,7 @@ export default async function Image({ params }: { params: { id: string } }) {
   }
 
   const when = formatWhenLong(event.starts_at);
-  const taken = (event.rsvps as { count: number }[] | null)?.[0]?.count ?? 0;
-  const left = Math.max(event.max_spots - taken, 0);
+  const left = Math.max(event.max_spots - event.spots_taken, 0);
   const title = event.title.length > 90 ? `${event.title.slice(0, 87)}…` : event.title;
 
   return new ImageResponse(

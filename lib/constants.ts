@@ -175,3 +175,14 @@ export const isAudience = (v: unknown): v is Audience =>
   typeof v === "string" && (AUDIENCES as readonly string[]).includes(v);
 
 export const findAgeGroup = (value: unknown) => AGE_GROUPS.find((g) => g.value === value);
+
+export const JOIN_MODES = ["open", "request"] as const;
+export type JoinMode = (typeof JOIN_MODES)[number];
+export const isJoinMode = (v: unknown): v is JoinMode =>
+  typeof v === "string" && (JOIN_MODES as readonly string[]).includes(v);
+
+/** Categories where "I approve each person" is preselected on the post form. */
+export const REQUEST_BY_DEFAULT: readonly string[] = ["Coffee Chat", "Dinner"];
+
+/** What the public sees in place of the venue and address on request-to-join events. */
+export const HIDDEN_VENUE = "Shared after approval";

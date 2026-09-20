@@ -10,6 +10,9 @@ export type EventRow = {
   starts_at: string;
   max_spots: number;
   created_at: string;
+  join_mode: "open" | "request";
+  /** Approved people only. Maintained by the database. */
+  spots_taken: number;
   skill_level: string;
   audience: string;
   /** Age range, inclusive. null/null = anyone 18+. */
@@ -19,5 +22,5 @@ export type EventRow = {
   cancelled_at: string | null;
 };
 
-/** An event row selected with `rsvps(count)`. */
-export type EventWithCount = EventRow & { rsvps: { count: number }[] };
+/** Kept as an alias: spots_taken now lives on the event row itself. */
+export type EventWithCount = EventRow;

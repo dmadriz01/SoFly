@@ -10,5 +10,4 @@ export function safeNext(next: string | null | undefined) {
   return next;
 }
 
-export const spotsTaken = (e: Pick<EventWithCount, "rsvps">) =>
-  e.rsvps?.[0]?.count ?? 0;
+export const spotsTaken = (e: Pick<EventWithCount, "spots_taken">) => e.spots_taken ?? 0;

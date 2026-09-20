@@ -6,6 +6,7 @@ import { DeleteEventButton } from "@/components/DeleteEventButton";
 import { EventTags } from "@/components/EventTags";
 import { GroupChat } from "@/components/GroupChat";
 import { ReportEvent } from "@/components/ReportEvent";
+import { RequestsPanel } from "@/components/RequestsPanel";
 import { RsvpPanel } from "@/components/RsvpPanel";
 import { ShareButton } from "@/components/ShareButton";
 import { ageLabel, ageOn, withinAgeRange } from "@/lib/age";
@@ -18,15 +19,23 @@ import { firstName } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
+type Status = "pending" | "approved" | "declined";
+
 type Detail = EventRow & {
   host: { name: string } | null;
-  rsvps: { user_id: string; created_at: string; profiles: { name: string } | null }[];
+  // Row-level security decides which of these each viewer can see.
+  rsvps: {
+    user_id: string;
+    created_at: string;
+    status: Status;
+    profiles: { name: string } | null;
+  }[];
 };
 
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
   const { data } = await createPublicClient()
     .from("events")
-    .select("title, venue_name, neighborhood, starts_at, cancelled_at")
+    .select("title, venue_name, neighborhood, starts_at, cancelled_at, join_mode")
     .eq("id", params.id)
     .maybeSingle();
   if (!data) return { title: "Meetup not found" };
@@ -35,7 +44,9 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   const cancelled = Boolean(data.cancelled_at);
   const description = cancelled
     ? "This meetup was cancelled."
-    : `${when.day} · ${when.time} · ${data.neighborhood}, ${data.venue_name}`;
+    : data.join_mode === "request"
+      ? `${when.day} · ${when.time} · ${data.neighborhood} · Request to join`
+      : `${when.day} · ${when.time} · ${data.neighborhood}, ${data.venue_name}`;
   return {
     title: cancelled ? `Cancelled: ${data.title}` : data.title,
     description,
@@ -49,7 +60,7 @@ export default async function EventPage({ params }: { params: { id: string } }) 
   const [{ data }, userResult] = await Promise.all([
     supabase
       .from("events")
-      .select("*, host:profiles!host_id(name), rsvps(user_id, created_at, profiles(name))")
+      .select("*, host:profiles!host_id(name), rsvps(user_id, created_at, status, profiles(name))")
       .eq("id", params.id)
       .maybeSingle(),
     supabase.auth.getUser(),
@@ -60,17 +71,33 @@ export default async function EventPage({ params }: { params: { id: string } }) 
 
   const user = userResult.data.user;
   const isHost = user?.id === event.host_id;
-  const going = event.rsvps.some((r) => r.user_id === user?.id);
+  const isRequest = event.join_mode === "request";
+  const myStatus = event.rsvps.find((r) => r.user_id === user?.id)?.status ?? null;
+  const going = myStatus === "approved";
+  const insider = isHost || going;
 
-  // RLS only returns this row to the host and to people who joined.
+  // RLS only returns these rows to the host and to approved guests.
   let chatUrl: string | null = null;
-  if (user && (isHost || going)) {
-    const { data: chat } = await supabase
-      .from("event_chat_links")
-      .select("url")
-      .eq("event_id", event.id)
-      .maybeSingle();
-    chatUrl = chat?.url ?? null;
+  let venue = event.venue_name;
+  let address = event.address;
+  let hasRealLocation = !isRequest;
+  if (user && insider) {
+    const [chat, location] = await Promise.all([
+      supabase.from("event_chat_links").select("url").eq("event_id", event.id).maybeSingle(),
+      isRequest
+        ? supabase
+            .from("event_locations")
+            .select("venue_name, address")
+            .eq("event_id", event.id)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
+    chatUrl = chat.data?.url ?? null;
+    if (location.data) {
+      venue = location.data.venue_name;
+      address = location.data.address;
+      hasRealLocation = true;
+    }
   }
 
   // Can this viewer join? (Only matters once they're logged in.)
@@ -85,11 +112,22 @@ export default async function EventPage({ params }: { params: { id: string } }) 
       }
     }
   }
-  const attendees = [...event.rsvps].sort((a, b) => a.created_at.localeCompare(b.created_at));
+
+  const byJoinTime = (a: { created_at: string }, b: { created_at: string }) =>
+    a.created_at.localeCompare(b.created_at);
+  const attendees = event.rsvps.filter((r) => r.status === "approved").sort(byJoinTime);
+  const requests = isHost
+    ? event.rsvps
+        .filter((r) => r.status === "pending")
+        .sort(byJoinTime)
+        .map((r) => ({ userId: r.user_id, name: r.profiles?.name?.trim() || "Someone" }))
+    : [];
+
   const when = formatWhenLong(event.starts_at);
   const cancelled = Boolean(event.cancelled_at);
   const ended = new Date(event.starts_at).getTime() <= Date.now();
-  const mapSrc = `https://maps.google.com/maps?q=${encodeURIComponent(event.address)}&output=embed`;
+  const spotsLeft = Math.max(event.max_spots - event.spots_taken, 0);
+  const mapSrc = `https://maps.google.com/maps?q=${encodeURIComponent(address)}&output=embed`;
 
   return (
     <article className="space-y-5">
@@ -127,22 +165,38 @@ export default async function EventPage({ params }: { params: { id: string } }) 
         </div>
         <div className="p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted">Where</p>
-          <p className="mt-0.5 font-semibold">{event.venue_name}</p>
-          <p className="text-muted">{event.address}</p>
-          <p className="text-sm text-muted">{event.neighborhood}</p>
+          {hasRealLocation ? (
+            <>
+              <p className="mt-0.5 font-semibold">{venue}</p>
+              <p className="text-muted">{address}</p>
+              <p className="text-sm text-muted">{event.neighborhood}</p>
+            </>
+          ) : (
+            <>
+              <p className="mt-0.5 font-semibold">{event.neighborhood}</p>
+              <p className="text-sm text-muted">
+                The exact address is shared once the host approves you.
+              </p>
+            </>
+          )}
         </div>
       </div>
 
       <RsvpPanel
         eventId={event.id}
         maxSpots={event.max_spots}
-        taken={event.rsvps.length}
-        going={going}
+        taken={event.spots_taken}
+        myStatus={myStatus}
+        joinMode={event.join_mode}
         loggedIn={Boolean(user)}
         ended={ended}
         cancelled={cancelled}
         blocked={blocked}
       />
+
+      {isHost && isRequest && !cancelled && (
+        <RequestsPanel eventId={event.id} requests={requests} spotsLeft={spotsLeft} />
+      )}
 
       {!cancelled && (isHost || (going && chatUrl)) && (
         <GroupChat eventId={event.id} url={chatUrl} isHost={isHost} />
@@ -156,11 +210,13 @@ export default async function EventPage({ params }: { params: { id: string } }) 
       )}
 
       <section>
-        <h2 className="mb-2 text-sm font-semibold">
-          Who&rsquo;s going ({attendees.length})
-        </h2>
-        {attendees.length === 0 ? (
-          <p className="text-sm text-muted">Nobody yet. Be the first to join.</p>
+        <h2 className="mb-2 text-sm font-semibold">Who&rsquo;s going ({event.spots_taken})</h2>
+        {isRequest && !insider ? (
+          <p className="text-sm text-muted">Names are shared with approved guests.</p>
+        ) : attendees.length === 0 ? (
+          <p className="text-sm text-muted">
+            {isRequest ? "Nobody approved yet." : "Nobody yet. Be the first to join."}
+          </p>
         ) : (
           <ul className="flex flex-wrap gap-2">
             {attendees.map((r) => (
@@ -175,15 +231,17 @@ export default async function EventPage({ params }: { params: { id: string } }) 
         )}
       </section>
 
-      <div className="card overflow-hidden">
-        <iframe
-          title={`Map of ${event.venue_name}`}
-          src={mapSrc}
-          loading="lazy"
-          referrerPolicy="no-referrer-when-downgrade"
-          className="h-64 w-full border-0"
-        />
-      </div>
+      {hasRealLocation && (
+        <div className="card overflow-hidden">
+          <iframe
+            title={`Map of ${venue}`}
+            src={mapSrc}
+            loading="lazy"
+            referrerPolicy="no-referrer-when-downgrade"
+            className="h-64 w-full border-0"
+          />
+        </div>
+      )}
 
       {isHost ? (
         <DeleteEventButton eventId={event.id} />

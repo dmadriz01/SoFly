@@ -1,4 +1,11 @@
-import { findAgeGroup, isAudience, isCategory, isNeighborhood, isSkillLevel } from "./constants";
+import {
+  findAgeGroup,
+  isAudience,
+  isCategory,
+  isJoinMode,
+  isNeighborhood,
+  isSkillLevel,
+} from "./constants";
 import { parseChatUrl } from "./chat";
 import { pacificLocalToUtc } from "./time";
 
@@ -15,6 +22,7 @@ export const EVENT_FIELDS = [
   "skill_level",
   "audience",
   "age_group",
+  "join_mode",
 ] as const;
 
 export type EventField = (typeof EVENT_FIELDS)[number];
@@ -67,6 +75,7 @@ export function validateEvent(input: Record<string, string>): EventErrors {
 
   if (!isSkillLevel(v("skill_level"))) errors.skill_level = "Pick a skill level.";
   if (!isAudience(v("audience"))) errors.audience = "Pick who it's for.";
+  if (!isJoinMode(v("join_mode"))) errors.join_mode = "Choose who can join.";
   if (!findAgeGroup(v("age_group"))) errors.age_group = "Pick an age group.";
 
   if (v("chat_url")) {
