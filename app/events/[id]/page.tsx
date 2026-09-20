@@ -23,15 +23,18 @@ type Detail = EventRow & {
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
   const { data } = await createPublicClient()
     .from("events")
-    .select("title, venue_name, neighborhood, starts_at")
+    .select("title, venue_name, neighborhood, starts_at, cancelled_at")
     .eq("id", params.id)
     .maybeSingle();
   if (!data) return { title: "Meetup not found" };
 
   const when = formatWhenLong(data.starts_at);
-  const description = `${when.day} · ${when.time} · ${data.neighborhood}, ${data.venue_name}`;
+  const cancelled = Boolean(data.cancelled_at);
+  const description = cancelled
+    ? "This meetup was cancelled."
+    : `${when.day} · ${when.time} · ${data.neighborhood}, ${data.venue_name}`;
   return {
-    title: data.title,
+    title: cancelled ? `Cancelled: ${data.title}` : data.title,
     description,
     openGraph: { title: data.title, description, type: "website" },
     twitter: { card: "summary_large_image", title: data.title, description },
@@ -68,6 +71,7 @@ export default async function EventPage({ params }: { params: { id: string } }) 
   }
   const attendees = [...event.rsvps].sort((a, b) => a.created_at.localeCompare(b.created_at));
   const when = formatWhenLong(event.starts_at);
+  const cancelled = Boolean(event.cancelled_at);
   const ended = new Date(event.starts_at).getTime() <= Date.now();
   const mapSrc = `https://maps.google.com/maps?q=${encodeURIComponent(event.address)}&output=embed`;
 
@@ -82,6 +86,13 @@ export default async function EventPage({ params }: { params: { id: string } }) 
           text={`${event.title}: ${when.day} · ${when.time}, ${event.neighborhood}`}
         />
       </div>
+
+      {cancelled && (
+        <div role="status" className="rounded-2xl border border-red-200 bg-red-50 p-4 text-red-900">
+          <p className="font-semibold">This meetup was cancelled.</p>
+          <p className="text-sm">Please don&rsquo;t show up. It won&rsquo;t be happening.</p>
+        </div>
+      )}
 
       <header>
         <CategoryBadge category={event.category} />
@@ -110,9 +121,10 @@ export default async function EventPage({ params }: { params: { id: string } }) 
         going={going}
         loggedIn={Boolean(user)}
         ended={ended}
+        cancelled={cancelled}
       />
 
-      {(isHost || (going && chatUrl)) && (
+      {!cancelled && (isHost || (going && chatUrl)) && (
         <GroupChat eventId={event.id} url={chatUrl} isHost={isHost} />
       )}
 
@@ -155,7 +167,7 @@ export default async function EventPage({ params }: { params: { id: string } }) 
 
       {isHost ? (
         <DeleteEventButton eventId={event.id} />
-      ) : (
+      ) : cancelled ? null : (
         <ReportEvent eventId={event.id} loggedIn={Boolean(user)} />
       )}
     </article>

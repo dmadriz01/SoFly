@@ -10,6 +10,8 @@ export type EventRow = {
   starts_at: string;
   max_spots: number;
   created_at: string;
+  /** Set by a moderator in Supabase; null for active events. */
+  cancelled_at: string | null;
 };
 
 /** An event row selected with `rsvps(count)`. */

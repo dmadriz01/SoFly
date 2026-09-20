@@ -12,7 +12,7 @@ export default async function Image({ params }: { params: { id: string } }) {
     loadBoldFont(),
     createPublicClient()
       .from("events")
-      .select("title, category, venue_name, neighborhood, starts_at, max_spots, rsvps(count)")
+      .select("title, category, venue_name, neighborhood, starts_at, max_spots, cancelled_at, rsvps(count)")
       .eq("id", params.id)
       .maybeSingle(),
   ]);
@@ -96,7 +96,7 @@ export default async function Image({ params }: { params: { id: string } }) {
             {event.neighborhood} · {event.venue_name}
           </div>
           <div style={{ display: "flex", marginTop: 8 }}>
-            {left} of {event.max_spots} spots left
+            {event.cancelled_at ? "This meetup was cancelled" : `${left} of ${event.max_spots} spots left`}
           </div>
         </div>
       </div>

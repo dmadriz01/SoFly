@@ -108,10 +108,36 @@ Set the subject to `Your BayMeet login code` and use this body in each:
 
 - **Reports:** run [`supabase/migrations/002_reports.sql`](supabase/migrations/002_reports.sql) in the SQL editor. Reports are private; read them in Supabase → Table Editor → `reports`.
 - **Group chat links:** run [`supabase/migrations/003_chat_links.sql`](supabase/migrations/003_chat_links.sql) in the SQL editor. Hosts can add a WhatsApp, GroupMe, Discord, Telegram, Signal, Slack or Messenger invite link; only the host and people who joined can see it.
+- **Cancelled events:** run [`supabase/migrations/004_cancelled.sql`](supabase/migrations/004_cancelled.sql). Run it **before** deploying the matching code; the new feed query needs the column. See "Moderating" below.
+- **Report email alerts:** add these in Vercel → Settings → Environment Variables (and `.env.local` locally). Mark the password **Sensitive**:
+  - `ALERT_EMAIL_USER`: a Gmail address
+  - `ALERT_EMAIL_APP_PASSWORD`: a Google app password ([myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)); reusing the one from Supabase SMTP is fine
+  - `REPORT_ALERT_EMAIL`: where alerts go (optional; defaults to `NEXT_PUBLIC_CONTACT_EMAIL`)
+
+  Redeploy afterward. If these aren't set, reports are still saved; only the email is skipped.
 - **Contact email:** set `NEXT_PUBLIC_CONTACT_EMAIL` (locally in `.env.local`, and in Vercel → Settings → Environment Variables). It powers the Feedback link and the privacy and guidelines pages.
 - **Custom domain:** set `NEXT_PUBLIC_SITE_URL` (e.g. `https://baymeet.app`) so link previews use it. Until then Vercel's production URL is used automatically.
 - **Analytics:** in Vercel, open your project → **Analytics** → **Enable**. The code is already in place.
 - **Link previews:** check them after deploying by pasting an event URL into the [LinkedIn Post Inspector](https://www.linkedin.com/post-inspector/). Platforms cache previews, so re-scrape after changes.
+
+## Moderating
+
+Reports are saved in Supabase → Table Editor → `reports`, and emailed to you if alerts are set up. Reporting never changes an event; you decide. In the Supabase **SQL editor**:
+
+```sql
+-- See open reports, newest first, with the event they're about
+select r.created_at, r.reason, r.details, e.title, e.id as event_id
+from public.reports r join public.events e on e.id = r.event_id
+order by r.created_at desc;
+
+-- Cancel an event (hides it from the feed, shows a "cancelled" banner, blocks new RSVPs)
+update public.events set cancelled_at = now() where id = 'EVENT_ID';
+
+-- Undo a cancellation
+update public.events set cancelled_at = null where id = 'EVENT_ID';
+```
+
+Only you can do this (the SQL editor and table editor); hosts can't cancel or un-cancel through the app. Hosts can still delete their own events.
 
 ## Things to know
 

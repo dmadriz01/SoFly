@@ -17,26 +17,64 @@ export const CATEGORIES = [
 
 export type Category = (typeof CATEGORIES)[number];
 
-export const NEIGHBORHOODS = [
-  "SF - Mission",
-  "SF - Marina",
-  "SF - Sunset",
-  "SF - SoMa",
-  "SF - Richmond",
-  "SF - Presidio",
-  "Oakland",
-  "Berkeley",
-  "Alameda",
-  "San Mateo",
-  "Palo Alto",
-  "Mountain View",
-  "San Jose",
-  "Sunnyvale",
-  "Marin",
-  "Other",
-] as const;
+// Existing values ("SF - Mission", "Oakland", "Marin", ...) are kept exactly so older events
+// still match. Cities are the 100 incorporated Bay Area cities outside San Francisco, by county.
+export const NEIGHBORHOOD_GROUPS: { label: string; items: string[] }[] = [
+  {
+    label: "San Francisco",
+    items: [
+      "SF - Mission",
+      "SF - Marina",
+      "SF - Sunset",
+      "SF - SoMa",
+      "SF - Richmond",
+      "SF - Presidio",
+      "SF - Other",
+    ],
+  },
+  {
+    label: "East Bay",
+    items: [
+      "Alameda", "Albany", "Antioch", "Berkeley", "Brentwood", "Clayton", "Concord", "Danville",
+      "Dublin", "El Cerrito", "Emeryville", "Fremont", "Hayward", "Hercules", "Lafayette",
+      "Livermore", "Martinez", "Moraga", "Newark", "Oakland", "Oakley", "Orinda", "Piedmont",
+      "Pinole", "Pittsburg", "Pleasant Hill", "Pleasanton", "Richmond", "San Leandro", "San Pablo",
+      "San Ramon", "Union City", "Walnut Creek",
+    ],
+  },
+  {
+    label: "Peninsula",
+    items: [
+      "Atherton", "Belmont", "Brisbane", "Burlingame", "Colma", "Daly City", "East Palo Alto",
+      "Foster City", "Half Moon Bay", "Hillsborough", "Menlo Park", "Millbrae", "Pacifica",
+      "Portola Valley", "Redwood City", "San Bruno", "San Carlos", "San Mateo",
+      "South San Francisco", "Woodside",
+    ],
+  },
+  {
+    label: "South Bay",
+    items: [
+      "Campbell", "Cupertino", "Gilroy", "Los Altos", "Los Altos Hills", "Los Gatos", "Milpitas",
+      "Monte Sereno", "Morgan Hill", "Mountain View", "Palo Alto", "San Jose", "Santa Clara",
+      "Saratoga", "Sunnyvale",
+    ],
+  },
+  {
+    label: "North Bay",
+    items: [
+      "Marin", "American Canyon", "Belvedere", "Benicia", "Calistoga", "Cloverdale",
+      "Corte Madera", "Cotati", "Dixon", "Fairfax", "Fairfield", "Healdsburg", "Larkspur",
+      "Mill Valley", "Napa", "Novato", "Petaluma", "Rio Vista", "Rohnert Park", "Ross",
+      "San Anselmo", "San Rafael", "Santa Rosa", "Sausalito", "Sebastopol", "Sonoma",
+      "St. Helena", "Suisun City", "Tiburon", "Vacaville", "Vallejo", "Windsor", "Yountville",
+    ],
+  },
+  { label: "Elsewhere", items: ["Other"] },
+];
 
-export type Neighborhood = (typeof NEIGHBORHOODS)[number];
+export const NEIGHBORHOODS: string[] = NEIGHBORHOOD_GROUPS.flatMap((g) => g.items);
+
+export type Neighborhood = string;
 
 // Full class strings so Tailwind's scanner picks them up.
 export const CATEGORY_STYLES: Record<Category, string> = {

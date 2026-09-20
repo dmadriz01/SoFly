@@ -3,7 +3,8 @@
 import { useState, useTransition } from "react";
 import { createEvent } from "@/app/actions";
 import { CHAT_APPS_HINT } from "@/lib/chat";
-import { CATEGORIES, NEIGHBORHOODS } from "@/lib/constants";
+import { CATEGORIES } from "@/lib/constants";
+import { NeighborhoodOptions } from "./NeighborhoodOptions";
 import {
   EVENT_FIELDS,
   LIMITS,
@@ -114,11 +115,7 @@ export function EventForm() {
             <option value="" disabled>
               Select…
             </option>
-            {NEIGHBORHOODS.map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
+            <NeighborhoodOptions />
           </select>
         </Field>
       </div>

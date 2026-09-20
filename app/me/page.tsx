@@ -11,9 +11,10 @@ export const dynamic = "force-dynamic";
 function upcomingThenPast(events: EventWithCount[]) {
   const now = Date.now();
   const time = (e: EventWithCount) => new Date(e.starts_at).getTime();
+  const isPast = (e: EventWithCount) => time(e) <= now || Boolean(e.cancelled_at);
   return {
-    upcoming: events.filter((e) => time(e) > now).sort((a, b) => time(a) - time(b)),
-    past: events.filter((e) => time(e) <= now).sort((a, b) => time(b) - time(a)),
+    upcoming: events.filter((e) => !isPast(e)).sort((a, b) => time(a) - time(b)),
+    past: events.filter(isPast).sort((a, b) => time(b) - time(a)),
   };
 }
 

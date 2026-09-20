@@ -11,6 +11,7 @@ export function RsvpPanel({
   going,
   loggedIn,
   ended,
+  cancelled,
 }: {
   eventId: string;
   maxSpots: number;
@@ -18,6 +19,7 @@ export function RsvpPanel({
   going: boolean;
   loggedIn: boolean;
   ended: boolean;
+  cancelled: boolean;
 }) {
   const [error, setError] = useState<string>();
   const [pending, startTransition] = useTransition();
@@ -43,7 +45,13 @@ export function RsvpPanel({
   }
 
   let button: React.ReactNode;
-  if (ended) {
+  if (cancelled) {
+    button = (
+      <button disabled className="btn-primary w-full">
+        Cancelled
+      </button>
+    );
+  } else if (ended) {
     button = (
       <button disabled className="btn-primary w-full">
         Ended
@@ -75,9 +83,11 @@ export function RsvpPanel({
 
   return (
     <div className="card p-4">
-      <p className="mb-3 text-sm font-medium">
-        <span className="text-lg font-bold">{left}</span> of {maxSpots} spots left
-      </p>
+      {!cancelled && (
+        <p className="mb-3 text-sm font-medium">
+          <span className="text-lg font-bold">{left}</span> of {maxSpots} spots left
+        </p>
+      )}
       {button}
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
     </div>

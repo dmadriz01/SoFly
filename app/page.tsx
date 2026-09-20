@@ -24,6 +24,7 @@ export default async function FeedPage({
   let query = supabase
     .from("events")
     .select("*, rsvps(count)")
+    .is("cancelled_at", null)
     .gt("starts_at", new Date().toISOString())
     .order("starts_at", { ascending: true })
     .limit(100);

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { sendReportAlert } from "@/lib/alerts";
 import { parseChatUrl } from "@/lib/chat";
 import { REPORT_REASONS } from "@/lib/constants";
 import { pacificLocalToUtc } from "@/lib/time";
@@ -71,9 +72,11 @@ export async function setRsvp(eventId: string, join: boolean): Promise<{ error?:
     // 23505 = already joined; treat as success.
     if (error && error.code !== "23505") {
       return {
-        error: error.message.includes("full")
-          ? "Sorry, this event just filled up."
-          : "Couldn't join. Please try again.",
+        error: error.message.includes("cancelled")
+          ? "This meetup was cancelled."
+          : error.message.includes("full")
+            ? "Sorry, this event just filled up."
+            : "Couldn't join. Please try again.",
       };
     }
   } else {
@@ -143,6 +146,24 @@ export async function reportEvent(
   // 23505 = this user already reported this event; treat as success.
   if (error && error.code !== "23505") {
     return { error: "Couldn't send your report. Please try again." };
+  }
+
+  // Email the moderator, but only for a new report so repeat clicks can't spam the inbox.
+  if (!error) {
+    const { data: event } = await supabase
+      .from("events")
+      .select("title, host:profiles!host_id(name)")
+      .eq("id", eventId)
+      .maybeSingle();
+    const host = event?.host as { name?: string } | { name?: string }[] | null | undefined;
+    await sendReportAlert({
+      eventId,
+      eventTitle: event?.title ?? "(unknown event)",
+      hostName: (Array.isArray(host) ? host[0]?.name : host?.name) ?? "",
+      reason,
+      details: trimmed,
+      reporterEmail: user.email ?? "",
+    });
   }
   return {};
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { NEIGHBORHOODS } from "@/lib/constants";
+import { NeighborhoodOptions } from "./NeighborhoodOptions";
 import { feedHref } from "@/lib/feed";
 
 export function NeighborhoodSelect({
@@ -21,11 +21,7 @@ export function NeighborhoodSelect({
         className="field !w-auto min-w-0 flex-1 !py-2 text-sm"
       >
         <option value="">All neighborhoods</option>
-        {NEIGHBORHOODS.map((n) => (
-          <option key={n} value={n}>
-            {n}
-          </option>
-        ))}
+        <NeighborhoodOptions />
       </select>
     </label>
   );
