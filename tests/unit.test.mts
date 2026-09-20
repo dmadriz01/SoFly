@@ -1,11 +1,13 @@
 // Unit tests for the pure logic (no network, no database). Run with `npm run test:unit`.
 // Uses Node's built-in TypeScript support, so it needs Node 22.6 or newer.
 import { ageFieldProblem, ageLabel, ageOn, parseBirthDate, resolveAgeRange, withinAgeRange } from "../lib/age.ts";
+import { aboutLinks, hasAbout, parseAbout } from "../lib/about.ts";
 import { parseChatUrl } from "../lib/chat.ts";
+import { parseHandle, socialUrl } from "../lib/social.ts";
 import * as email from "../lib/email-templates.ts";
 import { buildIcs } from "../lib/ics.ts";
 import { updateOrInsert } from "../lib/supabase/save.ts";
-import { validateEvent } from "../lib/validation.ts";
+import { validateEvent, validateRequestNote } from "../lib/validation.ts";
 import { addDaysToKey, pacificDate, pacificLocalToUtc } from "../lib/time.ts";
 
 let passed = 0;
@@ -52,6 +54,40 @@ t("age field: 17, 121, text and decimals are rejected", ["17", "121", "abc", "25
   t("form: Everyone, Women-only and Men-only are all valid", ["Everyone", "Women-only", "Men-only"].every((a) => !("audience" in errs({ audience: a }))));
   t("form: any other audience is rejected", "audience" in errs({ audience: "Nonbinary-only" }));
 }
+
+// ---- social usernames: a username in, a safe link out ----
+const handle = (k: Parameters<typeof parseHandle>[0], v: string) => { const r = parseHandle(k, v); return "handle" in r ? r.handle : "ERROR"; };
+t("social: a plain username is kept", handle("instagram", "ann.lee") === "ann.lee");
+t("social: a leading @ is dropped", handle("instagram", "@ann.lee") === "ann.lee" && handle("x", "@annlee") === "annlee");
+t("social: blank means none", handle("instagram", "") === null && handle("tiktok", "   ") === null);
+t("social: an Instagram link becomes the username", handle("instagram", "https://www.instagram.com/ann.lee/?hl=en") === "ann.lee");
+t("social: a link without https:// works too", handle("instagram", "instagram.com/ann.lee") === "ann.lee");
+t("social: a LinkedIn profile link becomes the slug", handle("linkedin", "https://www.linkedin.com/in/ann-lee-a1b2c3/?trk=abc") === "ann-lee-a1b2c3");
+t("social: the bare LinkedIn slug is accepted", handle("linkedin", "ann-lee-a1b2c3") === "ann-lee-a1b2c3");
+t("social: LinkedIn pages that aren't personal profiles are refused", handle("linkedin", "https://www.linkedin.com/company/acme") === "ERROR");
+t("social: an X link on either domain works", handle("x", "https://x.com/annlee") === "annlee" && handle("x", "https://twitter.com/annlee") === "annlee");
+t("social: a TikTok link keeps the name without the @", handle("tiktok", "https://www.tiktok.com/@ann_lee") === "ann_lee");
+t("social: a mobile Facebook link works", handle("facebook", "https://m.facebook.com/ann.lee") === "ann.lee");
+t("social: another site's link is refused, however it's dressed up", ["https://evil.com/ann", "https://instagram.com.evil.com/ann", "https://evilinstagram.com/ann", "https://user:pw@instagram.com/ann", "javascript:alert(1)"].every((u) => handle("instagram", u) === "ERROR"));
+t("social: a link to the wrong app is refused", handle("instagram", "https://x.com/annlee") === "ERROR" && handle("linkedin", "https://instagram.com/ann") === "ERROR");
+t("social: spaces, slashes and markup are refused", ["ann lee", "ann/lee", "<b>ann</b>", "ann;drop", "a".repeat(61)].every((u) => handle("instagram", u) === "ERROR"));
+t("social: the link is built from a fixed address", socialUrl("instagram", "ann.lee") === "https://www.instagram.com/ann.lee" && socialUrl("linkedin", "ann-lee") === "https://www.linkedin.com/in/ann-lee" && socialUrl("tiktok", "ann_lee") === "https://www.tiktok.com/@ann_lee");
+t("social: even a stored oddity can't break out of the address", socialUrl("instagram", "a/../b") === "https://www.instagram.com/a%2F..%2Fb");
+{
+  const blank = { bio: "", linkedin: "", instagram: "", x: "", tiktok: "", facebook: "" };
+  const ok1 = parseAbout({ ...blank, bio: "  Designer.  ", instagram: "https://instagram.com/ann.lee", x: "@annlee" });
+  t("about: bio is trimmed and links become usernames", ok1.ok && ok1.value.bio === "Designer." && ok1.value.instagram === "ann.lee" && ok1.value.x_handle === "annlee" && ok1.value.linkedin === null);
+  t("about: an empty form is fine", parseAbout(blank).ok);
+  const bad = parseAbout({ ...blank, bio: "x".repeat(501), instagram: "https://evil.com/x" });
+  t("about: a long bio and a bad link are both reported", !bad.ok && "bio" in bad.errors && "instagram" in bad.errors);
+  t("about: links come out in a fixed order with real addresses", ok1.ok && aboutLinks(ok1.value).map((l) => l.label).join() === "Instagram,X" && aboutLinks(ok1.value)[0].url === "https://www.instagram.com/ann.lee");
+  t("about: 'has a profile' means a bio or a link", ok1.ok && hasAbout(ok1.value) && !hasAbout(null) && !hasAbout({ bio: " ", linkedin: null, instagram: null, x_handle: null, tiktok: null, facebook: null }));
+}
+
+// ---- the note to the host is optional ----
+t("note: empty is fine (the host sees your profile anyway)", validateRequestNote("") === undefined && validateRequestNote("   ") === undefined);
+t("note: a short note is fine", validateRequestNote("Hi!") === undefined);
+t("note: 500 characters is fine, 501 is not", validateRequestNote("x".repeat(500)) === undefined && validateRequestNote("x".repeat(501)) !== undefined);
 
 // ---- chat links (only known apps; no look-alike hosts) ----
 t("WhatsApp link accepted", "url" in parseChatUrl("https://chat.whatsapp.com/AbC123"));

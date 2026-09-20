@@ -39,6 +39,21 @@ create table public.profile_private (
   created_at  timestamptz not null default now()
 );
 
+-- The "about you" a person shares so hosts know who they're letting in: a short bio and optional
+-- usernames on social apps. Only the person, and hosts of meetups they've asked to join or joined,
+-- can read it. Only usernames are stored (never a pasted link), so a link can only ever point at the
+-- app it claims to be, and never at a look-alike site.
+create table public.profile_bios (
+  user_id     uuid primary key references public.profiles (id) on delete cascade,
+  bio         text not null default '' check (char_length(bio) <= 500),
+  linkedin    text check (linkedin ~ '^[A-Za-z0-9._-]{1,60}$'),
+  instagram   text check (instagram ~ '^[A-Za-z0-9._-]{1,60}$'),
+  x_handle    text check (x_handle ~ '^[A-Za-z0-9._-]{1,60}$'),
+  tiktok      text check (tiktok ~ '^[A-Za-z0-9._-]{1,60}$'),
+  facebook    text check (facebook ~ '^[A-Za-z0-9._-]{1,60}$'),
+  updated_at  timestamptz not null default now()
+);
+
 -- Email preferences. No row means the defaults (everything on). Login codes are always sent.
 create table public.user_settings (
   user_id              uuid primary key references public.profiles (id) on delete cascade,
@@ -242,6 +257,23 @@ security definer
 set search_path = ''
 as $$
   select exists (select 1 from public.events e where e.id = eid and e.join_mode = 'open');
+$$;
+
+-- Is the person asking the host of a meetup that this guest has asked to join or joined?
+-- (Cancelling a request deletes the row, so the host loses access again.)
+create function private.hosts_guest(guest uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.rsvps r
+    join public.events e on e.id = r.event_id
+    where r.user_id = guest and e.host_id = (select auth.uid())
+  );
 $$;
 
 -- The one function we do offer through the API: a host cancelling their own event.
@@ -524,6 +556,7 @@ alter table public.rsvp_notes       enable row level security;
 alter table public.event_passes     enable row level security;
 alter table public.meetup_feedback  enable row level security;
 alter table public.push_subscriptions enable row level security;
+alter table public.profile_bios     enable row level security;
 alter table public.reports          enable row level security;
 
 -- profiles: public to read, editable by their owner.
@@ -569,6 +602,17 @@ create policy "guests manage their own feedback"
 
 create policy "users see and remove their own devices"
   on public.push_subscriptions for all
+  to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
+
+create policy "people and their hosts read a bio"
+  on public.profile_bios for select
+  to authenticated
+  using ((select auth.uid()) = user_id or private.hosts_guest(user_id));
+
+create policy "people write their own bio"
+  on public.profile_bios for all
   to authenticated
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
@@ -687,7 +731,7 @@ grant select on public.profiles, public.events, public.rsvps to anon, authentica
 -- Reads that need a login.
 grant select on
   public.profile_private, public.user_interests, public.user_settings, public.event_passes,
-  public.meetup_feedback, public.push_subscriptions,
+  public.meetup_feedback, public.push_subscriptions, public.profile_bios,
   public.rsvp_notes, public.event_locations, public.event_chat_links
   to authenticated;
 
@@ -698,6 +742,9 @@ grant insert (user_id, categories, updated_at), update (categories, updated_at)
   on public.user_interests to authenticated;
 grant insert (user_id, email_notifications, updated_at), update (email_notifications, updated_at)
   on public.user_settings to authenticated;
+grant insert (user_id, bio, linkedin, instagram, x_handle, tiktok, facebook, updated_at),
+      update (bio, linkedin, instagram, x_handle, tiktok, facebook, updated_at)
+  on public.profile_bios to authenticated;
 grant insert, delete on public.event_passes to authenticated;
 grant insert (event_id, user_id, would_join_again), update (would_join_again)
   on public.meetup_feedback to authenticated;

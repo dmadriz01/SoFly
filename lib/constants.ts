@@ -47,16 +47,6 @@ export type SkillLevel = (typeof SKILL_LEVELS)[number];
 export const AUDIENCES = ["Everyone", "Women-only", "Men-only"] as const;
 export type Audience = (typeof AUDIENCES)[number];
 
-/** One-tap starting points for the age fields. Hosts can type any ages they like. */
-export const AGE_QUICK_PICKS: { label: string; min: string; max: string }[] = [
-  { label: "Anyone 18+", min: "", max: "" },
-  { label: "21+", min: "21", max: "" },
-  { label: "18–25", min: "18", max: "25" },
-  { label: "25–35", min: "25", max: "35" },
-  { label: "35+", min: "35", max: "" },
-];
-
-
 // Existing values ("SF - Mission", "Oakland", "Marin", ...) are kept exactly so older events
 // still match. Cities are the 100 incorporated Bay Area cities outside San Francisco, by county.
 export const NEIGHBORHOOD_GROUPS: { label: string; items: string[] }[] = [

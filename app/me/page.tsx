@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { AboutForm } from "@/components/AboutForm";
 import { EmailSettings } from "@/components/EmailSettings";
 import { LogoutButton } from "@/components/LogoutButton";
 import { PushSettings } from "@/components/PushSettings";
@@ -8,7 +9,7 @@ import { EventCard } from "@/components/EventCard";
 import { NextUp } from "@/components/NextUp";
 import { InterestsForm } from "@/components/InterestsForm";
 import { getInterests } from "@/lib/interests";
-import { getBirthDate } from "@/lib/profile";
+import { getAbout, getBirthDate } from "@/lib/profile";
 import { createClient } from "@/lib/supabase/server";
 import type { EventWithCount } from "@/lib/types";
 
@@ -87,6 +88,7 @@ export default async function MePage() {
     .eq("user_id", user.id)
     .maybeSingle();
   const emailsOn = settings?.email_notifications ?? true;
+  const about = await getAbout(supabase, user.id);
   const hosting = (hostingRes.data ?? []) as EventWithCount[];
   const myRows = (myRsvps.data ?? []) as { event_id: string; status: string }[];
   const goingIds = myRows.map((r) => r.event_id);
@@ -216,6 +218,15 @@ export default async function MePage() {
           </>
         }
       />
+
+      <section id="about">
+        <h2 className="mb-1 text-lg font-bold">About you</h2>
+        <p className="mb-3 text-sm text-muted">
+          Helps hosts know who they&rsquo;re letting in. Only hosts of meetups you join or ask to join can
+          see it.
+        </p>
+        <AboutForm initial={about} mode="settings" />
+      </section>
 
       <section>
         <h2 className="mb-1 text-lg font-bold">Your interests</h2>

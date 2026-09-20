@@ -9,6 +9,7 @@ import { updateOrInsert } from "@/lib/supabase/save";
 import { sendReportAlert } from "@/lib/alerts";
 import { diagnoseEmail, diagnosePush, type Check } from "@/lib/diagnose";
 import { parseChatUrl } from "@/lib/chat";
+import { parseAbout, type AboutErrors, type AboutInput } from "@/lib/about";
 import { MIN_AGE, ageOn, parseBirthDate, resolveAgeRange } from "@/lib/age";
 import { HIDDEN_VENUE, REPORT_REASONS, isCategory } from "@/lib/constants";
 import { notifyEventCancelled, notifyHostOfRequest, notifyRequestDecision } from "@/lib/notify";
@@ -106,15 +107,16 @@ export async function setRsvp(
   if (!user) return { error: "Please log in to join." };
 
   if (join) {
-    // Approval-only events need an intro for the host to review (the host doesn't need one).
+    // On approval-only events a person can add a note for the host (the host sees their profile too).
     const { data: event } = await supabase
       .from("events")
       .select("join_mode, host_id")
       .eq("id", eventId)
       .maybeSingle();
-    const needsNote = event?.join_mode === "request" && event.host_id !== user.id;
-    if (needsNote) {
-      const noteError = validateRequestNote(note);
+    const isRequest = event?.join_mode === "request" && event.host_id !== user.id;
+    const cleanNote = note.trim();
+    if (isRequest && cleanNote) {
+      const noteError = validateRequestNote(cleanNote);
       if (noteError) return { error: noteError };
     }
 
@@ -137,14 +139,16 @@ export async function setRsvp(
       };
     }
 
-    if (needsNote) {
-      const { error: noteInsertError } = await supabase
-        .from("rsvp_notes")
-        .insert({ event_id: eventId, user_id: user.id, note: note.trim() });
-      if (noteInsertError) {
-        // A request without its note isn't useful to the host, so undo it.
-        await supabase.from("rsvps").delete().eq("event_id", eventId).eq("user_id", user.id);
-        return { error: "Couldn't send your request. Please try again." };
+    if (isRequest) {
+      if (cleanNote) {
+        const { error: noteInsertError } = await supabase
+          .from("rsvp_notes")
+          .insert({ event_id: eventId, user_id: user.id, note: cleanNote });
+        if (noteInsertError) {
+          // They wrote a note we couldn't save; better to ask again than to send it without.
+          await supabase.from("rsvps").delete().eq("event_id", eventId).eq("user_id", user.id);
+          return { error: "Couldn't send your request. Please try again." };
+        }
       }
       // Tell the host, without making the requester wait for the email.
       waitUntil(notifyHostOfRequest(eventId, user.id));
@@ -579,4 +583,39 @@ export async function sendTestPush(): Promise<{ checks?: Check[]; error?: string
   lastPushTest.set(user.id, now);
 
   return { checks: await diagnosePush({ userId: user.id }) };
+}
+
+/** Saves "about you". With `next` it continues there (onboarding); without, it just returns. */
+export async function saveAbout(
+  input: AboutInput,
+  next?: string
+): Promise<{ errors?: AboutErrors; error?: string }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const parsed = parseAbout(input);
+  if (!parsed.ok) return { errors: parsed.errors };
+
+  const { error } = await updateOrInsert(
+    supabase,
+    "profile_bios",
+    { user_id: user.id },
+    {
+      bio: parsed.value.bio,
+      linkedin: parsed.value.linkedin,
+      instagram: parsed.value.instagram,
+      x_handle: parsed.value.x_handle,
+      tiktok: parsed.value.tiktok,
+      facebook: parsed.value.facebook,
+      updated_at: new Date().toISOString(),
+    }
+  );
+  if (error) return { error: "Couldn't save that. Please try again." };
+
+  revalidatePath("/me");
+  if (next) redirect(safeNext(next));
+  return {};
 }

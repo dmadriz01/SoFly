@@ -9,13 +9,15 @@ import { EventTags } from "@/components/EventTags";
 import { FeedbackPrompt } from "@/components/FeedbackPrompt";
 import { HostCard } from "@/components/HostCard";
 import { GroupChat } from "@/components/GroupChat";
+import { GuestProfiles } from "@/components/GuestProfiles";
 import { ManageEvent } from "@/components/ManageEvent";
 import { ReportEvent } from "@/components/ReportEvent";
 import { RequestsPanel } from "@/components/RequestsPanel";
 import { RsvpPanel } from "@/components/RsvpPanel";
 import { ShareButton } from "@/components/ShareButton";
+import { hasAbout } from "@/lib/about";
 import { ageLabel, ageOn, withinAgeRange } from "@/lib/age";
-import { getBirthDate } from "@/lib/profile";
+import { getAbout, getAboutFor, getBirthDate } from "@/lib/profile";
 import { createPublicClient } from "@/lib/supabase/public";
 import { createClient } from "@/lib/supabase/server";
 import { formatWhenLong, pacificDate } from "@/lib/time";
@@ -132,6 +134,14 @@ export default async function EventPage({ params }: { params: { id: string } }) 
   const byJoinTime = (a: { created_at: string }, b: { created_at: string }) =>
     a.created_at.localeCompare(b.created_at);
   const attendees = event.rsvps.filter((r) => r.status === "approved").sort(byJoinTime);
+  // A host sees the profiles of the people asking to join and of approved guests. (Row level
+  // security returns only bios of people who have a request or RSVP on one of the host's meetups.)
+  const guestBios = isHost
+    ? await getAboutFor(
+        supabase,
+        event.rsvps.filter((r) => r.user_id !== event.host_id && r.status !== "declined").map((r) => r.user_id)
+      )
+    : {};
   const requests = isHost
     ? event.rsvps
         .filter((r) => r.status === "pending")
@@ -140,6 +150,7 @@ export default async function EventPage({ params }: { params: { id: string } }) 
           userId: r.user_id,
           name: r.profiles?.name?.trim() || "Someone",
           note: notes.get(r.user_id) ?? "",
+          about: guestBios[r.user_id] ?? null,
         }))
     : [];
 
@@ -154,6 +165,14 @@ export default async function EventPage({ params }: { params: { id: string } }) 
   const hostedJoined = (hostHistory ?? []).reduce((sum, e) => sum + (e.spots_taken as number), 0);
   const hostYes = (hostHistory ?? []).reduce((sum, e) => sum + (e.feedback_yes as number), 0);
   const hostAnswers = (hostHistory ?? []).reduce((sum, e) => sum + (e.feedback_total as number), 0);
+
+  const guests = isHost
+    ? attendees
+        .filter((r) => r.user_id !== event.host_id)
+        .map((r) => ({ userId: r.user_id, name: r.profiles?.name?.trim() || "Someone", about: guestBios[r.user_id] ?? null }))
+    : [];
+  // Whether the viewer has filled in "about you", which hosts see alongside a request.
+  const viewerHasAbout = user && !isHost && isRequest ? hasAbout(await getAbout(supabase, user.id)) : true;
 
   const when = formatWhenLong(event.starts_at);
   const cancelled = Boolean(event.cancelled_at);
@@ -252,6 +271,7 @@ export default async function EventPage({ params }: { params: { id: string } }) 
         isHost={isHost}
         hostName={event.host?.name?.trim() || "the host"}
         myNote={(user && notes.get(user.id)) || null}
+        hasAbout={viewerHasAbout}
       />
 
       {insider && !cancelled && !ended && (
@@ -261,6 +281,8 @@ export default async function EventPage({ params }: { params: { id: string } }) 
       {isHost && isRequest && !cancelled && (
         <RequestsPanel eventId={event.id} requests={requests} spotsLeft={spotsLeft} />
       )}
+
+      {isHost && !cancelled && <GuestProfiles guests={guests} />}
 
       {!cancelled && (isHost || (going && chatUrl)) && (
         <GroupChat eventId={event.id} url={chatUrl} isHost={isHost} />

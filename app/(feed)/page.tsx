@@ -10,7 +10,8 @@ import { ageLabel, ageOn, withinAgeRange } from "@/lib/age";
 import { isCategory, isNeighborhood, isSkillLevel } from "@/lib/constants";
 import { feedHref, type FeedFilters } from "@/lib/feed";
 import { getInterests } from "@/lib/interests";
-import { getBirthDate } from "@/lib/profile";
+import { hasAbout } from "@/lib/about";
+import { getAbout, getBirthDate } from "@/lib/profile";
 import { createClient } from "@/lib/supabase/server";
 import { formatWhenShort, pacificDate } from "@/lib/time";
 import type { EventWithCount } from "@/lib/types";
@@ -182,6 +183,7 @@ export default async function FeedPage({
           events={deck}
           loggedIn={Boolean(user)}
           hasProfile={Boolean(birthDate)}
+          hasAbout={user ? hasAbout(await getAbout(supabase, user.id)) : false}
           returnTo={feedHref({ ...filters, view: "swipe" })}
           listHref={feedHref({ ...filters, view: "list" })}
         />

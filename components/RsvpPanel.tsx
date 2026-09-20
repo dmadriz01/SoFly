@@ -20,6 +20,7 @@ export function RsvpPanel({
   isHost,
   hostName,
   myNote,
+  hasAbout,
 }: {
   eventId: string;
   maxSpots: number;
@@ -36,6 +37,8 @@ export function RsvpPanel({
   hostName: string;
   /** The intro the viewer sent with their pending request, if any. */
   myNote: string | null;
+  /** Whether the viewer has filled in "about you", which hosts see with a request. */
+  hasAbout: boolean;
 }) {
   const isRequest = joinMode === "request";
   const [error, setError] = useState<string>();
@@ -125,7 +128,7 @@ export function RsvpPanel({
     body = writing ? (
       <form onSubmit={sendRequest} className="space-y-2">
         <label htmlFor="request-note" className="block text-sm font-semibold">
-          Introduce yourself to {hostName}
+          Add a note for {hostName} <span className="font-normal text-muted">(optional)</span>
         </label>
         <textarea
           id="request-note"
@@ -133,12 +136,18 @@ export function RsvpPanel({
           maxLength={NOTE_MAX}
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          placeholder="Who you are, what you do, why you'd like to join, and anything else the host should know."
+          placeholder="Anything you'd like the host to know."
           className={`field text-sm ${noteError ? "field-error" : ""}`}
         />
-        <p className="text-xs text-muted">
-          Only the host sees this. It helps them decide who to approve.
-        </p>
+        <p className="text-xs text-muted">Only the host sees this, along with your profile.</p>
+        {!hasAbout && (
+          <div className="rounded-xl bg-accent-soft px-3 py-2 text-xs text-ink/90">
+            You haven&rsquo;t added your bio yet. Hosts see it with your request, so it helps to have one.
+            <Link href="/me#about" className="tap mt-1 flex justify-start font-semibold text-accent-dark underline">
+              Add your bio
+            </Link>
+          </div>
+        )}
         {noteError && <p className="text-sm text-red-600">{noteError}</p>}
         <div className="flex gap-2">
           <button type="submit" disabled={pending} className="btn-primary">

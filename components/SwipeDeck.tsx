@@ -37,12 +37,15 @@ export function SwipeDeck({
   events,
   loggedIn,
   hasProfile,
+  hasAbout,
   returnTo,
   listHref,
 }: {
   events: DeckEvent[];
   loggedIn: boolean;
   hasProfile: boolean;
+  /** Whether they've filled in "about you" (hosts see it with a request). */
+  hasAbout: boolean;
   /** Where to come back to after logging in or finishing a profile. */
   returnTo: string;
   listHref: string;
@@ -230,6 +233,7 @@ export function SwipeDeck({
       )}
       {sheet?.kind === "note" && (
         <NoteSheet
+          hasAbout={hasAbout}
           event={sheet.event}
           onClose={() => setSheet(null)}
           onSend={(note) => sendRequest(sheet.event, note)}
@@ -452,10 +456,12 @@ function Sheet({
 
 function NoteSheet({
   event,
+  hasAbout,
   onClose,
   onSend,
 }: {
   event: DeckEvent;
+  hasAbout: boolean;
   onClose: () => void;
   onSend: (note: string) => Promise<string | undefined>;
 }) {
@@ -476,11 +482,11 @@ function NoteSheet({
   }
 
   return (
-    <Sheet title={`Introduce yourself to ${event.hostName}`} onClose={onClose}>
+    <Sheet title={`Add a note for ${event.hostName}`} onClose={onClose}>
       <form onSubmit={submit} className="space-y-2">
         <p className="text-sm text-muted">
-          {event.title} needs the host&rsquo;s approval. Tell them who you are, what you do, and why
-          you&rsquo;d like to join.
+          {event.title} needs the host&rsquo;s approval. A note is optional; they&rsquo;ll see your
+          profile either way.
         </p>
         <textarea
           autoFocus
@@ -488,10 +494,18 @@ function NoteSheet({
           maxLength={NOTE_MAX}
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          aria-label="Your introduction"
+          aria-label="Your note (optional)"
           className={`field text-sm ${error ? "field-error" : ""}`}
         />
-        <p className="text-xs text-muted">Only the host sees this.</p>
+        <p className="text-xs text-muted">Only the host sees this, along with your profile.</p>
+        {!hasAbout && (
+          <div className="rounded-xl bg-accent-soft px-3 py-2 text-xs text-ink/90">
+            You haven&rsquo;t added your bio yet, and hosts see it with your request.
+            <a href="/me#about" className="tap mt-1 flex justify-start font-semibold text-accent-dark underline">
+              Add your bio
+            </a>
+          </div>
+        )}
         {error && <p className="text-sm text-red-600">{error}</p>}
         <button type="submit" disabled={sending} className="btn-primary w-full">
           {sending ? "Sending…" : "Send request"}

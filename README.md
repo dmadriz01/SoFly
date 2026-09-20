@@ -122,6 +122,7 @@ Set the subject to `Your BayMeet login code` and use this body in each:
 | `011_meetup_feedback` | guests' private "would you join again?" answers, shown only as totals |
 | `012_men_only_audience` | lets a meetup be set for men only (as well as everyone or women only) |
 | `013_push_subscriptions` | the devices that turned on push notifications |
+| `014_profile_bios` | a short bio and social usernames, visible to hosts of meetups you join or ask to join |
 
 **Changing the database?** Update `schema.sql` and add a migration, then run `npm test`. `test:db` builds a database both ways, runs about 240 checks on each (who can see and do what), and fails if the two ever differ. `test:unit` covers ages, dates, calendar files, chat-link safety, and the email logic (who gets emailed, when, and why someone is skipped). `test:contract` reads the app's own code, finds every database call, and checks each one against the permissions the schema really grants, so a write the database would refuse fails here, not in production.
 

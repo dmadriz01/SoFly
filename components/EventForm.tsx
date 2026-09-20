@@ -4,7 +4,6 @@ import { useRef, useState, useTransition } from "react";
 import { createEvent } from "@/app/actions";
 import { CHAT_APPS_HINT } from "@/lib/chat";
 import {
-  AGE_QUICK_PICKS,
   AUDIENCES,
   CATEGORY_GROUPS,
   REQUEST_BY_DEFAULT,
@@ -257,31 +256,8 @@ export function EventForm() {
             )}
           </div>
         </div>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {AGE_QUICK_PICKS.map((pick) => {
-            const active = ageMin === pick.min && ageMax === pick.max;
-            return (
-              <button
-                key={pick.label}
-                type="button"
-                onClick={() => {
-                  setAgeMin(pick.min);
-                  setAgeMax(pick.max);
-                }}
-                aria-pressed={active}
-                className={`tap rounded-full border px-3.5 text-sm font-medium transition ${
-                  active
-                    ? "border-accent bg-accent-soft text-accent-dark"
-                    : "border-line bg-white text-ink hover:border-accent/50"
-                }`}
-              >
-                {pick.label}
-              </button>
-            );
-          })}
-        </div>
         <p className="mt-2 text-xs text-muted">
-          Type any ages, or tap a shortcut. Leave a box blank for no limit. BayMeet is 18+ only.
+          Leave a box blank for no limit. BayMeet is 18+ only.
         </p>
       </fieldset>
       <p className="-mt-2 text-xs text-muted">

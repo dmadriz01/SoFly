@@ -2,8 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { respondToRequest } from "@/app/actions";
+import type { About } from "@/lib/about";
+import { BioBlock } from "./BioBlock";
 
-export type PendingRequest = { userId: string; name: string; note: string };
+export type PendingRequest = { userId: string; name: string; note: string; about: About | null };
 
 /** The host's inbox for a request-to-join event. */
 export function RequestsPanel({
@@ -65,13 +67,15 @@ export function RequestsPanel({
                 </button>
                 </span>
               </div>
-              {r.note ? (
-                <p className="whitespace-pre-line rounded-xl bg-cream px-3 py-2 text-sm text-ink/90">
-                  {r.note}
-                </p>
-              ) : (
-                <p className="text-sm text-muted">No note.</p>
-              )}
+              <div className="space-y-2 rounded-xl bg-cream px-3 py-2.5">
+                <BioBlock about={r.about} />
+                {r.note && (
+                  <p className="whitespace-pre-line border-t border-line pt-2 text-sm text-ink/90">
+                    <span className="mb-0.5 block text-xs font-semibold uppercase tracking-wide text-muted">Note</span>
+                    {r.note}
+                  </p>
+                )}
+              </div>
             </li>
           ))}
         </ul>

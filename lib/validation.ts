@@ -93,14 +93,11 @@ export function validateEvent(input: Record<string, string>): EventErrors {
   return errors;
 }
 
-export const NOTE_MIN = 10;
 export const NOTE_MAX = 500;
 
-/** The intro a person writes when asking to join an approval-only event. */
+/** The optional note a person can add when asking to join an approval-only event. */
 export function validateRequestNote(note: string): string | undefined {
-  const n = note.trim();
-  if (n.length < NOTE_MIN) return `Tell the host a bit about yourself (at least ${NOTE_MIN} characters).`;
-  if (n.length > NOTE_MAX) return `Keep it under ${NOTE_MAX} characters.`;
+  if (note.trim().length > NOTE_MAX) return `Keep it under ${NOTE_MAX} characters.`;
   return undefined;
 }
 

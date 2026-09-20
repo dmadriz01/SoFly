@@ -412,6 +412,51 @@ async function behaviour({ db, U, oldEvent }, { migrated }) {
   r = await as("postgres", `insert into public.push_subscriptions (user_id,endpoint,p256dh,auth) values ($1,$2,'x','y')`, [U.ann, "https://push.example/" + "x".repeat(2000)]);
   ok("absurdly long device addresses are rejected", !!r.error, JSON.stringify(r));
 
+  // ---- profile bios (visible to the person, and to hosts of meetups they've asked to join or joined) ----
+  const OPEN_FOR_BIOS = await mkEvent("dee", { title: "bio open", max: 9 });
+  const REQ_FOR_BIOS = await mkEvent("dee", { title: "bio dinner", max: 9, mode: "request" });
+  const UNRELATED_HOST_EVENT = await mkEvent("cy", { title: "cy hosts, nobody joins", max: 9 });
+  await as("ann", `insert into public.rsvps (event_id,user_id) values ($1,$2)`, [OPEN_FOR_BIOS, U.ann]);     // ann joined dee's open meetup
+  await as("bob", `insert into public.rsvps (event_id,user_id) values ($1,$2)`, [REQ_FOR_BIOS, U.bob]);      // bob has a pending request
+  r = await as("ann", `insert into public.profile_bios (user_id,bio,linkedin,instagram,x_handle,tiktok,facebook) values ($1,'Product designer, new to Oakland.','ann-lee-12','ann.lee','annlee','ann_lee','ann.lee.9')`, [U.ann]);
+  ok("a person can save a bio with social usernames", !r.error, JSON.stringify(r));
+  await as("bob", `insert into public.profile_bios (user_id,bio) values ($1,'Chef, love long dinners.')`, [U.bob]);
+  await as("cy", `insert into public.profile_bios (user_id,bio) values ($1,'Cy: grad student.')`, [U.cy]);
+  r = await as("ann", `select user_id from public.profile_bios`);
+  ok("a person sees only their own bio", sees(r) === 1 && r.rows[0].user_id === U.ann, JSON.stringify(r));
+  r = await as("dee", `select user_id from public.profile_bios order by user_id`);
+  ok("the host sees the bios of people who joined or asked to join their meetups", sees(r) === 2 && r.rows.map((x) => x.user_id).sort().join() === [U.ann, U.bob].sort().join(), JSON.stringify(r));
+  ok("...but not of people who haven't (cy)", !r.rows.some((x) => x.user_id === U.cy));
+  r = await as("cy", `select user_id from public.profile_bios`);
+  ok("a host whose meetups nobody joined sees only their own bio", sees(r) === 1 && r.rows[0].user_id === U.cy, JSON.stringify(r));
+  r = await as("bob", `select user_id from public.profile_bios`);
+  ok("another guest cannot read someone else's bio", sees(r) === 1 && r.rows[0].user_id === U.bob, JSON.stringify(r));
+  r = await as("anon", `select * from public.profile_bios`);
+  ok("anon cannot read bios", !!r.error || sees(r) === 0, JSON.stringify(r));
+  await as("bob", `delete from public.rsvps where event_id=$1 and user_id=$2`, [REQ_FOR_BIOS, U.bob]);
+  r = await as("dee", `select user_id from public.profile_bios`);
+  ok("cancelling a request takes the host's access away again", sees(r) === 1 && r.rows[0].user_id === U.ann, JSON.stringify(r));
+  r = await as("ann", `update public.profile_bios set bio='Product designer and climber.', instagram=null, updated_at=now() where user_id=$1 returning user_id`, [U.ann]);
+  ok("a person can edit their bio and clear a username", !r.error && sees(r) === 1, JSON.stringify(r));
+  r = await as("bob", `update public.profile_bios set bio='hijacked' where user_id=$1`, [U.ann]);
+  ok("nobody can edit someone else's bio", !!r.error || r.n === 0, JSON.stringify(r));
+  r = await as("dee", `update public.profile_bios set bio='host edit' where user_id=$1`, [U.ann]);
+  ok("a host can read a guest's bio but not change it", !!r.error || r.n === 0, JSON.stringify(r));
+  r = await as("ann", `update public.profile_bios set user_id=$2 where user_id=$1`, [U.ann, U.bob]);
+  ok("a bio cannot be handed to someone else", denied(r), JSON.stringify(r));
+  r = await as("cy", `insert into public.profile_bios (user_id,bio) values ($1,'x')`, [U.ann]);
+  ok("cannot write a bio for someone else", !!r.error, JSON.stringify(r));
+  r = await as("ann", postgrestUpsert("profile_bios", "user_id, bio, updated_at", `'${U.ann}', 'again', now()`, "user_id"));
+  ok("a PostgREST-style upsert on bios is refused (the app updates, then inserts)", denied(r), JSON.stringify(r));
+  r = await as("ann", `update public.profile_bios set bio=$2 where user_id=$1`, [U.ann, "b".repeat(501)]);
+  ok("a bio over 500 characters is rejected", failsWith(r, "profile_bios_bio_check"), JSON.stringify(r));
+  for (const [why, bad] of [["a full link", "https://instagram.com/ann"], ["a space", "ann lee"], ["a slash", "ann/lee"], ["an @ sign", "@ann"], ["a script", "<script>"], ["too long", "a".repeat(61)], ["empty", ""]]) {
+    r = await as("ann", `update public.profile_bios set instagram=$2 where user_id=$1`, [U.ann, bad]);
+    ok(`a username with ${why} is rejected`, !!r.error, JSON.stringify(r));
+  }
+  r = await as("ann", `update public.profile_bios set linkedin=$2 where user_id=$1`, [U.ann, "ann-lee-a1b2c3d4"]);
+  ok("a normal LinkedIn slug is accepted", !r.error, JSON.stringify(r));
+
   const EP = await mkEvent("host", { title: "pass me", max: 5 });
   r = await as("ann", `insert into public.event_passes (user_id,event_id) values ($1,$2)`, [U.ann, EP]);
   ok("a user can pass on an event", !r.error, JSON.stringify(r));

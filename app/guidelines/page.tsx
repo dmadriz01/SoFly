@@ -30,8 +30,8 @@ export default function GuidelinesPage() {
             check ID at the door.
           </li>
           <li>
-            Hosting a coffee chat or dinner? You can choose to approve each person. Requesters
-            introduce themselves so you can decide. Only approved people see the exact address, so decide who joins based on how comfortable you feel, and
+            Hosting a coffee chat or dinner? You can choose to approve each person. You&rsquo;ll see each
+            requester&rsquo;s profile and any note they added, so you can decide. Only approved people see the exact address, so decide who joins based on how comfortable you feel, and
             never share the address publicly.
           </li>
           <li>

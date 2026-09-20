@@ -51,8 +51,8 @@ export default function PrivacyPage() {
           people who have joined. Please don&rsquo;t put private information in a meetup. On meetups where
           the host approves each person, the exact venue and address, the list of who&rsquo;s going, and
           any group chat link are visible only to the host and approved guests. Requests to join,
-          including the short introduction a person writes, are visible only to the host and the person
-          who made the request.
+          including any note a person adds, are visible only to the host and the person who made the
+          request.
         </p>
       </section>
 
@@ -73,6 +73,17 @@ export default function PrivacyPage() {
           your request, when a meetup you were going to is cancelled, the day before a meetup you&rsquo;re part of, and
           the day after to ask how it went. You can turn all of these off on the Me tab. Emails go only to the address you signed up
           with, and we never share it.
+        </p>
+      </section>
+
+      <section className="space-y-2">
+        <h2 className="text-lg font-bold">Your bio and social profiles</h2>
+        <p className="text-ink/90">
+          You can add a short bio and the usernames of your LinkedIn, Instagram, X, TikTok and Facebook
+          profiles. It&rsquo;s optional. Only you, and the hosts of meetups you join or ask to join, can see
+          it. If you cancel a request or leave a meetup, that host can no longer see it. We store only
+          usernames, never pasted links, and the links shown to hosts always go to that app&rsquo;s own site.
+          You can change or clear it any time on the Me tab.
         </p>
       </section>
 

@@ -54,8 +54,8 @@ export function requestReceived(a: {
   const body = layout({
     heading: `${a.requesterName} would like to join ${title}`,
     paragraphs: [
-      `Hi ${a.hostName}, ${a.requesterName} asked to join your meetup and wrote you a short introduction.`,
-      "Read it and approve or decline. It only takes a moment.",
+      `Hi ${a.hostName}, ${a.requesterName} asked to join your meetup.`,
+      "Open it to see their profile and any note they added, then approve or decline. It only takes a moment.",
     ],
     cta: { label: "Review the request", url: a.eventUrl },
     siteUrl: a.siteUrl,
