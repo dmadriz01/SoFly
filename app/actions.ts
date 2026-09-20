@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { updateOrInsert } from "@/lib/supabase/save";
 import { sendReportAlert } from "@/lib/alerts";
+import { diagnoseEmail, type Check } from "@/lib/diagnose";
 import { parseChatUrl } from "@/lib/chat";
 import { MIN_AGE, ageOn, parseBirthDate } from "@/lib/age";
 import { HIDDEN_VENUE, REPORT_REASONS, findAgeGroup, isCategory } from "@/lib/constants";
@@ -491,4 +492,23 @@ export async function submitFeedback(eventId: string, wouldJoinAgain: boolean): 
   revalidatePath(`/events/${eventId}`);
   revalidatePath("/me");
   return {};
+}
+
+// A short pause between test emails per person, so the button can't be used to burn the mail quota.
+const lastTest = new Map<string, number>();
+
+/** Checks every link in the email chain and sends a real test email to the signed-in person. */
+export async function sendTestEmail(): Promise<{ checks?: Check[]; error?: string }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user || !user.email) return { error: "Please log in." };
+
+  const now = Date.now();
+  if (now - (lastTest.get(user.id) ?? 0) < 30_000) return { error: "Please wait a few seconds before trying again." };
+  lastTest.set(user.id, now);
+
+  const { data: profile } = await supabase.from("profiles").select("name").eq("id", user.id).maybeSingle();
+  return { checks: await diagnoseEmail({ userId: user.id, userEmail: user.email, name: profile?.name ?? "" }) };
 }

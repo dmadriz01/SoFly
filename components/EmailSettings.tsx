@@ -1,13 +1,17 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { setEmailNotifications } from "@/app/actions";
+import { sendTestEmail, setEmailNotifications } from "@/app/actions";
+import type { Check } from "@/lib/diagnose";
 
 /** One switch for all of BayMeet's emails. Login codes are always sent. */
 export function EmailSettings({ initial }: { initial: boolean }) {
   const [on, setOn] = useState(initial);
   const [error, setError] = useState<string>();
   const [pending, startTransition] = useTransition();
+  const [checks, setChecks] = useState<Check[]>();
+  const [testError, setTestError] = useState<string>();
+  const [testing, startTest] = useTransition();
 
   function toggle() {
     const next = !on;
@@ -22,8 +26,19 @@ export function EmailSettings({ initial }: { initial: boolean }) {
     });
   }
 
+  function runTest() {
+    setChecks(undefined);
+    setTestError(undefined);
+    startTest(async () => {
+      const result = await sendTestEmail();
+      if (result.error) setTestError(result.error);
+      else setChecks(result.checks);
+    });
+  }
+
   return (
-    <div className="card flex items-center justify-between gap-4 p-4">
+    <div className="card space-y-4 p-4">
+      <div className="flex items-center justify-between gap-4">
       <div>
         <p className="font-semibold">Email me about my meetups</p>
         <p className="text-sm text-muted">
@@ -48,6 +63,29 @@ export function EmailSettings({ initial }: { initial: boolean }) {
           }`}
         />
       </button>
+      </div>
+
+      <div className="border-t border-line pt-3">
+        <button type="button" onClick={runTest} disabled={testing} className="btn-secondary tap !py-2 text-sm">
+          {testing ? "Checking…" : "Send me a test email"}
+        </button>
+        {testError && <p className="mt-2 text-sm text-red-600">{testError}</p>}
+        {checks && (
+          <ul className="mt-3 space-y-2 text-sm" aria-live="polite">
+            {checks.map((c) => (
+              <li key={c.label} className="flex gap-2">
+                <span aria-hidden className={c.ok ? "text-emerald-600" : "text-red-600"}>
+                  {c.ok ? "✓" : "✗"}
+                </span>
+                <span>
+                  <span className="font-medium">{c.label}</span>
+                  {c.detail && <span className="block text-muted">{c.detail}</span>}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }

@@ -149,3 +149,17 @@ export function feedbackRequest(a: { name: string; eventTitle: string; eventUrl:
   });
   return { subject: `How was ${title.slice(0, 70)}?`, ...body };
 }
+
+/** Sent by the "Send me a test email" button, to prove the whole chain works. */
+export function testEmail(a: { name: string; siteUrl: string }): Email {
+  const body = layout({
+    heading: "Your BayMeet emails work",
+    paragraphs: [
+      `Hi ${a.name}, this is a test email from BayMeet.`,
+      "If you're reading it, BayMeet can email you about join requests, cancellations and reminders.",
+    ],
+    cta: { label: "Open BayMeet", url: a.siteUrl },
+    siteUrl: a.siteUrl,
+  });
+  return { subject: "BayMeet test email", ...body };
+}

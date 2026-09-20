@@ -121,7 +121,7 @@ Set the subject to `Your BayMeet login code` and use this body in each:
 | `010_email_settings` | each person's on/off switch for BayMeet's emails |
 | `011_meetup_feedback` | guests' private "would you join again?" answers, shown only as totals |
 
-**Changing the database?** Update `schema.sql` and add a migration, then run `npm test`. `test:db` builds a database both ways, runs about 240 checks on each (who can see and do what), and fails if the two ever differ. `test:unit` covers ages, dates, calendar files, chat-link safety and the emails.
+**Changing the database?** Update `schema.sql` and add a migration, then run `npm test`. `test:db` builds a database both ways, runs about 240 checks on each (who can see and do what), and fails if the two ever differ. `test:unit` covers ages, dates, calendar files, chat-link safety, and the email logic (who gets emailed, when, and why someone is skipped). `test:contract` reads the app's own code, finds every database call, and checks each one against the permissions the schema really grants, so a write the database would refuse fails here, not in production.
 
 ## Email notifications
 
@@ -136,6 +136,12 @@ To turn it on (all optional; without these the app works exactly as before, just
    - `CRON_SECRET`: any long random string (run `openssl rand -hex 24`). Mark it **Sensitive**.
    - Confirm `ALERT_EMAIL_USER` and `ALERT_EMAIL_APP_PASSWORD` are set. Emails are sent from that Gmail account.
 4. Redeploy. The daily job (`vercel.json`) then runs at 9am Pacific, sending reminders and feedback requests. In Vercel, **Settings → Cron Jobs** lists it and has a **Run** button to test it.
+
+**Emails not arriving?** Don't guess; check each link:
+
+1. Open the **Me** tab and press **Send me a test email**. It checks, in order: the mail account, the server key, that Supabase accepts the key, that your emails are switched on, that the daily-job secret exists, and that Gmail accepts a real message. A red ✗ names the exact problem, and never shows a secret. If everything is green but nothing arrives, look in spam.
+2. For the daily job, open Vercel → **Logs**, filter for `/api/cron/reminders`, and find the line that starts `Daily emails:`. It reports `eventsTomorrow` (meetups it found), `reminders` (emails sent), `skipped` (people it skipped: `optedOut`, `noEmail`, `lookupFailed`), `failed` (refused by Gmail) with `firstFailure` (Gmail's reason), and a `note` if it stopped early.
+3. Environment variable changes only take effect on a **new deployment**. After adding or changing one, redeploy.
 
 Notes: emails come from your Gmail address and may land in spam at first. Gmail limits sending to a few hundred a day, and the reminder job stops at 250 per run. On Vercel's free plan a cron job can run only once a day, at some point within the scheduled hour.
 

@@ -44,5 +44,6 @@ export async function sendReportAlert(report: ReportAlert) {
     return;
   }
   const { subject, text } = buildReportEmail(report);
-  await sendMail({ to, subject, text });
+  const result = await sendMail({ to, subject, text });
+  if (!result.ok) console.error("Report alert not delivered:", result.reason, result.detail ?? "");
 }
