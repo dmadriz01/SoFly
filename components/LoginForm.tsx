@@ -99,6 +99,10 @@ export function LoginForm({ next, initialError }: { next: string; initialError?:
         <p className="text-center text-sm text-muted">
           You can also tap the link in the email, if you open it in this same browser.
         </p>
+        <p className="text-center text-sm text-muted">
+          Don&rsquo;t see it after a minute? Check your spam or junk folder, and tap <span className="font-semibold">Not spam</span> so
+          future emails arrive.
+        </p>
         <div className="text-center">
           <button
             onClick={() => {

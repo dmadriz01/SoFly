@@ -280,6 +280,9 @@ for (const [label, iso, expected] of [
 
   t("diagnostic: never prints a secret", JSON.stringify(c).indexOf("sb_secret") === -1 && JSON.stringify(c).indexOf("APP_PASSWORD=") === -1);
 
+  const okLine = (await diagnoseEmail(who, { admin: fakeAdmin(base(), users), send: fakeMailbox().send, mailConfigured: true, cronSecretSet: true })).find((x) => x.label === "Test email accepted by the mail server");
+  t("diagnostic: a sent test email says what to do if it landed in spam (mark 'Not spam', add to contacts)", okLine?.ok === true && /check spam/.test(okLine.detail ?? "") && /Not spam/.test(okLine.detail ?? "") && /contacts/.test(okLine.detail ?? ""), okLine?.detail);
+
   // the exact failure seen in real life: Gmail says 535, "Username and Password not accepted"
   const real = "EAUTH · 535 · Invalid login: 535-5.7.8 Username and Password not accepted.";
   const hint = mailErrorHint(real);

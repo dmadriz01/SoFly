@@ -182,6 +182,14 @@ t("weeks: only real dates are accepted", isDateKey("2026-09-21") && !isDateKey("
   t("delete: the confirmation says the guests will be told, and how the button differs from Cancel", /will be told it was cancelled/.test(del) && /Cancel above instead/.test(del));
 }
 
+// ---- login: people are told where to look if the code email lands in spam ----
+{
+  const login = fs.readFileSync(path.join(process.cwd(), "components/LoginForm.tsx"), "utf8");
+  const step = login.slice(login.indexOf('status === "sent"'), login.indexOf("return (\n    <form onSubmit={sendLink}"));
+  t("login: the 'Check your email' screen says to look in spam/junk and tap 'Not spam'", /spam or junk folder/.test(step) && /Not spam/.test(step) && /after a minute/.test(step));
+  t("login: that hint is on the code screen only (not the first form)", !/spam/.test(login.slice(login.indexOf("return (\n    <form onSubmit={sendLink}"))));
+}
+
 // ---- the feed: the same Filters button on the List and Swipe tabs ----
 {
   const feed = fs.readFileSync(path.join(process.cwd(), "app/(feed)/page.tsx"), "utf8");

@@ -91,7 +91,7 @@ export async function diagnoseEmail(
       label: "Test email accepted by the mail server",
       ok: result.ok,
       detail: result.ok
-        ? `Sent to ${who.userEmail}. If it isn't in your inbox within a minute, check spam.`
+        ? `Sent to ${who.userEmail}. If it isn't in your inbox within a minute, check spam. If it landed there, open it and choose "Not spam" and add the sender to your contacts: a new sender often starts in spam, and your mail app learns from that.`
         : result.reason === "smtp-error"
           ? `The mail server refused it: ${result.detail}${mailErrorHint(result.detail)}`
           : "No mail account.",
