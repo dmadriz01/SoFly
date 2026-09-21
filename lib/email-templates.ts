@@ -96,21 +96,23 @@ export function requestDecision(a: {
   return { subject: a.approved ? `You're in: ${title.slice(0, 70)}` : `An update on ${title.slice(0, 70)}`, ...body };
 }
 
-/** To everyone who was going: the host cancelled. */
+/** To everyone who was going: it was cancelled (by the host, or by BayMeet). */
 export function eventCancelled(a: {
   name: string;
   eventTitle: string;
   when: string;
   eventUrl: string;
   siteUrl: string;
+  by?: "host" | "moderator";
 }): Email {
   const title = oneLine(a.eventTitle);
+  const line =
+    a.by === "moderator"
+      ? `Hi ${a.name}, BayMeet cancelled ${title}, which was planned for ${a.when}.`
+      : `Hi ${a.name}, the host cancelled ${title}, which was planned for ${a.when}.`;
   const body = layout({
     heading: `Cancelled: ${title}`,
-    paragraphs: [
-      `Hi ${a.name}, the host cancelled ${title}, which was planned for ${a.when}.`,
-      "Please don't show up. If it's on your calendar, you can delete it.",
-    ],
+    paragraphs: [line, "Please don't show up. If it's on your calendar, you can delete it."],
     cta: { label: "Find another meetup", url: a.siteUrl },
     siteUrl: a.siteUrl,
   });

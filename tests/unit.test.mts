@@ -158,6 +158,22 @@ t("weeks: only real dates are accepted", isDateKey("2026-09-21") && !isDateKey("
   t("icons: the old separate icon routes (with year-long caches under fixed URLs) are gone", !fs.existsSync(path.join(process.cwd(), "app/icon.tsx")) && !fs.existsSync(path.join(process.cwd(), "app/apple-icon.tsx")));
 }
 
+// ---- deleting a meetup tells the people who joined, but only if the delete really happened ----
+{
+  const src = fs.readFileSync(path.join(process.cwd(), "app/actions.ts"), "utf8");
+  const body = src.slice(src.indexOf("export async function deleteEvent"), src.indexOf("export async function signOut"));
+  const iSnap = body.indexOf("snapshotBeforeDelete(");
+  const iDelete = body.indexOf('.from("events")');
+  const iFail = body.indexOf("data.length === 0");
+  const iSend = body.indexOf("notifyEventDeleted(");
+  t("delete: who was going is looked up BEFORE the delete (the guest list goes with the meetup)", iSnap > -1 && iSnap < iDelete, JSON.stringify({ iSnap, iDelete }));
+  t("delete: nobody is notified unless the delete succeeded (the send comes after the failure check)", iFail > -1 && iSend > iFail, JSON.stringify({ iFail, iSend }));
+  const manage = fs.readFileSync(path.join(process.cwd(), "components/ManageEvent.tsx"), "utf8");
+  t("cancel: the helper text no longer claims people aren't emailed", !/aren.{1,8}t emailed/i.test(manage) && /email and a push/i.test(manage));
+  const del = fs.readFileSync(path.join(process.cwd(), "components/DeleteEventButton.tsx"), "utf8");
+  t("delete: the confirmation says the guests will be told, and how the button differs from Cancel", /will be told it was cancelled/.test(del) && /Cancel above instead/.test(del));
+}
+
 // ---- chat links (only known apps; no look-alike hosts) ----
 t("WhatsApp link accepted", "url" in parseChatUrl("https://chat.whatsapp.com/AbC123"));
 t("scheme added when missing", parseChatUrl("chat.whatsapp.com/AbC123").hasOwnProperty("url"));

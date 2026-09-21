@@ -12,7 +12,13 @@ import { parseChatUrl } from "@/lib/chat";
 import { parseAbout, type AboutErrors, type AboutInput } from "@/lib/about";
 import { MIN_AGE, ageOn, parseBirthDate, resolveAgeRange } from "@/lib/age";
 import { HIDDEN_VENUE, REPORT_REASONS, isCategory } from "@/lib/constants";
-import { notifyEventCancelled, notifyHostOfRequest, notifyRequestDecision } from "@/lib/notify";
+import {
+  notifyEventCancelled,
+  notifyEventDeleted,
+  notifyHostOfRequest,
+  notifyRequestDecision,
+  snapshotBeforeDelete,
+} from "@/lib/notify";
 import { getBirthDate } from "@/lib/profile";
 import { isPushEndpoint, pushConfigured } from "@/lib/push";
 import { pacificDate, pacificLocalToUtc } from "@/lib/time";
@@ -175,6 +181,10 @@ export async function deleteEvent(eventId: string): Promise<{ error: string }> {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  // Deleting removes the guest list too, so look up who was going first. This only reads; nobody
+  // is told unless the delete below really happens.
+  const guestsToTell = await snapshotBeforeDelete(eventId);
+
   // RLS limits this to the host's own events; an empty result means nothing was deleted.
   const { data, error } = await supabase
     .from("events")
@@ -185,6 +195,8 @@ export async function deleteEvent(eventId: string): Promise<{ error: string }> {
   if (error || !data || data.length === 0) {
     return { error: "Couldn't delete this event." };
   }
+
+  if (guestsToTell) waitUntil(notifyEventDeleted(guestsToTell));
 
   revalidatePath("/");
   revalidatePath("/me");

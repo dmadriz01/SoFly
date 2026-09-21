@@ -7,7 +7,7 @@ import vm from "node:vm";
 import webpush from "web-push";
 import { iconUrl } from "../lib/brand.ts";
 import { diagnosePush } from "../lib/diagnose.ts";
-import { notifyEventCancelled, notifyHostOfRequest, notifyRequestDecision, sendDailyEmails } from "../lib/notify.ts";
+import { notifyEventCancelled, notifyEventDeleted, notifyHostOfRequest, notifyRequestDecision, sendDailyEmails, snapshotBeforeDelete } from "../lib/notify.ts";
 import { isPushEndpoint, sendPushToUser, type PushPayload, type PushSender } from "../lib/push.ts";
 import { fakeAdmin, fakeMailbox, type FakeData } from "./fake-supabase.mts";
 
@@ -167,8 +167,30 @@ const NOW = new Date("2026-09-20T19:51:45Z");
 {
   const d = base(); d.rsvps.push({ event_id: "ev1", user_id: "ann", status: "approved" }, { event_id: "ev1", user_id: "bob", status: "pending" });
   const r = recorder();
-  await silently(() => notifyEventCancelled("ev1", { admin: fakeAdmin(d, users), send: fakeMailbox().send, push: r.push }));
+  await silently(() => notifyEventCancelled("ev1", { admin: fakeAdmin(d, users), send: fakeMailbox().send, push: r.push, now: NOW }));
   t("a cancellation pushes to approved guests only", r.sent.length === 1 && r.sent[0].to === "ann" && r.sent[0].payload.title === "Cancelled: Pickeball", JSON.stringify(r.sent));
+  t("...and tapping it opens the (cancelled) meetup page", r.sent[0].payload.url === "/events/ev1" && r.sent[0].payload.body === "The host cancelled this meetup.", JSON.stringify(r.sent[0].payload));
+  const rm = recorder();
+  await silently(() => notifyEventCancelled("ev1", { admin: fakeAdmin(d, users), send: fakeMailbox().send, push: rm.push, now: NOW }, "moderator"));
+  t("a moderator's cancellation pushes 'BayMeet cancelled this meetup.'", rm.sent[0]?.payload.body === "BayMeet cancelled this meetup.", JSON.stringify(rm.sent));
+}
+{
+  // a guest with emails switched off still gets the push (push has its own consent), and vice versa
+  const d = base(); d.rsvps.push({ event_id: "ev1", user_id: "ann", status: "approved" }, { event_id: "ev1", user_id: "bob", status: "approved" });
+  d.user_settings.push({ user_id: "ann", email_notifications: false });
+  const r = recorder(); const box = fakeMailbox();
+  await silently(() => notifyEventCancelled("ev1", { admin: fakeAdmin(d, users), send: box.send, push: r.push, now: NOW }));
+  t("emails off: no email for that guest, but the push still goes out", box.sent.map((m) => m.to).join() === "bob@example.com" && r.sent.map((x) => x.to).sort().join() === "ann,bob", JSON.stringify({ mail: box.sent.map((m) => m.to), push: r.sent.map((x) => x.to) }));
+}
+{
+  // deleting: same people, same channels, and the push opens the feed since the page is gone
+  const d = base(); d.rsvps.push({ event_id: "ev1", user_id: "ann", status: "approved" });
+  const snap = await snapshotBeforeDelete("ev1", { admin: fakeAdmin(d, users), now: NOW });
+  d.events = []; d.rsvps = [];
+  const r = recorder(); const box = fakeMailbox();
+  await silently(() => notifyEventDeleted(snap!, { admin: fakeAdmin(d, users), send: box.send, push: r.push }));
+  t("a deleted meetup: the guest gets an email AND a push", box.sent.length === 1 && box.sent[0].to === "ann@example.com" && r.sent.length === 1 && r.sent[0].to === "ann", JSON.stringify({ mail: box.sent.length, push: r.sent }));
+  t("...the push opens the feed, not a page that no longer exists", r.sent[0].payload.url === "/");
 }
 {
   const d = base(); d.rsvps.push({ event_id: "ev1", user_id: "ann", status: "approved" }, { event_id: "ev1", user_id: "bob", status: "pending" });

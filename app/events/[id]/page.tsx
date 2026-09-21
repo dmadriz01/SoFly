@@ -335,7 +335,12 @@ export default async function EventPage({ params }: { params: { id: string } }) 
       )}
 
       {isHost ? (
-        <DeleteEventButton eventId={event.id} />
+        <DeleteEventButton
+          eventId={event.id}
+          // Who would be told it's off: approved guests, if it hasn't been cancelled or started yet.
+          toNotify={cancelled || ended ? 0 : attendees.filter((r) => r.user_id !== event.host_id).length}
+          canCancelInstead={!cancelled && !ended}
+        />
       ) : cancelled ? null : (
         <ReportEvent eventId={event.id} loggedIn={Boolean(user)} />
       )}

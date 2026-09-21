@@ -84,8 +84,8 @@ export function ManageEvent({
           Cancel this meetup
         </button>
         <p className="mt-1.5 text-xs text-muted">
-          Shows a cancelled notice on the page and stops new joins. People aren&rsquo;t emailed, so
-          message your group too. Only BayMeet can undo a cancellation.
+          Keeps the page up with a cancelled notice and stops new joins. Everyone who joined gets an
+          email and a push notification. Only BayMeet can undo a cancellation.
         </p>
       </div>
 

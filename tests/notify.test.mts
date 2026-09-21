@@ -1,7 +1,7 @@
 // Tests the real email logic (who gets emailed, when, and why someone is skipped) against a fake
 // database and inbox. Run with `npm run test:unit`.
 import { diagnoseEmail } from "../lib/diagnose.ts";
-import { notifyEventCancelled, notifyHostOfRequest, notifyRequestDecision, sendDailyEmails } from "../lib/notify.ts";
+import { notifyEventCancelled, notifyEventDeleted, notifyHostOfRequest, notifyRequestDecision, sendDailyEmails, snapshotBeforeDelete } from "../lib/notify.ts";
 import { fakeAdmin, fakeMailbox, type FakeData } from "./fake-supabase.mts";
 
 let passed = 0;
@@ -178,8 +178,59 @@ for (const [label, iso, expected] of [
   const d = base();
   d.rsvps.push({ event_id: "ev1", user_id: "ann", status: "approved" }, { event_id: "ev1", user_id: "bob", status: "pending" });
   const box = fakeMailbox();
-  await silently(() => notifyEventCancelled("ev1", { admin: fakeAdmin(d, users), send: box.send }));
+  await silently(() => notifyEventCancelled("ev1", { admin: fakeAdmin(d, users), send: box.send, now: NOW }));
   t("a cancellation emails approved guests only (not the host, not pending requesters)", box.sent.length === 1 && box.sent[0].to === "ann@example.com", JSON.stringify(box.sent.map((m) => m.to)));
+}
+{
+  // ---- cancelling and deleting: the people who joined are told, by email ----
+  const going = () => {
+    const d = base();
+    d.rsvps.push({ event_id: "ev1", user_id: "ann", status: "approved" }, { event_id: "ev1", user_id: "cy", status: "approved" }, { event_id: "ev1", user_id: "bob", status: "pending" });
+    return d;
+  };
+  const box = fakeMailbox();
+  await silently(() => notifyEventCancelled("ev1", { admin: fakeAdmin(going(), users), send: box.send, now: NOW }));
+  t("cancel: every approved guest is emailed, nobody else", box.sent.map((m) => m.to).sort().join() === "ann@example.com,cy@example.com", JSON.stringify(box.sent.map((m) => m.to)));
+  t("cancel: the email says the host cancelled, names the meetup, and tells them not to go", /the host cancelled Pickeball/.test(box.sent[0].text) && /don't show up/i.test(box.sent[0].text) && box.sent[0].subject === "Cancelled: Pickeball", box.sent[0].text);
+
+  const boxM = fakeMailbox();
+  await silently(() => notifyEventCancelled("ev1", { admin: fakeAdmin(going(), users), send: boxM.send, now: NOW }, "moderator"));
+  t("moderator cancel: the email says BayMeet cancelled it (not the host)", /BayMeet cancelled Pickeball/.test(boxM.sent[0]?.text) && !/the host cancelled/.test(boxM.sent[0].text), boxM.sent[0]?.text);
+
+  // delete: the guest list vanishes with the meetup, so the snapshot has to be taken first
+  const dd = going();
+  const snap = await snapshotBeforeDelete("ev1", { admin: fakeAdmin(dd, users), now: NOW });
+  t("delete: before deleting, it records who was going (approved guests, not the host or pending)", snap?.guestIds.sort().join() === "ann,cy" && snap.title === "Pickeball" && snap.removed === true, JSON.stringify(snap));
+  dd.events = []; dd.rsvps = []; // what the delete does: the meetup and its guest list are gone
+  const boxD = fakeMailbox(); const pushed: { to: string; url: string; title: string }[] = [];
+  await silently(() => notifyEventDeleted(snap!, { admin: fakeAdmin(dd, users), send: boxD.send, push: async (to, p) => { pushed.push({ to, url: p.url ?? "", title: p.title }); return { sent: 1, removed: 0, failed: 0 }; } }));
+  t("delete: the guests are still emailed even though the meetup is gone from the database", boxD.sent.map((m) => m.to).sort().join() === "ann@example.com,cy@example.com", JSON.stringify(boxD.sent.map((m) => m.to)));
+  t("delete: they are pushed too, and tapping goes to the feed (the meetup page no longer exists)", pushed.length === 2 && pushed.every((p) => p.url === "/" && p.title === "Cancelled: Pickeball"), JSON.stringify(pushed));
+
+  // nobody should hear about a meetup that never had guests, already happened, or was already cancelled
+  const hostOnly = await snapshotBeforeDelete("ev1", { admin: fakeAdmin(base(), users), now: NOW });
+  t("delete: a meetup with nobody but the host going notifies nobody", hostOnly === null);
+  const past = going();
+  const afterStart = new Date("2026-09-22T01:00:00Z");
+  t("delete: a meetup that already started notifies nobody (a 'cancelled' notice about the past would only confuse)", (await snapshotBeforeDelete("ev1", { admin: fakeAdmin(past, users), now: afterStart })) === null);
+  const boxP = fakeMailbox();
+  await silently(() => notifyEventCancelled("ev1", { admin: fakeAdmin(going(), users), send: boxP.send, now: afterStart }));
+  t("cancel: same for cancelling a meetup that already started", boxP.sent.length === 0);
+  const already = going(); (already.events[0] as { cancelled_at: unknown }).cancelled_at = "2026-09-19T10:00:00Z";
+  t("delete: deleting a meetup that was already cancelled doesn't tell people a second time", (await snapshotBeforeDelete("ev1", { admin: fakeAdmin(already, users), now: NOW })) === null);
+  t("delete: an unknown meetup notifies nobody", (await snapshotBeforeDelete("nope", { admin: fakeAdmin(going(), users), now: NOW })) === null);
+  t("delete: with no server key it does nothing and doesn't throw", (await snapshotBeforeDelete("ev1", { admin: null, now: NOW })) === null);
+
+  // a guest who turned emails off isn't emailed, the others still are
+  const off = going(); off.user_settings.push({ user_id: "ann", email_notifications: false });
+  const boxO = fakeMailbox();
+  await silently(() => notifyEventCancelled("ev1", { admin: fakeAdmin(off, users), send: boxO.send, now: NOW }));
+  t("cancel: a guest who turned emails off isn't emailed; the other guest still is", boxO.sent.map((m) => m.to).join() === "cy@example.com", JSON.stringify(boxO.sent.map((m) => m.to)));
+
+  // one bad address must not stop the rest
+  const boxF = fakeMailbox((to) => (to === "ann@example.com" ? "fail" : "ok"));
+  await silently(() => notifyEventCancelled("ev1", { admin: fakeAdmin(going(), users), send: boxF.send, now: NOW }));
+  t("cancel: one failed email doesn't stop the others", boxF.sent.map((m) => m.to).join() === "cy@example.com");
 }
 {
   // Nothing configured at all: every path must be a quiet no-op, never an error.

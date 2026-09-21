@@ -19,6 +19,8 @@ export type Deps = {
   /** Tests can force either channel on or off; otherwise it follows the real configuration. */
   mailConfigured?: boolean;
   pushConfigured?: boolean;
+  /** Tests can fix "now"; production always uses the real time. */
+  now?: Date;
 };
 
 const use = (deps: Deps) => {
@@ -122,37 +124,113 @@ export function notifyRequestDecision(eventId: string, userId: string, approved:
   });
 }
 
-/** The host cancelled: tell everyone who was approved to go. */
-export function notifyEventCancelled(eventId: string, deps: Deps = {}) {
-  return safely("event cancelled", async () => {
-    const { admin, send, push } = use(deps);
-    if (!admin) return;
-    const { data: event } = await admin.from("events").select("title, starts_at, host_id").eq("id", eventId).maybeSingle();
-    if (!event) return;
-    const { data: guests } = await admin.from("rsvps").select("user_id").eq("event_id", eventId).eq("status", "approved");
+/** A meetup that was called off, and the people who should hear about it. */
+export type Cancellation = {
+  eventId: string;
+  title: string;
+  startsAt: string;
+  hostId: string;
+  /** Approved guests other than the host. */
+  guestIds: string[];
+  /** Who called it off: the host, or BayMeet (a moderator). */
+  by: "host" | "moderator";
+  /** True when the meetup page no longer exists (the host deleted it), so tapping goes to the feed. */
+  removed: boolean;
+};
 
-    const when = formatWhenLong(event.starts_at);
-    for (const g of (guests ?? []).filter((g) => g.user_id !== event.host_id).slice(0, 200)) {
-      const to = await recipient(admin, g.user_id as string);
-      if (to.ok) {
-        await send({
-          to: to.to.email,
-          ...email.eventCancelled({
-            name: to.to.name,
-            eventTitle: event.title,
-            when: `${when.day} at ${when.time}`,
-            eventUrl: eventUrl(eventId),
-            siteUrl: SITE_URL,
-          }),
-        });
-      }
-      await push(g.user_id as string, {
-        title: `Cancelled: ${event.title}`,
-        body: "The host cancelled this meetup.",
-        url: `/events/${eventId}`,
-        tag: `cancelled-${eventId}`,
+/**
+ * Works out who to tell that a meetup is off. Returns null when nobody should be told: the meetup
+ * doesn't exist, it has already started or happened (a "cancelled" notice about the past would only
+ * confuse people), or nobody but the host was going. With `requireActive` it also stays quiet for a
+ * meetup that was already cancelled, whose guests were told at the time.
+ */
+async function loadCancellation(
+  admin: SupabaseClient,
+  eventId: string,
+  opts: { by: Cancellation["by"]; removed: boolean; requireActive: boolean; now: Date }
+): Promise<Cancellation | null> {
+  const { data: event } = await admin
+    .from("events")
+    .select("title, starts_at, host_id, cancelled_at")
+    .eq("id", eventId)
+    .maybeSingle();
+  if (!event) return null;
+  if (opts.requireActive && event.cancelled_at) return null;
+  if (new Date(event.starts_at as string) <= opts.now) return null;
+
+  const { data: guests } = await admin.from("rsvps").select("user_id").eq("event_id", eventId).eq("status", "approved");
+  const guestIds = (guests ?? [])
+    .map((g) => g.user_id as string)
+    .filter((id) => id !== event.host_id)
+    .slice(0, 200);
+  if (guestIds.length === 0) return null;
+  return { eventId, title: event.title as string, startsAt: event.starts_at as string, hostId: event.host_id as string, guestIds, by: opts.by, removed: opts.removed };
+}
+
+/** Email and push, to each guest. Each channel follows that person's own settings. */
+async function deliverCancellation(c: Cancellation, admin: SupabaseClient, deps: Deps) {
+  const { send, push } = use({ ...deps, admin });
+  const when = formatWhenLong(c.startsAt);
+  for (const userId of c.guestIds) {
+    const to = await recipient(admin, userId);
+    if (to.ok) {
+      await send({
+        to: to.to.email,
+        ...email.eventCancelled({
+          name: to.to.name,
+          eventTitle: c.title,
+          when: `${when.day} at ${when.time}`,
+          eventUrl: eventUrl(c.eventId),
+          siteUrl: SITE_URL,
+          by: c.by,
+        }),
       });
     }
+    await push(userId, {
+      title: `Cancelled: ${c.title}`,
+      body: c.by === "moderator" ? "BayMeet cancelled this meetup." : "The host cancelled this meetup.",
+      url: c.removed ? "/" : `/events/${c.eventId}`,
+      tag: `cancelled-${c.eventId}`,
+    });
+  }
+}
+
+/**
+ * A meetup was just cancelled (it stays on its page, marked cancelled): tell everyone who was
+ * going. Call it after the cancellation went through. `by` says who cancelled.
+ */
+export function notifyEventCancelled(eventId: string, deps: Deps = {}, by: Cancellation["by"] = "host") {
+  return safely("event cancelled", async () => {
+    const { admin } = use(deps);
+    if (!admin) return;
+    // Already marked cancelled by the time this runs, so don't ask for an "active" meetup here.
+    const c = await loadCancellation(admin, eventId, { by, removed: false, requireActive: false, now: deps.now ?? new Date() });
+    if (c) await deliverCancellation(c, admin, deps);
+  });
+}
+
+/**
+ * Deleting a meetup removes its guest list, so who to tell has to be looked up BEFORE the delete.
+ * Returns null when nobody should be told (or the service key isn't set). Send the result with
+ * notifyEventDeleted, and only if the delete really happened.
+ */
+export async function snapshotBeforeDelete(eventId: string, deps: Deps = {}): Promise<Cancellation | null> {
+  try {
+    const { admin } = use(deps);
+    if (!admin) return null;
+    return await loadCancellation(admin, eventId, { by: "host", removed: true, requireActive: true, now: deps.now ?? new Date() });
+  } catch (err) {
+    console.error("Notification failed (looking up guests before delete):", err);
+    return null;
+  }
+}
+
+/** The host deleted the meetup: tell the people who were going (from the snapshot taken before). */
+export function notifyEventDeleted(snapshot: Cancellation, deps: Deps = {}) {
+  return safely("event deleted", async () => {
+    const { admin } = use(deps);
+    if (!admin) return;
+    await deliverCancellation(snapshot, admin, deps);
   });
 }
 
