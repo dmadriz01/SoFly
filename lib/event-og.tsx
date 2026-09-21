@@ -1,4 +1,5 @@
 import { ImageResponse } from "next/og";
+import { categoryLabel } from "./constants";
 import { coverSvg } from "./cover";
 import { COLORS, OG_SIZE, Wordmark } from "./og";
 import { formatWhenLong } from "./time";
@@ -7,6 +8,8 @@ export type OgEvent = {
   id: string;
   title: string;
   category: string;
+  /** The host's own name for an "Other ..." meetup, if any. */
+  activity?: string | null;
   venue_name: string;
   neighborhood: string;
   starts_at: string;
@@ -49,7 +52,7 @@ export function eventOgImage(event: OgEvent, font: ArrayBuffer) {
             <Wordmark size={40} />
           </div>
           <div style={{ display: "flex", background: COLORS.accentSoft, color: COLORS.accentDark, fontSize: 30, padding: "12px 28px", borderRadius: 999, border: `2px solid ${COLORS.line}` }}>
-            {event.category}
+            {categoryLabel(event.category, event.activity)}
           </div>
         </div>
         {/* ...and the details sit on a slim card at the bottom, so the sky, sun and landmarks stay visible. */}

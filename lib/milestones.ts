@@ -57,7 +57,7 @@ export function computeMilestones(input: MilestoneInput): Milestone[] {
     make("high-five", "🙌", "High five", "You've been to 5 meetups.", n, 5, reachedAt(went, 5)),
     make("local", "🏡", "Local", "You've been to 10 meetups.", n, 10, reachedAt(went, 10)),
     make("explorer", "🧭", "Explorer", "You've tried 3 different kinds of meetup.", categories, 3, reachedAt(went, 3, (w) => w.category)),
-    make("around-the-bay", "🌉", "Around the Bay", "You've been to meetups in 3 different neighborhoods.", neighborhoods, 3, reachedAt(went, 3, (w) => w.neighborhood)),
+    make("around-town", "🏙️", "Around town", "You've been to meetups in 3 different neighborhoods.", neighborhoods, 3, reachedAt(went, 3, (w) => w.neighborhood)),
     make("first-host", "🎤", "Host", "You hosted a meetup.", h, 1, reachedAt(ran, 1)),
     make("regular-host", "🏆", "Regular host", "You've hosted 5 meetups.", h, 5, reachedAt(ran, 5)),
     make("connector", "🤝", "Connector", "A friend joined because you invited them.", f, 1, null),
@@ -84,7 +84,7 @@ export function untilText(m: Milestone): string {
   const left = m.target - m.current;
   const noun: Record<string, [string, string]> = {
     "first-meetup": ["meetup", "meetups"], regular: ["meetup", "meetups"], "high-five": ["meetup", "meetups"], local: ["meetup", "meetups"],
-    explorer: ["new kind of meetup", "new kinds of meetup"], "around-the-bay": ["new neighborhood", "new neighborhoods"],
+    explorer: ["new kind of meetup", "new kinds of meetup"], "around-town": ["new neighborhood", "new neighborhoods"],
     "first-host": ["meetup to host", "meetups to host"], "regular-host": ["more meetup to host", "more meetups to host"],
     connector: ["friend to invite", "friends to invite"], butterfly: ["more friend to invite", "more friends to invite"],
   };

@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { EventForm, type EventFormInitial } from "@/components/EventForm";
 import { getBirthDate } from "@/lib/profile";
+import { CITIES } from "@/lib/cities";
+import { currentCity } from "@/lib/city-pref";
 import { isRepeatEvery, suggestNextStart } from "@/lib/recurrence";
 import { createClient } from "@/lib/supabase/server";
 
@@ -36,12 +38,16 @@ export default async function NewEventPage({ searchParams }: { searchParams: { f
         venue = (location?.venue_name as string | undefined) ?? "";
         address = (location?.address as string | undefined) ?? "";
       }
+      // The city and the name of an "Other ..." activity. Best effort: a database from before cities just has neither.
+      const { data: extra } = await supabase.from("events").select("city, activity").eq("id", from).maybeSingle();
       const { data: chat } = await supabase.from("event_chat_links").select("url").eq("event_id", from).maybeSingle();
       const repeatDays = Number(one(searchParams.repeat));
       copiedFrom = e.title as string;
       initial = {
         title: e.title as string,
         category: e.category as string,
+        activity: (extra?.activity as string | null | undefined) ?? "",
+        city: (extra?.city as string | undefined) ?? "",
         description: (e.description as string) ?? "",
         venue_name: venue,
         address,
@@ -68,7 +74,7 @@ export default async function NewEventPage({ searchParams }: { searchParams: { f
           {copiedFrom ? <>Copied from &ldquo;{copiedFrom}&rdquo;. Change anything you like, and pick the new date.</> : "Tell people where to show up."}
         </p>
       </div>
-      <EventForm initial={initial} />
+      <EventForm initial={initial} cities={CITIES} defaultCity={await currentCity(supabase, user.id)} />
     </div>
   );
 }

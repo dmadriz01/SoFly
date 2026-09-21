@@ -18,7 +18,7 @@ const read = (f: string) => fs.readFileSync(path.join(root, f), "utf8");
 
 // ───────── the name ─────────
 t("name: the site is called SoFly", SITE_NAME === "SoFly");
-t("name: the tagline still talks about the Bay Area (that's a place, not the old name)", /Bay Area/.test(TAGLINE) && !/baymeet/i.test(TAGLINE));
+t("name: the tagline is place-neutral (SoFly isn't only for the Bay Area any more) and doesn't use the old name", /in your city/.test(TAGLINE) && !/Bay Area/.test(TAGLINE) && !/baymeet/i.test(TAGLINE));
 
 // The old name may only survive in two OLD migration files whose text is history (migration 018
 // replaces what they created).

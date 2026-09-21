@@ -3,11 +3,14 @@
 import { useRef, useState, useTransition } from "react";
 import { createEvent } from "@/app/actions";
 import { CHAT_APPS_HINT } from "@/lib/chat";
+import { CITIES, DEFAULT_CITY_ID, cityOrDefault, isMultiCity, type City } from "@/lib/cities";
 import {
+  ACTIVITY_MAX,
   AUDIENCES,
   CATEGORY_GROUPS,
   REQUEST_BY_DEFAULT,
   SKILL_LEVELS,
+  isNamedOther,
 } from "@/lib/constants";
 import { NeighborhoodOptions } from "./NeighborhoodOptions";
 import { MAX_OCCURRENCES, MIN_OCCURRENCES } from "@/lib/recurrence";
@@ -51,7 +54,20 @@ export function Field({
 /** Starting values, e.g. when posting again from a meetup you already ran. */
 export type EventFormInitial = Partial<Record<EventField, string>>;
 
-export function EventForm({ initial }: { initial?: EventFormInitial }) {
+export function EventForm({
+  initial,
+  cities = CITIES,
+  defaultCity = DEFAULT_CITY_ID,
+}: {
+  initial?: EventFormInitial;
+  /** The cities to choose from. With one, no city control is shown. */
+  cities?: readonly City[];
+  /** The city preselected: the one the person is browsing. */
+  defaultCity?: string;
+}) {
+  const multi = isMultiCity(cities);
+  const [city, setCity] = useState(cityOrDefault(initial?.city || defaultCity, cities).id);
+  const [category, setCategory] = useState(initial?.category ?? "");
   const [errors, setErrors] = useState<EventErrors>({});
   const [formError, setFormError] = useState<string>();
   const [pending, startTransition] = useTransition();
@@ -115,6 +131,7 @@ export function EventForm({ initial }: { initial?: EventFormInitial }) {
             defaultValue={initial?.category ?? ""}
             className={cls("category")}
             onChange={(e) => {
+              setCategory(e.target.value);
               // Coffee chats and dinners default to approving each person, until the host chooses.
               if (!joinTouched.current) {
                 setJoinMode(REQUEST_BY_DEFAULT.includes(e.target.value) ? "request" : "open");
@@ -136,20 +153,59 @@ export function EventForm({ initial }: { initial?: EventFormInitial }) {
             ))}
           </select>
         </Field>
+        {multi && (
+          <Field label="City" name="city" error={errors.city}>
+            <select
+              id="city"
+              name="city"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              className={cls("city")}
+              {...aria("city")}
+            >
+              {cities.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
         <Field label="Neighborhood" name="neighborhood" error={errors.neighborhood}>
           <select
+            // A new list of places when the city changes, so an old choice can't be left behind.
+            key={city}
             id="neighborhood"
             name="neighborhood"
-            defaultValue={initial?.neighborhood ?? ""}
+            defaultValue={city === cityOrDefault(initial?.city || defaultCity, cities).id ? (initial?.neighborhood ?? "") : ""}
             className={cls("neighborhood")}
             {...aria("neighborhood")}
           >
             <option value="" disabled>
               Select…
             </option>
-            <NeighborhoodOptions />
+            <NeighborhoodOptions groups={cityOrDefault(city, cities).groups} />
           </select>
         </Field>
+        {isNamedOther(category) && (
+          <Field
+            label="What is it?"
+            name="activity"
+            error={errors.activity}
+            hint="A few words, like Frisbee golf or Trivia night. This is what people see on the card."
+          >
+            <input
+              id="activity"
+              name="activity"
+              type="text"
+              defaultValue={initial?.activity}
+              maxLength={ACTIVITY_MAX}
+              placeholder="Frisbee golf"
+              className={cls("activity")}
+              {...aria("activity")}
+            />
+          </Field>
+        )}
       </div>
 
       <Field

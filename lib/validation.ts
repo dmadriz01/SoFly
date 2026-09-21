@@ -1,9 +1,11 @@
 import { ageFieldProblem } from "./age";
+import { CITIES, DEFAULT_CITY_ID, cityById, inCity, type City } from "./cities";
 import {
+  ACTIVITY_MAX,
   isAudience,
   isCategory,
   isJoinMode,
-  isNeighborhood,
+  isNamedOther,
   isSkillLevel,
 } from "./constants";
 import { parseChatUrl } from "./chat";
@@ -13,6 +15,8 @@ import { pacificLocalToUtc } from "./time";
 export const EVENT_FIELDS = [
   "title",
   "category",
+  "activity",
+  "city",
   "neighborhood",
   "venue_name",
   "address",
@@ -41,7 +45,11 @@ export const LIMITS = {
 };
 
 // One rule per field, shared by posting and editing so the two can never drift apart.
-const neighborhoodError = (v: string) => (isNeighborhood(v) ? undefined : "Pick a neighborhood.");
+// A missing city means the app's first city, so forms and callers from before cities existed keep working.
+const cityIdOf = (raw: string | undefined) => (raw ?? "").trim() || DEFAULT_CITY_ID;
+const cityError = (raw: string | undefined, cities: readonly City[]) => (cityById(cityIdOf(raw), cities) ? undefined : "Pick a city.");
+const neighborhoodError = (v: string, city: string | undefined, cities: readonly City[]) =>
+  cityById(cityIdOf(city), cities) && inCity(v, cityIdOf(city), cities) ? undefined : "Pick a neighborhood.";
 
 const venueError = (v: string) =>
   !v
@@ -76,11 +84,11 @@ export type EventDetailsField = "starts_at" | "neighborhood" | "venue_name" | "a
 export const DETAILS_FIELDS: readonly EventDetailsField[] = ["starts_at", "neighborhood", "venue_name", "address"];
 
 /** The date/time and place of a meetup: what a host can change after posting. */
-export function validateEventDetails(input: Record<string, string>): Partial<Record<EventDetailsField, string>> {
+export function validateEventDetails(input: Record<string, string>, cities: readonly City[] = CITIES): Partial<Record<EventDetailsField, string>> {
   const v = (k: EventDetailsField) => (input[k] ?? "").trim();
   const errors: Partial<Record<EventDetailsField, string>> = {};
   const checks: [EventDetailsField, string | undefined][] = [
-    ["neighborhood", neighborhoodError(v("neighborhood"))],
+    ["neighborhood", neighborhoodError(v("neighborhood"), input.city, cities)],
     ["venue_name", venueError(v("venue_name"))],
     ["address", addressError(v("address"))],
     ["starts_at", startsAtError(v("starts_at"))],
@@ -101,7 +109,7 @@ export function validateEventEdit(input: Record<string, string>): Partial<Record
 }
 
 /** Shared by the form (client) and the server action so the rules can't drift. */
-export function validateEvent(input: Record<string, string>): EventErrors {
+export function validateEvent(input: Record<string, string>, cities: readonly City[] = CITIES): EventErrors {
   const errors: EventErrors = {};
   const v = (k: EventField) => (input[k] ?? "").trim();
 
@@ -110,7 +118,14 @@ export function validateEvent(input: Record<string, string>): EventErrors {
     errors.title = `Keep it under ${LIMITS.title} characters.`;
 
   if (!isCategory(v("category"))) errors.category = "Pick a category.";
-  const place = validateEventDetails(input);
+  // "Other sports" / "Other social": say what it is, so people know what they're joining.
+  if (isNamedOther(v("category"))) {
+    if (!v("activity")) errors.activity = "What is it? For example: Frisbee golf.";
+    else if (v("activity").length > ACTIVITY_MAX) errors.activity = `Keep it under ${ACTIVITY_MAX} characters.`;
+  }
+  const cityProblem = cityError(input.city, cities);
+  if (cityProblem) errors.city = cityProblem;
+  const place = validateEventDetails(input, cities);
   if (place.neighborhood) errors.neighborhood = place.neighborhood;
   if (place.venue_name) errors.venue_name = place.venue_name;
   if (place.address) errors.address = place.address;

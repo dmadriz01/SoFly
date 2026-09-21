@@ -5,13 +5,15 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { passEvent, setRsvp, unpassEvent } from "@/app/actions";
 import { EventCover } from "@/components/EventCover";
-import { emojiFor } from "@/lib/constants";
+import { categoryLabel, emojiFor } from "@/lib/constants";
 import { NOTE_MAX, validateRequestNote } from "@/lib/validation";
 
 export type DeckEvent = {
   id: string;
   title: string;
   category: string;
+  /** The host's own name for an "Other ..." meetup. */
+  activity?: string | null;
   when: string;
   /** The raw start time and skill level: they shape the cover picture. */
   startsAt: string;
@@ -463,7 +465,7 @@ function SwipeCard({
             rather than being sliced in half. */}
         <div className="flex min-h-0 flex-1 flex-col gap-1.5 p-4 [@media(max-height:639px)]:gap-1 [@media(max-height:639px)]:p-3">
           <div className="flex shrink-0 flex-nowrap items-center gap-1.5 overflow-hidden whitespace-nowrap [@media(max-height:639px)]:hidden">
-            <span className="text-sm font-semibold text-muted">{event.category}</span>
+            <span className="text-sm font-semibold text-muted">{categoryLabel(event.category, event.activity)}</span>
             {[...(event.matchesInterests ? ["Matches your interests"] : []), ...event.tags].slice(0, 2).map((t, i) => (
               <span
                 key={t}

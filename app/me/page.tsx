@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { AboutForm } from "@/components/AboutForm";
 import { EmailSettings } from "@/components/EmailSettings";
 import { LogoutButton } from "@/components/LogoutButton";
+import { CitySwitcher } from "@/components/CitySwitcher";
 import { NotificationSettings } from "@/components/NotificationSettings";
 import { PushSettings } from "@/components/PushSettings";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -11,6 +12,8 @@ import { EventCard } from "@/components/EventCard";
 import { NextUp } from "@/components/NextUp";
 import { InterestsForm } from "@/components/InterestsForm";
 import { isAdminUser } from "@/lib/admin-access";
+import { CITIES, isMultiCity } from "@/lib/cities";
+import { currentCity } from "@/lib/city-pref";
 import { repeatLabel, seriesNeedingMoreDates } from "@/lib/recurrence";
 import { getInterests } from "@/lib/interests";
 import { metCount, summarizeHosting } from "@/lib/engagement";
@@ -315,6 +318,14 @@ export default async function MePage() {
         </p>
         <AboutForm initial={about} mode="settings" />
       </section>
+
+      {isMultiCity() && (
+        <section>
+          <h2 className="mb-1 text-lg font-bold">Your city</h2>
+          <p className="mb-3 text-sm text-muted">The feed, your weekly picks and new meetups you post start here.</p>
+          <CitySwitcher cities={CITIES} current={await currentCity(supabase, user.id)} label="Your city" />
+        </section>
+      )}
 
       <section id="interests">
         <h2 className="mb-1 text-lg font-bold">Your interests</h2>

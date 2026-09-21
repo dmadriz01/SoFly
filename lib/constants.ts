@@ -1,3 +1,5 @@
+import { CITIES } from "./cities";
+
 // Grouped for the post form's dropdown; the feed's filter pills use the flat CATEGORIES list.
 export const CATEGORY_GROUPS = [
   {
@@ -15,6 +17,7 @@ export const CATEGORY_GROUPS = [
       "Yoga",
       "Swimming",
       "Dance",
+      "Other sports & fitness",
     ],
   },
   { label: "Games", items: ["Board Games", "Video Games"] },
@@ -32,6 +35,7 @@ export const CATEGORY_GROUPS = [
       "Arts & Crafts",
       "Photography",
       "Volunteering",
+      "Other social & interests",
     ],
   },
   { label: "Other", items: ["Other"] },
@@ -41,68 +45,30 @@ export type Category = (typeof CATEGORY_GROUPS)[number]["items"][number];
 
 export const CATEGORIES: readonly Category[] = CATEGORY_GROUPS.flatMap((g) => g.items);
 
+/**
+ * The two "Other ..." choices: the host says what it actually is ("Frisbee golf"), and that name
+ * is what people see on the card. The plain "Other" stays for meetups posted before these existed.
+ */
+export const NAMED_OTHER_CATEGORIES = ["Other sports & fitness", "Other social & interests"] as const;
+export const isNamedOther = (category: unknown): boolean =>
+  typeof category === "string" && (NAMED_OTHER_CATEGORIES as readonly string[]).includes(category);
+export const ACTIVITY_MAX = 40;
+
+/** What to show as a meetup's kind: the host's own name for it if they gave one, else the category. */
+export const categoryLabel = (category: string, activity?: string | null): string => {
+  const name = (activity ?? "").trim();
+  return isNamedOther(category) && name ? name : category;
+};
+
 export const SKILL_LEVELS = ["All levels", "Beginner", "Intermediate", "Advanced"] as const;
 export type SkillLevel = (typeof SKILL_LEVELS)[number];
 
 export const AUDIENCES = ["Everyone", "Women-only", "Men-only"] as const;
 export type Audience = (typeof AUDIENCES)[number];
 
-// Existing values ("SF - Mission", "Oakland", "Marin", ...) are kept exactly so older events
-// still match. Cities are the 100 incorporated Bay Area cities outside San Francisco, by county.
-export const NEIGHBORHOOD_GROUPS: { label: string; items: string[] }[] = [
-  {
-    label: "San Francisco",
-    items: [
-      "SF - Mission",
-      "SF - Marina",
-      "SF - Sunset",
-      "SF - SoMa",
-      "SF - Richmond",
-      "SF - Presidio",
-      "SF - Other",
-    ],
-  },
-  {
-    label: "East Bay",
-    items: [
-      "Alameda", "Albany", "Antioch", "Berkeley", "Brentwood", "Clayton", "Concord", "Danville",
-      "Dublin", "El Cerrito", "Emeryville", "Fremont", "Hayward", "Hercules", "Lafayette",
-      "Livermore", "Martinez", "Moraga", "Newark", "Oakland", "Oakley", "Orinda", "Piedmont",
-      "Pinole", "Pittsburg", "Pleasant Hill", "Pleasanton", "Richmond", "San Leandro", "San Pablo",
-      "San Ramon", "Union City", "Walnut Creek",
-    ],
-  },
-  {
-    label: "Peninsula",
-    items: [
-      "Atherton", "Belmont", "Brisbane", "Burlingame", "Colma", "Daly City", "East Palo Alto",
-      "Foster City", "Half Moon Bay", "Hillsborough", "Menlo Park", "Millbrae", "Pacifica",
-      "Portola Valley", "Redwood City", "San Bruno", "San Carlos", "San Mateo",
-      "South San Francisco", "Woodside",
-    ],
-  },
-  {
-    label: "South Bay",
-    items: [
-      "Campbell", "Cupertino", "Gilroy", "Los Altos", "Los Altos Hills", "Los Gatos", "Milpitas",
-      "Monte Sereno", "Morgan Hill", "Mountain View", "Palo Alto", "San Jose", "Santa Clara",
-      "Saratoga", "Sunnyvale",
-    ],
-  },
-  {
-    label: "North Bay",
-    items: [
-      "Marin", "American Canyon", "Belvedere", "Benicia", "Calistoga", "Cloverdale",
-      "Corte Madera", "Cotati", "Dixon", "Fairfax", "Fairfield", "Healdsburg", "Larkspur",
-      "Mill Valley", "Napa", "Novato", "Petaluma", "Rio Vista", "Rohnert Park", "Ross",
-      "San Anselmo", "San Rafael", "Santa Rosa", "Sausalito", "Sebastopol", "Sonoma",
-      "St. Helena", "Suisun City", "Tiburon", "Vacaville", "Vallejo", "Windsor", "Yountville",
-    ],
-  },
-  { label: "Elsewhere", items: ["Other"] },
-];
-
-export const NEIGHBORHOODS: string[] = NEIGHBORHOOD_GROUPS.flatMap((g) => g.items);
+/** Every place across every city. A meetup's neighborhood must also belong to its own city (see lib/cities.ts). */
+export const NEIGHBORHOOD_GROUPS = CITIES.flatMap((c) => c.groups);
+export const NEIGHBORHOODS: string[] = Array.from(new Set(NEIGHBORHOOD_GROUPS.flatMap((g) => g.items)));
 
 export type Neighborhood = string;
 
@@ -120,6 +86,7 @@ export const CATEGORY_STYLES: Record<Category, string> = {
   Yoga: "bg-pink-100 text-pink-900 dark:bg-pink-400/20 dark:text-pink-200",
   Swimming: "bg-cyan-100 text-cyan-900 dark:bg-cyan-400/20 dark:text-cyan-200",
   Dance: "bg-purple-200 text-purple-900 dark:bg-purple-400/20 dark:text-purple-200",
+  "Other sports & fitness": "bg-orange-200 text-orange-950 dark:bg-orange-400/20 dark:text-orange-200",
   "Board Games": "bg-violet-100 text-violet-900 dark:bg-violet-400/20 dark:text-violet-200",
   "Video Games": "bg-indigo-100 text-indigo-900 dark:bg-indigo-400/20 dark:text-indigo-200",
   "Coffee Chat": "bg-amber-200 text-amber-950 dark:bg-amber-400/20 dark:text-amber-200",
@@ -133,6 +100,7 @@ export const CATEGORY_STYLES: Record<Category, string> = {
   "Arts & Crafts": "bg-neutral-200 text-neutral-800 dark:bg-neutral-400/20 dark:text-neutral-200",
   Photography: "bg-gray-200 text-gray-800 dark:bg-gray-400/20 dark:text-gray-200",
   Volunteering: "bg-green-200 text-green-950 dark:bg-green-400/20 dark:text-green-200",
+  "Other social & interests": "bg-fuchsia-200 text-fuchsia-950 dark:bg-fuchsia-400/20 dark:text-fuchsia-200",
   Other: "bg-slate-100 text-slate-700 dark:bg-slate-400/20 dark:text-slate-200",
 };
 
@@ -180,6 +148,7 @@ export const CATEGORY_EMOJI: Record<Category, string> = {
   Yoga: "🧘",
   Swimming: "🏊",
   Dance: "💃",
+  "Other sports & fitness": "🏅",
   "Board Games": "🎲",
   "Video Games": "🎮",
   "Coffee Chat": "☕",
@@ -193,6 +162,7 @@ export const CATEGORY_EMOJI: Record<Category, string> = {
   "Arts & Crafts": "🎨",
   Photography: "📷",
   Volunteering: "🌱",
+  "Other social & interests": "🎉",
   Other: "✨",
 };
 

@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import { updateEventDetails } from "@/app/actions";
 import { EDIT_FIELDS, LIMITS, validateEventEdit, type EditField } from "@/lib/validation";
 import { Field } from "./EventForm";
+import type { CityGroup } from "@/lib/cities";
 import { NeighborhoodOptions } from "./NeighborhoodOptions";
 
 type Errors = Partial<Record<EditField, string>>;
@@ -19,6 +20,7 @@ export function EditEventForm({
   isRequest,
   toNotify,
   spotsTaken,
+  neighborhoods,
 }: {
   eventId: string;
   initial: { starts_at: string; neighborhood: string; venue_name: string; address: string; max_spots: number };
@@ -27,6 +29,8 @@ export function EditEventForm({
   isRequest: boolean;
   /** How many people who joined will be told about the change. */
   toNotify: number;
+  /** The places to choose from: the meetup's own city's. Every place when not given (a one-city app). */
+  neighborhoods?: readonly CityGroup[];
 }) {
   const [errors, setErrors] = useState<Errors>({});
   const [formError, setFormError] = useState<string>();
@@ -96,7 +100,7 @@ export function EditEventForm({
           <option value="" disabled>
             Select…
           </option>
-          <NeighborhoodOptions />
+          <NeighborhoodOptions groups={neighborhoods} />
         </select>
       </Field>
 

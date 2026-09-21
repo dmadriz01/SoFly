@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { EditEventForm } from "@/components/EditEventForm";
+import { cityOrDefault, isMultiCity } from "@/lib/cities";
 import { createClient } from "@/lib/supabase/server";
 import { pacificLocalValue } from "@/lib/time";
 
@@ -82,6 +83,11 @@ export default async function EditEventPage({ params }: { params: { id: string }
         isRequest={isRequest}
         toNotify={count ?? 0}
         spotsTaken={event.spots_taken}
+        neighborhoods={
+          isMultiCity()
+            ? cityOrDefault((await supabase.from("events").select("city").eq("id", event.id).maybeSingle()).data?.city).groups
+            : undefined
+        }
         initial={{ starts_at: pacificLocalValue(event.starts_at), neighborhood: event.neighborhood, venue_name: venue, address, max_spots: event.max_spots }}
       />
     </div>

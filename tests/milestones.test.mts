@@ -27,7 +27,7 @@ const NOW = new Date("2026-09-01T12:00:00Z");
   t("progress never goes past the goal", get({ ...none, attended: Array.from({ length: 12 }, (_, i) => w(i + 1)) }, "regular").current === 3 && get({ ...none, attended: Array.from({ length: 12 }, (_, i) => w(i + 1)) }, "local").achieved);
   const mixed = { ...none, attended: [w(1, "Running", "Oakland"), w(2, "Running", "Oakland"), w(3, "Yoga", "Berkeley"), w(4, "Dinner", "Berkeley"), w(5, "Music", "SF - Mission")] };
   t("explorer: three different kinds of meetup, dated to the meetup that made the third", get(mixed, "explorer").achieved && get(mixed, "explorer").achievedAt === w(4).starts_at && get(mixed, "explorer").current === 3);
-  t("around the bay: three different neighborhoods, dated to the meetup that made the third", get(mixed, "around-the-bay").achieved && get(mixed, "around-the-bay").achievedAt === w(5).starts_at);
+  t("around town: three different neighborhoods, dated to the meetup that made the third", get(mixed, "around-town").achieved && get(mixed, "around-town").achievedAt === w(5).starts_at);
   t("going to the same kind of meetup again and again is not exploring", !get({ ...none, attended: [w(1), w(2), w(3), w(4)] }, "explorer").achieved && get({ ...none, attended: [w(1), w(2), w(3), w(4)] }, "explorer").current === 1);
   const before = JSON.stringify(five); computeMilestones(five);
   t("the input isn't changed", JSON.stringify(five) === before);

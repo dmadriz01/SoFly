@@ -30,6 +30,10 @@ export type EventRow = {
   series_id?: string | null;
   /** Days between dates in the series (7 or 14). */
   repeat_every?: number | null;
+  /** The host's own name for an "Other ..." meetup ("Frisbee golf"). Null otherwise, and on older databases. */
+  activity?: string | null;
+  /** Which city (see lib/cities.ts). Absent on databases from before cities. */
+  city?: string;
 };
 
 /** Kept as an alias: spots_taken now lives on the event row itself. */

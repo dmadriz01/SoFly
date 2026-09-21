@@ -13,19 +13,19 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: { default: `${SITE_NAME}: meetups around the Bay Area`, template: `%s · ${SITE_NAME}` },
+  title: { default: `${SITE_NAME}: meetups in your city`, template: `%s · ${SITE_NAME}` },
   description: TAGLINE,
   applicationName: SITE_NAME,
   openGraph: {
     type: "website",
     siteName: SITE_NAME,
-    title: `${SITE_NAME}: meetups around the Bay Area`,
+    title: `${SITE_NAME}: meetups in your city`,
     description: TAGLINE,
     locale: "en_US",
   },
   twitter: {
     card: "summary_large_image",
-    title: `${SITE_NAME}: meetups around the Bay Area`,
+    title: `${SITE_NAME}: meetups in your city`,
     description: TAGLINE,
   },
   icons: {

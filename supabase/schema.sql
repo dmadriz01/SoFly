@@ -64,7 +64,10 @@ create table public.user_settings (
   notify_activity      boolean not null default true,
   quiet_start          smallint,
   quiet_end            smallint,
+  -- The city they browse (see lib/cities.ts). null = the app's first city.
+  city                 text,
   updated_at           timestamptz not null default now(),
+  constraint user_settings_city_length check (city is null or char_length(city) between 1 and 40),
   constraint user_settings_quiet_hours_check check (
     (quiet_start is null) = (quiet_end is null)
     and (quiet_start is null or quiet_start between 0 and 23)
@@ -116,6 +119,11 @@ create table public.events (
   -- repeat_every (7 or 14 days) says how often. Set only when posting (see the guard trigger).
   series_id     uuid,
   repeat_every  smallint,
+  -- Which city (see lib/cities.ts); set when posting, never changed. Meetups from before cities
+  -- existed are in the Bay Area, which is the default.
+  city          text not null default 'sf-bay-area',
+  -- What an "Other sports & fitness" / "Other social & interests" meetup actually is, in the host's words.
+  activity      text,
   created_at    timestamptz not null default now(),
 
   constraint events_title_length         check (char_length(title) between 1 and 100),
@@ -124,6 +132,8 @@ create table public.events (
   constraint events_venue_length         check (char_length(venue_name) between 1 and 100),
   constraint events_address_length       check (char_length(address) between 1 and 200),
   constraint events_neighborhood_length  check (char_length(neighborhood) between 1 and 40),
+  constraint events_city_length          check (char_length(city) between 1 and 40),
+  constraint events_activity_length      check (activity is null or char_length(activity) between 1 and 40),
   constraint events_max_spots_range      check (max_spots between 1 and 200),
   constraint events_spots_within_capacity check (spots_taken between 0 and max_spots),
   constraint events_feedback_within_total check (feedback_yes between 0 and feedback_total),
@@ -261,6 +271,7 @@ create index reports_created_at_idx   on public.reports (created_at desc);
 -- The admin page lists open reports first.
 create index reports_open_idx         on public.reports (created_at desc) where reviewed_at is null;
 create index events_series_idx        on public.events (series_id, starts_at) where series_id is not null;
+create index events_city_starts_idx    on public.events (city, starts_at);
 create index rsvps_invited_by_idx     on public.rsvps (invited_by) where invited_by is not null;
 create index event_waitlist_user_id_idx on public.event_waitlist (user_id);
 create index notification_log_user_recent_idx on public.notification_log (user_id, created_at desc);
@@ -1104,9 +1115,9 @@ grant insert (user_id, birth_date) on public.profile_private to authenticated;
 grant insert (user_id, categories, updated_at), update (categories, updated_at)
   on public.user_interests to authenticated;
 grant insert (user_id, email_notifications, notify_reminders, notify_matches, notify_activity,
-              quiet_start, quiet_end, updated_at),
+              quiet_start, quiet_end, city, updated_at),
       update (email_notifications, notify_reminders, notify_matches, notify_activity,
-              quiet_start, quiet_end, updated_at)
+              quiet_start, quiet_end, city, updated_at)
   on public.user_settings to authenticated;
 grant insert (user_id, bio, linkedin, instagram, x_handle, tiktok, facebook, updated_at),
       update (bio, linkedin, instagram, x_handle, tiktok, facebook, updated_at)
@@ -1119,10 +1130,10 @@ grant delete on public.push_subscriptions to authenticated;
 
 grant insert (host_id, title, category, description, venue_name, address, neighborhood,
               starts_at, max_spots, join_mode, skill_level, audience, age_min, age_max,
-              series_id, repeat_every)
+              series_id, repeat_every, city, activity)
   on public.events to authenticated;
 grant update (title, category, description, venue_name, address, neighborhood,
-              starts_at, max_spots, skill_level, audience, age_min, age_max)
+              starts_at, max_spots, skill_level, audience, age_min, age_max, activity)
   on public.events to authenticated;
 grant delete on public.events to authenticated;
 

@@ -47,7 +47,7 @@ export function EventCard({
         <span aria-hidden className="drop-shadow-[0_1px_2px_rgba(0,0,0,0.25)]">{emojiFor(event.category)}</span>
       </EventCover>
       <div className="flex flex-wrap items-center gap-1.5">
-        <CategoryBadge category={event.category} />
+        <CategoryBadge category={event.category} activity={event.activity} />
         <EventTags event={event} />
         {repeatLabel(event.repeat_every) && (
           <span className="rounded-full border border-line px-2.5 py-0.5 text-xs font-semibold text-ink">

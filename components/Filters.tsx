@@ -2,11 +2,12 @@
 
 import { useRouter } from "next/navigation";
 import { CATEGORY_GROUPS, SKILL_LEVELS } from "@/lib/constants";
+import type { CityGroup } from "@/lib/cities";
 import { feedHref, type FeedFilters } from "@/lib/feed";
 import { NeighborhoodOptions } from "./NeighborhoodOptions";
 
 /** The feed's dropdown filters. Changing one navigates, keeping the rest in the URL. */
-export function FeedSelects({ filters }: { filters: FeedFilters }) {
+export function FeedSelects({ filters, neighborhoods }: { filters: FeedFilters; neighborhoods?: readonly CityGroup[] }) {
   const router = useRouter();
   const go = (patch: Partial<FeedFilters>) => router.push(feedHref({ ...filters, ...patch }));
   const select = "field tap min-w-0 w-full !py-2 text-sm";
@@ -38,7 +39,7 @@ export function FeedSelects({ filters }: { filters: FeedFilters }) {
         className={select}
       >
         <option value="">All neighborhoods</option>
-        <NeighborhoodOptions />
+        <NeighborhoodOptions groups={neighborhoods} />
       </select>
 
       <select

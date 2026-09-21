@@ -7,7 +7,7 @@ import { pushSummary, type DetailChange } from "./event-edit";
 import { metCount, whyThis, type Taste } from "./engagement";
 import { claimSend, digestSentRecently, underNudgeCap } from "./notify-log";
 import { channelsFor, parsePrefs, type Category, type Prefs } from "./notify-policy";
-import { loadPool, picksFor } from "./picks";
+import { cityOfEvent, cityOfUser, loadPool, picksFor } from "./picks";
 import { SITE_URL } from "./site";
 import { createAdminClient } from "./supabase/admin";
 import { addDaysToKey, formatWhenLong, formatWhenShort, pacificDate, pacificLocalToUtc, pacificWeekday } from "./time";
@@ -571,8 +571,14 @@ export async function sendDailyEmails(now = new Date(), deps: Deps = {}): Promis
   // feeling is fresh.
   const past = await eventsBetween(admin, yesterday, startOfToday);
   result.eventsYesterday = past.length;
-  const similarPool = past.length > 0 ? await loadPool(admin, now, 14) : [];
+  // One pool of upcoming meetups per city (just one in a one-city app), loaded when first needed.
+  const similarPools = new Map<string, Awaited<ReturnType<typeof loadPool>>>();
+  const similarPoolFor = async (city: string) => {
+    if (!similarPools.has(city)) similarPools.set(city, await loadPool(admin, now, 14, 300, city));
+    return similarPools.get(city)!;
+  };
   for (const event of past) {
+    const eventCity = await cityOfEvent(admin, event.id);
     const approved = await approvedGuestIds(admin, event.id);
     const ids = approved.filter((id) => id !== event.host_id);
     for (const id of ids) {
@@ -582,7 +588,7 @@ export async function sendDailyEmails(now = new Date(), deps: Deps = {}): Promis
       let similar: Awaited<ReturnType<typeof picksFor>> = [];
       try {
         const taste: Taste = { categories: event.category ? [event.category] : [], neighborhoods: event.neighborhood ? [event.neighborhood] : [] };
-        similar = await picksFor(admin, id, similarPool, taste, { now, withinDays: 14, limit: 3 });
+        similar = await picksFor(admin, id, await similarPoolFor(eventCity), taste, { now, withinDays: 14, limit: 3 });
       } catch (err) {
         console.error("Couldn't pick similar meetups for the recap:", err);
       }
@@ -671,13 +677,20 @@ export async function sendDailyEmails(now = new Date(), deps: Deps = {}): Promis
   // interests, only when there is something worth sending, and never twice in a week.
   if (pacificWeekday(now) === DIGEST_WEEKDAY) {
     const horizon = new Date(now.getTime() + DIGEST_WINDOW_DAYS * 86400000);
-    const pool = await loadPool(admin, now, DIGEST_WINDOW_DAYS);
-    if (pool.length > 0) {
+    // Each person's digest comes from their own city; one pool per city, loaded when first needed.
+    const digestPools = new Map<string, Awaited<ReturnType<typeof loadPool>>>();
+    const digestPoolFor = async (city: string) => {
+      if (!digestPools.has(city)) digestPools.set(city, await loadPool(admin, now, DIGEST_WINDOW_DAYS, 300, city));
+      return digestPools.get(city)!;
+    };
+    {
       const { data: members } = await admin.from("user_interests").select("user_id, categories").limit(1000);
       for (const m of members ?? []) {
         const categories = (m.categories as string[] | null) ?? [];
         if (categories.length === 0) continue;
         const id = m.user_id as string;
+        const pool = await digestPoolFor(await cityOfUser(admin, id));
+        if (pool.length === 0) continue; // nothing coming up in their city: nothing to look up or send
         if (capped()) return done("stopped at the daily cap");
         const prefs = await prefsOf(id);
         if (!prefs.matches) {

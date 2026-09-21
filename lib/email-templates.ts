@@ -89,7 +89,7 @@ export function requestDecision(a: {
         heading: `An update on ${title}`,
         paragraphs: [
           `Hi ${a.name}, the host couldn't fit you into this one.`,
-          "That's not a judgment on you. Small meetups have limited spots. There are plenty more happening around the Bay.",
+          "That's not a judgment on you. Small meetups have limited spots. There are plenty more happening in your city.",
         ],
         cta: { label: "Find another meetup", url: a.siteUrl },
         siteUrl: a.siteUrl,

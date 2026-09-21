@@ -93,7 +93,7 @@ export const CATEGORY_COLOR: Record<string, string> = {
   Swimming: "#2aa7c9", Dance: "#9a5fd0", "Board Games": "#7a5fd0", "Video Games": "#5a5fd0",
   "Coffee Chat": "#b7793a", Dinner: "#c2483d", Conversation: "#e08a4a", "Book Club": "#8d63a8",
   "Language Exchange": "#4a7fd0", Networking: "#6b7a90", "Food & Drink": "#d0574a", Music: "#c04fc0",
-  "Arts & Crafts": "#8a9a5a", Photography: "#6b7a8a", Volunteering: "#4faf6a", Other: BRAND.accent,
+  "Arts & Crafts": "#8a9a5a", Photography: "#6b7a8a", Volunteering: "#4faf6a", "Other sports & fitness": "#d9822b", "Other social & interests": "#b14fb3", Other: BRAND.accent,
 };
 
 type Family = "sport" | "game" | "social" | "art" | "outdoor";
@@ -102,7 +102,7 @@ const FAMILY: Record<string, Family> = {
   Dance: "art", Cycling: "sport", Running: "outdoor", Hiking: "outdoor", Climbing: "outdoor", Volunteering: "outdoor",
   Yoga: "outdoor", "Board Games": "game", "Video Games": "game", "Coffee Chat": "social", Dinner: "social",
   Conversation: "social", "Book Club": "social", "Language Exchange": "social", Networking: "social",
-  "Food & Drink": "social", Music: "art", "Arts & Crafts": "art", Photography: "art", Other: "social",
+  "Food & Drink": "social", Music: "art", "Arts & Crafts": "art", Photography: "art", "Other sports & fitness": "sport", "Other social & interests": "social", Other: "social",
 };
 
 // Where in the Bay Area a meetup is decides the scene behind it. Every neighborhood in the post

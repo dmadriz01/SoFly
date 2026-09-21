@@ -832,6 +832,38 @@ async function behaviour({ db, U, oldEvent }, { migrated }) {
   r = await as("anon", `select * from public.host_stats($1)`, [HS]);
   ok("host stats: a host with no meetups is all zeros (not an error)", !r.error && r.rows[0].hosted === 0 && r.rows[0].guests === 0 && r.rows[0].repeat_guests === 0, JSON.stringify(r));
 
+  // ═════════════ cities and named "Other" activities (migration 020) ═════════════
+  const CITY_EV = (await ins("host")).rows[0].id;
+  ok("city: a meetup posted without a city is in the Bay Area (the default)", (await one(`select city from public.events where id=$1`, [CITY_EV])).city === "sf-bay-area");
+  ok("city: every meetup that already existed got the default too", (await one(`select count(*)::int c from public.events where city is distinct from 'sf-bay-area'`)).c === 0);
+  r = await as("host", `insert into public.events (host_id,title,category,venue_name,address,neighborhood,starts_at,max_spots,city,activity) values ($1,'x','Other sports & fitness','v','a','Oakland',$2,10,'new-york','Frisbee golf') returning id, city, activity`, [U.host, "2027-05-01T18:00:00Z"]);
+  ok("city: a host can post into a city and name an Other activity", !r.error && r.rows[0].city === "new-york" && r.rows[0].activity === "Frisbee golf", JSON.stringify(r));
+  const CITY2 = r.rows?.[0]?.id;
+  r = await as("host", `update public.events set city='sf-bay-area' where id=$1`, [CITY2]);
+  ok("city: a meetup can't be moved to another city after posting", denied(r), JSON.stringify(r));
+  r = await as("host", `update public.events set activity='Disc golf' where id=$1`, [CITY2]);
+  ok("activity: the host can rename their own Other activity", !r.error && (await one(`select activity from public.events where id=$1`, [CITY2])).activity === "Disc golf", JSON.stringify(r));
+  r = await as("ann", `update public.events set activity='Hijacked' where id=$1`, [CITY2]);
+  ok("activity: someone else can't rename it", (await one(`select activity from public.events where id=$1`, [CITY2])).activity === "Disc golf", JSON.stringify(r));
+  r = await as("host", `insert into public.events (host_id,title,category,venue_name,address,neighborhood,starts_at,max_spots,activity) values ($1,'x','Other sports & fitness','v','a','Oakland',$2,10,'') returning id`, [U.host, "2027-05-02T18:00:00Z"]);
+  ok("activity: an empty name is refused", failsWith(r, "events_activity_length"), JSON.stringify(r));
+  r = await as("host", `insert into public.events (host_id,title,category,venue_name,address,neighborhood,starts_at,max_spots,activity) values ($1,'x','Other sports & fitness','v','a','Oakland',$2,10,$3) returning id`, [U.host, "2027-05-02T18:00:00Z", "x".repeat(41)]);
+  ok("activity: more than 40 characters is refused", failsWith(r, "events_activity_length"), JSON.stringify(r));
+  r = await as("host", `insert into public.events (host_id,title,category,venue_name,address,neighborhood,starts_at,max_spots,city) values ($1,'x','Running','v','a','Oakland',$2,10,'') returning id`, [U.host, "2027-05-02T18:00:00Z"]);
+  ok("city: an empty city id is refused", failsWith(r, "events_city_length"), JSON.stringify(r));
+  r = await as("anon", `select city, activity from public.events where id=$1`, [CITY2]);
+  ok("city: anyone can read a meetup's city and activity", !r.error && r.rows[0].city === "new-york", JSON.stringify(r));
+  r = await as("ann", `insert into public.user_settings (user_id, city) values ($1,'new-york') on conflict (user_id) do update set city=excluded.city`, [U.ann]);
+  ok("city: a person can save the city they browse", !r.error && (await one(`select city from public.user_settings where user_id=$1`, [U.ann])).city === "new-york", JSON.stringify(r));
+  r = await as("ann", `update public.user_settings set city='sf-bay-area' where user_id=$1`, [U.ann]);
+  ok("city: and change it", !r.error && (await one(`select city from public.user_settings where user_id=$1`, [U.ann])).city === "sf-bay-area", JSON.stringify(r));
+  r = await as("ann", `select city from public.user_settings where user_id=$1`, [U.host]);
+  ok("city: nobody can read someone else's", (r.rows?.length ?? 0) === 0, JSON.stringify(r));
+  r = await as("ann", `update public.user_settings set city='' where user_id=$1`, [U.ann]);
+  ok("city: an empty setting is refused", failsWith(r, "user_settings_city_length"), JSON.stringify(r));
+  r = await as("ann", `update public.user_settings set notify_reminders=true, quiet_start=null, quiet_end=null where user_id=$1`, [U.ann]);
+  ok("city: notification settings still save exactly as before", !r.error, JSON.stringify(r));
+
   // ---- cleanup and cascades ----
   await as("host", `delete from public.events where id=$1`, [EP]);
   ok("deleting an event clears its passes and reports", (await one(`select (select count(*) from public.event_passes where event_id=$1) + (select count(*) from public.reports where event_id=$1) as c`, [EP])).c == 0);
@@ -889,7 +921,7 @@ await behaviour(fromSchema, { migrated: false });
 // require the same database as a clean install.
 label = "rerun";
 {
-  const RECENT = MIGRATIONS.filter((f) => /^01[0-9]/.test(f));
+  const RECENT = MIGRATIONS.filter((f) => /^0[12][0-9]/.test(f));
   const clean = await catalog((await buildFromSchema()).db);
   const same = (x) => x.length === clean.length && x.every((line, i) => line === clean[i]);
 

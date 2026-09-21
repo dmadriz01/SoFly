@@ -38,5 +38,8 @@ export default async function Image({ params }: { params: { id: string } }) {
     );
   }
 
-  return eventOgImage(event, font);
+  // The host's own name for an "Other ..." meetup. Read separately and best effort, so a database without
+  // that column yet still gets its preview picture.
+  const { data: named } = await createPublicClient().from("events").select("activity").eq("id", params.id).maybeSingle();
+  return eventOgImage({ ...event, activity: (named?.activity as string | null | undefined) ?? null }, font);
 }

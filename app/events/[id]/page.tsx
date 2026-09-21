@@ -316,7 +316,7 @@ export default async function EventPage({ params, searchParams }: { params: { id
 
       <header>
         <div className="flex flex-wrap items-center gap-1.5">
-          <CategoryBadge category={event.category} />
+          <CategoryBadge category={event.category} activity={event.activity} />
           <EventTags event={event} />
         </div>
         <h1 className="mt-2 text-2xl font-bold leading-tight tracking-tight">{event.title}</h1>

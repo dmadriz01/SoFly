@@ -2,6 +2,7 @@
 
 import { waitUntil } from "@vercel/functions";
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -11,11 +12,13 @@ import { diagnoseEmail, diagnosePush, type Check } from "@/lib/diagnose";
 import { parseChatUrl } from "@/lib/chat";
 import { parseAbout, type AboutErrors, type AboutInput } from "@/lib/about";
 import { MIN_AGE, ageOn, parseBirthDate, resolveAgeRange } from "@/lib/age";
-import { HIDDEN_VENUE, REPORT_REASONS, isCategory } from "@/lib/constants";
+import { CITY_COOKIE } from "@/lib/city-pref";
+import { DEFAULT_CITY_ID, cityOrDefault, inCity, isCityId, isMultiCity } from "@/lib/cities";
+import { HIDDEN_VENUE, REPORT_REASONS, isCategory, isNamedOther } from "@/lib/constants";
 import { describeEdit } from "@/lib/event-edit";
 import { whyThis } from "@/lib/engagement";
 import { verifyInvite } from "@/lib/invite";
-import { loadPool, picksFor } from "@/lib/picks";
+import { cityOfEvent, loadPool, picksFor } from "@/lib/picks";
 import { occurrenceStarts } from "@/lib/recurrence";
 import {
   notifyEventCancelled,
@@ -73,40 +76,18 @@ export async function createEvent(formData: FormData): Promise<CreateEventResult
     : [pacificLocalToUtc(input.starts_at)!.toISOString()];
   if (!starts) return { errors: { starts_at: "That isn't a valid date and time." } };
 
+  // The city and the host's own name for an "Other ..." activity. Both are left out of the request
+  // (undefined isn't sent) unless they matter, so an ordinary meetup in a one-city app is posted exactly
+  // as before and works even on a database that doesn't have these columns yet (migration 020).
+  const cityId = isCityId(input.city) ? input.city : DEFAULT_CITY_ID;
+  const activity = isNamedOther(input.category) ? input.activity : "";
+
   let created: { id: string; starts_at: string }[] = [];
   if (!repeatEvery) {
-    // A one-off meetup, exactly as before (no new columns, so this works on any database version).
-    const { data, error } = await supabase
-      .from("events")
-      .insert({
-        host_id: user.id,
-        title: input.title,
-        category: input.category,
-        neighborhood: input.neighborhood,
-        venue_name: isRequest ? HIDDEN_VENUE : input.venue_name,
-        address: isRequest ? input.neighborhood : input.address,
-        join_mode: input.join_mode,
-        starts_at: starts[0],
-        max_spots: Number(input.max_spots),
-        description: input.description,
-        skill_level: input.skill_level,
-        audience: input.audience,
-        age_min: ageRange.min,
-        age_max: ageRange.max,
-      })
-      .select("id, starts_at")
-      .single();
-    if (error || !data) {
-      return { errors: {}, formError: "Something went wrong posting your meetup. Please try again." };
-    }
-    created = [data as { id: string; starts_at: string }];
-  } else {
-    // A series: one meetup per date, tied together by a shared series id. All or nothing.
-    const seriesId = crypto.randomUUID();
-    const { data, error } = await supabase
-      .from("events")
-      .insert(
-        starts.map((iso) => ({
+    const one = (withActivity: boolean) =>
+      supabase
+        .from("events")
+        .insert({
           host_id: user.id,
           title: input.title,
           category: input.category,
@@ -114,18 +95,89 @@ export async function createEvent(formData: FormData): Promise<CreateEventResult
           venue_name: isRequest ? HIDDEN_VENUE : input.venue_name,
           address: isRequest ? input.neighborhood : input.address,
           join_mode: input.join_mode,
-          starts_at: iso,
+          starts_at: starts[0],
           max_spots: Number(input.max_spots),
           description: input.description,
           skill_level: input.skill_level,
           audience: input.audience,
           age_min: ageRange.min,
           age_max: ageRange.max,
-          series_id: seriesId,
-          repeat_every: repeatEvery,
-        }))
-      )
-      .select("id, starts_at");
+          city: isMultiCity() ? cityId : undefined,
+          activity: withActivity && activity ? activity : undefined,
+        })
+        .select("id, starts_at")
+        .single();
+    let { data, error } = await one(true);
+    // PGRST204 / 42703: migration 020 hasn't been run. A one-city app can still post; the host's name for
+    // the activity is dropped (the title still says what it is). With several cities it can't post at all.
+    if (error && (error.code === "PGRST204" || error.code === "42703")) {
+      console.error("Posting with a city or activity failed: run supabase/migrations/020_cities_and_activities.sql in the SQL editor.");
+      if (isMultiCity()) return { errors: {}, formError: "Posting isn't available right now. Please try again later." };
+      ({ data, error } = await one(false));
+    }
+    if (error || !data) {
+      return { errors: {}, formError: "Something went wrong posting your meetup. Please try again." };
+    }
+    created = [data as { id: string; starts_at: string }];
+  } else {
+    // A series: one meetup per date, tied together by a shared series id. All or nothing.
+    const seriesId = crypto.randomUUID();
+    const series = (withNewColumns: boolean) =>
+      withNewColumns
+        ? supabase
+            .from("events")
+            .insert(
+              starts.map((iso) => ({
+                host_id: user.id,
+                title: input.title,
+                category: input.category,
+                neighborhood: input.neighborhood,
+                venue_name: isRequest ? HIDDEN_VENUE : input.venue_name,
+                address: isRequest ? input.neighborhood : input.address,
+                join_mode: input.join_mode,
+                starts_at: iso,
+                max_spots: Number(input.max_spots),
+                description: input.description,
+                skill_level: input.skill_level,
+                audience: input.audience,
+                age_min: ageRange.min,
+                age_max: ageRange.max,
+                series_id: seriesId,
+                repeat_every: repeatEvery,
+                city: cityId,
+                activity: activity || null,
+              }))
+            )
+            .select("id, starts_at")
+        : supabase
+            .from("events")
+            .insert(
+              starts.map((iso) => ({
+                host_id: user.id,
+                title: input.title,
+                category: input.category,
+                neighborhood: input.neighborhood,
+                venue_name: isRequest ? HIDDEN_VENUE : input.venue_name,
+                address: isRequest ? input.neighborhood : input.address,
+                join_mode: input.join_mode,
+                starts_at: iso,
+                max_spots: Number(input.max_spots),
+                description: input.description,
+                skill_level: input.skill_level,
+                audience: input.audience,
+                age_min: ageRange.min,
+                age_max: ageRange.max,
+                series_id: seriesId,
+                repeat_every: repeatEvery,
+              }))
+            )
+            .select("id, starts_at");
+    let { data, error } = await series(true);
+    // Migration 019 was run but 020 wasn't: a one-city app still posts the series without the new columns.
+    if (error && (error.code === "PGRST204" || error.code === "42703") && /city|activity/.test(error.message ?? "") && !isMultiCity()) {
+      console.error("Posting with a city or activity failed: run supabase/migrations/020_cities_and_activities.sql in the SQL editor.");
+      ({ data, error } = await series(false));
+    }
     if (error || !data || data.length !== starts.length) {
       // PGRST204 / 42703: the new columns aren't there, i.e. migration 019 hasn't been run yet.
       if (error?.code === "PGRST204" || error?.code === "42703") {
@@ -224,6 +276,13 @@ export async function updateEventDetails(eventId: string, formData: FormData): P
   if (event.cancelled_at) return { errors: {}, formError: "This meetup was cancelled, so it can't be changed." };
   if (new Date(event.starts_at).getTime() <= Date.now()) {
     return { errors: {}, formError: "This meetup has already started, so it can't be changed." };
+  }
+
+  // With several cities, the new neighborhood has to be one of the meetup's own city's. (A one-city app
+  // skips this: the check above already covers it, and the city column may not exist yet.)
+  if (isMultiCity()) {
+    const { data: where } = await supabase.from("events").select("city").eq("id", eventId).maybeSingle();
+    if (!inCity(input.neighborhood, cityOrDefault(where?.city).id)) return { errors: { neighborhood: "Pick a neighborhood in this meetup's city." } };
   }
 
   // Nobody who is already going can be squeezed out by lowering the spots.
@@ -715,6 +774,28 @@ export async function saveNotificationPrefs(input: {
   return {};
 }
 
+/**
+ * Chooses the city to browse: remembered on this device, and saved to the account when logged in (so
+ * it follows them to another phone). Does nothing in a one-city app.
+ */
+export async function setCity(cityId: string): Promise<{ error?: string }> {
+  if (!isMultiCity()) return {};
+  if (!isCityId(cityId)) return { error: "Pick a city from the list." };
+  cookies().set(CITY_COOKIE, cityId, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "lax" });
+
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (user) {
+    // Best effort: the choice already works through the cookie, so a failure here isn't shown.
+    const { error } = await updateOrInsert(supabase, "user_settings", { user_id: user.id }, { city: cityId, updated_at: new Date().toISOString() });
+    if (error) console.error("Couldn't save the city to the account:", error.message);
+  }
+  revalidatePath("/", "layout");
+  return {};
+}
+
 /** Saves interests. With `next` it continues there (onboarding); without, it just returns. */
 export async function saveInterests(categories: string[], next?: string): Promise<{ error?: string }> {
   const supabase = createClient();
@@ -797,7 +878,7 @@ export async function getSimilarMeetups(
   const now = new Date();
   const interests = (await getInterests(supabase, user.id)) ?? [];
   const taste = { categories: Array.from(new Set([event.category as string, ...interests])), neighborhoods: [event.neighborhood as string] };
-  const pool = await loadPool(supabase, now, 14);
+  const pool = await loadPool(supabase, now, 14, 300, await cityOfEvent(supabase, eventId));
   const picks = await picksFor(supabase, user.id, pool, taste, { now, withinDays: 14, limit: 3, alsoExclude: [eventId] });
   return { items: picks.map((c) => ({ id: c.id, title: c.title, when: formatWhenShort(c.starts_at), place: c.neighborhood, spotsLeft: c.spots_left, why: whyThis(c, taste) })) };
 }

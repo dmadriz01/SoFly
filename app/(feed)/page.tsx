@@ -4,11 +4,14 @@ import { EventCard } from "@/components/EventCard";
 import { FeedSelects } from "@/components/Filters";
 import { FiltersSheet } from "@/components/FiltersSheet";
 import { FilterChips } from "@/components/FilterChips";
+import { CitySwitcher } from "@/components/CitySwitcher";
 import { Hero } from "@/components/Hero";
 import { SwipeDeck, type DeckEvent } from "@/components/SwipeDeck";
 import { ViewToggle } from "@/components/ViewToggle";
 import { WeekStrip } from "@/components/WeekStrip";
 import { ageLabel, ageOn, withinAgeRange } from "@/lib/age";
+import { CITIES, cityOrDefault, inCity, isMultiCity } from "@/lib/cities";
+import { currentCity } from "@/lib/city-pref";
 import { isCategory, isNeighborhood, isSkillLevel } from "@/lib/constants";
 import { feedHref, type FeedFilters } from "@/lib/feed";
 import { getInterests } from "@/lib/interests";
@@ -70,6 +73,10 @@ export default async function FeedPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  // Which city's meetups to show. With one city this is just that city and nothing is filtered or asked.
+  const city = await currentCity(supabase, user?.id);
+  const multiCity = isMultiCity();
+  if (multiCity && filters.neighborhood && !inCity(filters.neighborhood, city)) filters.neighborhood = undefined;
   const [birthDate, interests] = user
     ? await Promise.all([getBirthDate(supabase, user.id), getInterests(supabase, user.id)])
     : [null, null];
@@ -81,6 +88,7 @@ export default async function FeedPage({
     .gt("starts_at", new Date().toISOString())
     .order("starts_at", { ascending: true })
     .limit(100);
+  if (multiCity) query = query.eq("city", city);
   if (filters.category) query = query.eq("category", filters.category);
   if (filters.neighborhood) query = query.eq("neighborhood", filters.neighborhood);
   // "Beginner" also matches all-levels events, which welcome beginners too.
@@ -121,6 +129,7 @@ export default async function FeedPage({
       .gte("starts_at", weekFrom.toISOString())
       .lt("starts_at", weekTo.toISOString())
       .limit(300);
+    if (multiCity) cq = cq.eq("city", city);
     if (filters.category) cq = cq.eq("category", filters.category);
     if (filters.neighborhood) cq = cq.eq("neighborhood", filters.neighborhood);
     if (filters.level) cq = cq.in("skill_level", [filters.level, "All levels"]);
@@ -151,15 +160,18 @@ export default async function FeedPage({
     <div className="ml-auto flex shrink-0 items-center gap-2">
       <FiltersSheet count={activeFilters}>
         {strip}
-        <FeedSelects filters={filters} />
+        <FeedSelects filters={filters} neighborhoods={cityOrDefault(city).groups} />
         <FilterChips filters={filters} showEligible={Boolean(birthDate)} />
       </FiltersSheet>
       <ViewToggle filters={filters} active={activeView} />
     </div>
   );
 
+  // Only shown when there's more than one city to choose from.
+  const cityBar = multiCity ? <CitySwitcher cities={CITIES} current={city} /> : null;
   const header = (
     <>
+      {cityBar}
       {user ? (
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-3">
           <div className="min-w-0 flex-1 basis-40">
@@ -220,6 +232,7 @@ export default async function FeedPage({
         id: e.id,
         title: e.title,
         category: e.category,
+        activity: e.activity ?? null,
         when: formatWhenShort(e.starts_at),
         startsAt: e.starts_at,
         skill: e.skill_level,
@@ -247,6 +260,7 @@ export default async function FeedPage({
           <h1 className="text-xl font-bold tracking-tight [@media(max-width:359px)]:hidden">Discover</h1>
           {controls}
         </div>
+        {cityBar}
         <SwipeDeck
           // A new key when the filters change resets which cards were swiped away.
           key={feedHref({ ...filters, view: "swipe" })}

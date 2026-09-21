@@ -107,7 +107,7 @@ const AA = 4.5;
 // ───────── the Feed intro ─────────
 {
   t("intro: the headline is exactly 'Do more things / with real people.'", FEED_HEADLINE.join(" ") === "Do more things with real people.");
-  t("intro: the sentence under it is exactly the one asked for", FEED_INTRO === "Pickup games, dinners and coffee chats around the Bay Area. Find one you like and join in a tap.");
+  t("intro: the sentence under it is exactly the one asked for", FEED_INTRO === "Pickup games, dinners and coffee chats in your city. Find one you like and join in a tap.");
   const feed = read("app/(feed)/page.tsx");
   t("intro: the Feed shows it (instead of 'What's happening / Find people to connect with!')", /\{FEED_HEADLINE\[0\]\}[\s\S]{0,80}\{FEED_HEADLINE\[1\]\}/.test(feed) && /\{FEED_INTRO\}/.test(feed) && !/What&rsquo;s happening|What's happening|Find people to connect with/.test(feed));
   t("intro: the logged-out banner uses the very same text, from one place", /FEED_HEADLINE\[0\]/.test(read("components/Hero.tsx")) && /\{FEED_INTRO\}/.test(read("components/Hero.tsx")) && !/Pickup games, dinners/.test(read("components/Hero.tsx")));
