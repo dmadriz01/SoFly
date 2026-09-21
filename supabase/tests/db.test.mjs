@@ -660,6 +660,178 @@ async function behaviour({ db, U, oldEvent }, { migrated }) {
   ok("...while someone whose request is still pending can't", sees(r) === 0, JSON.stringify(r));
   for (const id of [OPEN, REQ, REQ2, CXL, PASTED]) await db.query(`delete from public.events where id=$1`, [id]);
 
+  // ═════════════ retention features (migration 019) ═════════════
+  const ins = (who, extra = "") => as(who, `insert into public.events (host_id,title,category,venue_name,address,neighborhood,starts_at,max_spots${extra ? "," + extra.cols : ""}) values ($1,'series','Running','v','a','Oakland',$2,10${extra ? "," + extra.vals : ""}) returning id`, [U[who], extra?.when ?? "2027-03-01T18:00:00Z"]);
+  const SID = "11111111-1111-4111-8111-111111111111", SID2 = "22222222-2222-4222-8222-222222222222";
+  const mkSeries = async (who, sid, iso, every = 7) => (await as(who, `insert into public.events (host_id,title,category,venue_name,address,neighborhood,starts_at,max_spots,series_id,repeat_every) values ($1,'weekly run','Running','v','a','Oakland',$2,10,$3,$4) returning id`, [U[who], iso, sid, every]));
+
+  // ---- recurring meetups ----
+  const S = [];
+  for (const d of ["2027-03-04T18:00:00Z", "2027-03-11T18:00:00Z", "2027-03-18T18:00:00Z", "2027-03-25T18:00:00Z"]) { const x = await mkSeries("host", SID, d); S.push(x.rows?.[0]?.id); if (x.error) ok("series: a host can post several dates in one series", false, x.error); }
+  ok("series: a host can post several dates in one series, repeating every week", S.every(Boolean) && (await one(`select count(*)::int c from public.events where series_id=$1 and repeat_every=7`, [SID])).c === 4);
+  r = await mkSeries("ann", SID, "2027-04-01T18:00:00Z");
+  ok("series: someone else cannot add a meetup to another host's series", failsWith(r, "belongs to someone else"), JSON.stringify(r));
+  r = await mkSeries("host", SID2, "2027-04-01T18:00:00Z", 5);
+  ok("series: only weekly or every-two-weeks repeats are allowed", failsWith(r, "events_repeat_every_check"), JSON.stringify(r));
+  r = await mkSeries("host", SID2, "2027-04-01T18:00:00Z", 14);
+  ok("series: every two weeks is fine", !r.error, JSON.stringify(r));
+  r = await as("host", `update public.events set series_id=$2 where id=$1`, [S[0], SID2]);
+  ok("series: the series can't be changed after posting (no attaching to or leaving a series)", denied(r), JSON.stringify(r));
+  r = await as("host", `update public.events set repeat_every=14 where id=$1`, [S[0]]);
+  ok("series: nor the repeat interval", denied(r), JSON.stringify(r));
+  for (let i = 0; i < 25; i++) await q(`insert into public.events (host_id,title,category,venue_name,address,neighborhood,starts_at,max_spots,series_id,repeat_every) values ($1,'big','Running','v','a','Oakland',$2,10,'33333333-3333-4333-8333-333333333333',7)`, [U.host, `2028-01-${String(i + 1).padStart(2, "0")}T18:00:00Z`]);
+  r = await mkSeries("host", "33333333-3333-4333-8333-333333333333", "2028-02-01T18:00:00Z");
+  ok("series: the 26th meetup is still fine", !r.error, JSON.stringify(r));
+  r = await mkSeries("host", "33333333-3333-4333-8333-333333333333", "2028-02-02T18:00:00Z");
+  ok("series: the 27th is refused", failsWith(r, "at most 26"), JSON.stringify(r));
+  const solo = (await ins("host")).rows[0].id;
+  r = await as("host", `select * from public.cancel_series_from($1)`, [S[1]]);
+  const ids = r.rows?.map((x) => x.cancel_series_from) ?? [];
+  ok("cancel series: this meetup and every later one are cancelled, and the ids come back", ids.length === 3 && [S[1], S[2], S[3]].every((x) => ids.includes(x)), JSON.stringify(r));
+  const cx = async (id) => (await one(`select cancelled_at from public.events where id=$1`, [id])).cancelled_at;
+  ok("cancel series: the earlier meetup, the other series and an unrelated meetup are untouched", (await cx(S[0])) === null && (await cx(solo)) === null && (await one(`select count(*)::int c from public.events where series_id=$1 and cancelled_at is not null`, [SID2])).c === 0);
+  r = await as("host", `select * from public.cancel_series_from($1)`, [S[1]]);
+  ok("cancel series: doing it again cancels nothing more (and doesn't reset the times)", (r.rows?.length ?? 0) === 0 && !r.error);
+  r = await as("host", `select * from public.cancel_series_from($1)`, [solo]);
+  ok("cancel series: a meetup that isn't in a series cancels just itself", r.rows?.length === 1 && (await cx(solo)) !== null);
+  r = await as("ann", `select * from public.cancel_series_from($1)`, [S[0]]);
+  ok("cancel series: someone else cannot cancel your series", failsWith(r, "only cancel your own") && (await cx(S[0])) === null, JSON.stringify(r));
+  r = await as("anon", `select * from public.cancel_series_from($1)`, [S[0]]);
+  ok("cancel series: a logged-out visitor cannot run it", denied(r), JSON.stringify(r));
+  const oldOne = (await one(`insert into public.events (host_id,title,category,venue_name,address,neighborhood,starts_at,max_spots,series_id,repeat_every) values ($1,'old','Running','v','a','Oakland','2020-02-01T18:00:00Z',10,$2,7) returning id`, [U.host, SID2])).id;
+  r = await as("host", `select * from public.cancel_series_from($1)`, [oldOne]);
+  ok("cancel series: from a meetup that already happened, only the LATER dates are cancelled; the past one never is", (r.rows?.length ?? 0) === 1 && (await cx(oldOne)) === null && (await one(`select count(*)::int c from public.events where series_id=$1 and cancelled_at is not null`, [SID2])).c === 1, JSON.stringify(r));
+
+  // ---- bring a friend ----
+  const INV = await mkEvent("host", { title: "invites", max: 10 });
+  await as("ann", `insert into public.rsvps (event_id,user_id) values ($1,$2)`, [INV, U.ann]);
+  const joinWith = async (who, by) => { const x = await as(who, `insert into public.rsvps (event_id,user_id,invited_by) values ($1,$2,$3) returning invited_by`, [INV, U[who], by]); return x.error ? x.error : x.rows[0].invited_by; };
+  ok("invites: someone invited by an approved guest is recorded as invited by them", (await joinWith("bob", U.ann)) === U.ann);
+  ok("invites: invited by the host works too", (await joinWith("cy", U.host)) === U.host);
+  const REQ_INV = await mkEvent("host", { title: "invites request", max: 10, mode: "request" });
+  await as("ann", `insert into public.rsvps (event_id,user_id) values ($1,$2)`, [REQ_INV, U.ann]);
+  r = await as("bob", `insert into public.rsvps (event_id,user_id,invited_by) values ($1,$2,$3) returning invited_by, status`, [REQ_INV, U.bob, U.ann]);
+  ok("invites: an inviter whose own request is still pending doesn't count (ignored, and they can still join)", !r.error && r.rows[0].invited_by === null && r.rows[0].status === "pending", JSON.stringify(r));
+  r = await as("dee", `insert into public.rsvps (event_id,user_id,invited_by) values ($1,$2,$3) returning invited_by`, [INV, U.dee, U.dee]);
+  ok("invites: you can't invite yourself (ignored)", !r.error && r.rows[0].invited_by === null, JSON.stringify(r));
+  await as("dee", `delete from public.rsvps where event_id=$1 and user_id=$2`, [INV, U.dee]);
+  r = await as("dee", `insert into public.rsvps (event_id,user_id,invited_by) values ($1,$2,$3) returning invited_by`, [INV, U.dee, "99999999-9999-4999-8999-999999999999"]);
+  ok("invites: a made-up inviter is ignored, never an error, so an old link can't stop anyone joining", !r.error && r.rows[0].invited_by === null, JSON.stringify(r));
+  r = await as("host", `update public.rsvps set invited_by=$2 where event_id=$1 and user_id=$3`, [INV, U.ann, U.bob]);
+  ok("invites: who invited whom can't be edited afterwards", denied(r), JSON.stringify(r));
+  r = await as("host", `select user_id, invited_by from public.rsvps where event_id=$1 and invited_by is not null`, [INV]);
+  ok("invites: the host can see who invited whom", sees(r) === 2, JSON.stringify(r));
+
+  // ---- "still coming?" ----
+  const confirmed = async (who, ev) => (await one(`select confirmed_at from public.rsvps where event_id=$1 and user_id=$2`, [ev, U[who]]))?.confirmed_at;
+  r = await as("ann", `select public.confirm_attendance($1)`, [INV]);
+  const first = await confirmed("ann", INV);
+  ok("confirm: a guest who is going can confirm", !r.error && first !== null, JSON.stringify(r));
+  await db.query(`select pg_sleep(0.01)`);
+  await as("ann", `select public.confirm_attendance($1)`, [INV]);
+  ok("confirm: confirming twice is fine and keeps the first time", (await confirmed("ann", INV)).getTime() === first.getTime());
+  ok("confirm: only that person's row is touched", (await confirmed("bob", INV)) === null);
+  r = await as("bob", `select public.confirm_attendance($1)`, [REQ_INV]);
+  ok("confirm: someone whose request is only pending can't confirm", failsWith(r, "not going"), JSON.stringify(r));
+  r = await as("dee", `select public.confirm_attendance($1)`, [REQ_INV]);
+  ok("confirm: someone who never joined can't confirm", failsWith(r, "not going"), JSON.stringify(r));
+  r = await as("ann", `update public.rsvps set confirmed_at = now() where event_id=$1 and user_id=$2`, [INV, U.ann]);
+  ok("confirm: it can't be written directly (only through the function)", denied(r), JSON.stringify(r));
+  r = await as("anon", `select public.confirm_attendance($1)`, [INV]);
+  ok("confirm: a logged-out visitor cannot run it", denied(r), JSON.stringify(r));
+  const CONF_PAST = await mkPast("confirm past");
+  r = await as("ann", `select public.confirm_attendance($1)`, [CONF_PAST]);
+  ok("confirm: not once the meetup has started", failsWith(r, "already started"), JSON.stringify(r));
+  const CONF_CX = await mkEvent("host", { title: "confirm cancelled", max: 4 });
+  await as("ann", `insert into public.rsvps (event_id,user_id) values ($1,$2)`, [CONF_CX, U.ann]);
+  await as("host", `select public.cancel_event($1)`, [CONF_CX]);
+  r = await as("ann", `select public.confirm_attendance($1)`, [CONF_CX]);
+  ok("confirm: not for a cancelled meetup", failsWith(r, "cancelled"), JSON.stringify(r));
+
+  // ---- waitlist ----
+  const FULL = await mkEvent("host", { title: "full one", max: 1 });
+  await as("ann", `insert into public.rsvps (event_id,user_id) values ($1,$2)`, [FULL, U.ann]);
+  const wait = (who, ev) => as(who, `insert into public.event_waitlist (event_id,user_id) values ($1,$2)`, [ev, U[who]]);
+  r = await wait("bob", FULL);
+  ok("waitlist: someone can join the waitlist of a full open meetup", !r.error, JSON.stringify(r));
+  ok("waitlist: a second person too", !(await wait("cy", FULL)).error);
+  r = await wait("bob", FULL);
+  ok("waitlist: not twice", !!r.error, JSON.stringify(r));
+  r = await as("bob", `select user_id from public.event_waitlist where event_id=$1`, [FULL]);
+  ok("waitlist: you only see your own place", sees(r) === 1 && r.rows[0].user_id === U.bob, JSON.stringify(r));
+  r = await as("host", `select user_id from public.event_waitlist where event_id=$1`, [FULL]);
+  ok("waitlist: the host sees everyone waiting", sees(r) === 2, JSON.stringify(r));
+  r = await as("ann", `select user_id from public.event_waitlist where event_id=$1`, [FULL]);
+  ok("waitlist: other guests don't see who is waiting", sees(r) === 0, JSON.stringify(r));
+  const ROOMY = await mkEvent("host", { title: "roomy", max: 5 });
+  r = await wait("bob", ROOMY);
+  ok("waitlist: refused while there are spots (just join)", failsWith(r, "spots left"), JSON.stringify(r));
+  const FULL_REQ = await mkEvent("host", { title: "full request", max: 1, mode: "request" });
+  await q(`insert into public.rsvps (event_id,user_id) values ($1,$2)`, [FULL_REQ, U.host]);
+  r = await wait("bob", FULL_REQ);
+  ok("waitlist: not for approval-only meetups (the host decides those)", failsWith(r, "only for open"), JSON.stringify(r));
+  r = await as("host", `insert into public.event_waitlist (event_id,user_id) values ($1,$2)`, [FULL, U.host]);
+  ok("waitlist: a host can't wait for their own meetup", failsWith(r, "hosting"), JSON.stringify(r));
+  r = await wait("ann", FULL);
+  ok("waitlist: someone who already joined can't wait", failsWith(r, "already joined"), JSON.stringify(r));
+  r = await as("dee", `insert into public.event_waitlist (event_id,user_id) values ($1,$2)`, [FULL, U.bob]);
+  ok("waitlist: you can't put someone else on it", !!r.error, JSON.stringify(r));
+  r = await as("anon", `insert into public.event_waitlist (event_id,user_id) values ($1,$2)`, [FULL, U.dee]);
+  ok("waitlist: logged-out visitors can't", !!r.error, JSON.stringify(r));
+  await as("host", `select public.cancel_event($1)`, [(await mkEvent("host", { title: "cxl full", max: 1 }))]);
+  r = await as("cy", `delete from public.event_waitlist where event_id=$1 and user_id=$2`, [FULL, U.bob]);
+  ok("waitlist: you can't remove someone else", (r.n ?? 0) === 0 && (await one(`select count(*)::int c from public.event_waitlist where event_id=$1`, [FULL])).c === 2, JSON.stringify(r));
+  await as("ann", `delete from public.rsvps where event_id=$1 and user_id=$2`, [FULL, U.ann]);
+  r = await as("bob", `insert into public.rsvps (event_id,user_id) values ($1,$2)`, [FULL, U.bob]);
+  ok("waitlist: when a spot opens, someone from the list can take it", !r.error, JSON.stringify(r));
+  ok("waitlist: ...which takes them off the list (and only them)", (await one(`select count(*)::int c from public.event_waitlist where event_id=$1 and user_id=$2`, [FULL, U.bob])).c === 0 && (await one(`select count(*)::int c from public.event_waitlist where event_id=$1 and user_id=$2`, [FULL, U.cy])).c === 1);
+  r = await as("cy", `delete from public.event_waitlist where event_id=$1 and user_id=$2`, [FULL, U.cy]);
+  ok("waitlist: you can leave the list yourself", r.n === 1 || !r.error);
+
+  // ---- notification settings ----
+  await as("ann", `insert into public.user_settings (user_id) values ($1) on conflict do nothing`, [U.ann]);
+  const st = await one(`select notify_reminders, notify_matches, notify_activity, quiet_start, quiet_end from public.user_settings where user_id=$1`, [U.ann]);
+  ok("settings: every kind of notification is on by default, and there are no quiet hours", st.notify_reminders && st.notify_matches && st.notify_activity && st.quiet_start === null && st.quiet_end === null, JSON.stringify(st));
+  r = await as("ann", `update public.user_settings set notify_matches=false, quiet_start=22, quiet_end=8 where user_id=$1`, [U.ann]);
+  ok("settings: you can turn a kind off and set quiet hours", !r.error && (await one(`select notify_matches, quiet_start from public.user_settings where user_id=$1`, [U.ann])).quiet_start === 22, JSON.stringify(r));
+  r = await as("ann", `update public.user_settings set quiet_start=25, quiet_end=8 where user_id=$1`, [U.ann]);
+  ok("settings: an hour must be 0-23", failsWith(r, "user_settings_quiet_hours_check"), JSON.stringify(r));
+  r = await as("ann", `update public.user_settings set quiet_start=21, quiet_end=null where user_id=$1`, [U.ann]);
+  ok("settings: quiet hours need both a start and an end", failsWith(r, "user_settings_quiet_hours_check"), JSON.stringify(r));
+  r = await as("bob", `select * from public.user_settings where user_id=$1`, [U.ann]);
+  ok("settings: nobody can read someone else's settings", sees(r) === 0, JSON.stringify(r));
+  r = await as("bob", `update public.user_settings set notify_matches=true where user_id=$1`, [U.ann]);
+  ok("settings: or change them", (r.n ?? 0) === 0, JSON.stringify(r));
+
+  // ---- the send log is for the server only ----
+  await q(`insert into public.notification_log (user_id, kind, ref) values ($1,'digest','2027-w10')`, [U.ann]);
+  for (const who of ["ann", "anon"]) {
+    r = await as(who, `select * from public.notification_log`);
+    ok(`log: ${who === "anon" ? "a logged-out visitor" : "a signed-in person"} can't read it`, denied(r), JSON.stringify(r));
+  }
+  r = await as("ann", `insert into public.notification_log (user_id, kind) values ($1,'x')`, [U.ann]);
+  ok("log: nor write to it", denied(r), JSON.stringify(r));
+  r = await as("postgres", `insert into public.notification_log (user_id, kind, ref) values ($1,'digest','2027-w10')`, [U.ann]);
+  ok("log: the same message can't be logged twice (that's what stops the daily job repeating itself)", failsWith(r, "notification_log_user_id_kind_ref_key") || failsWith(r, "duplicate"), JSON.stringify(r));
+
+  // ---- host record: counts, never names ----
+  const HS = "44444444-4444-4444-8444-444444444444";
+  await q(`insert into public.profiles (id, name) values ($1, 'Stat Host') on conflict do nothing`, [U.dee]);
+  const pastFor = async (title, iso) => (await one(`insert into public.events (host_id,title,category,venue_name,address,neighborhood,starts_at,max_spots) values ($1,$2,'Yoga','v','a','Oakland',$3,10) returning id`, [U.dee, title, iso])).id;
+  const HP1 = await pastFor("hp1", "2020-03-01T18:00:00Z"), HP2 = await pastFor("hp2", "2020-03-08T18:00:00Z"), HPX = await pastFor("hpx", "2020-03-15T18:00:00Z");
+  const HF = await pastFor("future", "2030-03-15T18:00:00Z");
+  for (const [ev, who, status] of [[HP1, "dee", "approved"], [HP1, "ann", "approved"], [HP1, "bob", "approved"], [HP2, "ann", "approved"], [HP2, "cy", "approved"], [HP2, "bob", "pending"], [HPX, "ann", "approved"], [HF, "ann", "approved"]]) await q(`insert into public.rsvps (event_id,user_id) values ($1,$2)`, [ev, U[who]]);
+  await q(`update public.rsvps set status='pending' where event_id=$1 and user_id=$2`, [HP2, U.bob]);
+  await q(`update public.events set cancelled_at='2020-03-14T00:00:00Z' where id=$1`, [HPX]); // cancelled AFTER people joined
+  for (const who of ["anon", "cy"]) {
+    r = await as(who, `select * from public.host_stats($1)`, [U.dee]);
+    ok(`host stats (${who === "anon" ? "logged out" : "signed in"}): 2 meetups held, 4 guest visits (the host, the pending guest, the cancelled and the future meetup don't count), 1 repeat guest`, !r.error && r.rows[0].hosted === 2 && r.rows[0].guests === 4 && r.rows[0].repeat_guests === 1, JSON.stringify(r));
+  }
+  r = await as("anon", `select * from public.host_stats($1)`, [U.dee]);
+  ok("host stats: only three numbers come back, no names or ids", Object.keys(r.rows[0]).sort().join() === "guests,hosted,repeat_guests", Object.keys(r.rows[0]).join());
+  r = await as("anon", `select * from public.host_stats($1)`, [HS]);
+  ok("host stats: a host with no meetups is all zeros (not an error)", !r.error && r.rows[0].hosted === 0 && r.rows[0].guests === 0 && r.rows[0].repeat_guests === 0, JSON.stringify(r));
+
   // ---- cleanup and cascades ----
   await as("host", `delete from public.events where id=$1`, [EP]);
   ok("deleting an event clears its passes and reports", (await one(`select (select count(*) from public.event_passes where event_id=$1) + (select count(*) from public.reports where event_id=$1) as c`, [EP])).c == 0);
@@ -717,7 +889,7 @@ await behaviour(fromSchema, { migrated: false });
 // require the same database as a clean install.
 label = "rerun";
 {
-  const RECENT = MIGRATIONS.filter((f) => /^01[0-8]/.test(f));
+  const RECENT = MIGRATIONS.filter((f) => /^01[0-9]/.test(f));
   const clean = await catalog((await buildFromSchema()).db);
   const same = (x) => x.length === clean.length && x.every((line, i) => line === clean[i]);
 

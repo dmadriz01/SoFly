@@ -58,7 +58,18 @@ create table public.profile_bios (
 create table public.user_settings (
   user_id              uuid primary key references public.profiles (id) on delete cascade,
   email_notifications  boolean not null default true,
-  updated_at           timestamptz not null default now()
+  -- Which kinds of notification (email and push), and quiet hours (Pacific time) for push.
+  notify_reminders     boolean not null default true,
+  notify_matches       boolean not null default true,
+  notify_activity      boolean not null default true,
+  quiet_start          smallint,
+  quiet_end            smallint,
+  updated_at           timestamptz not null default now(),
+  constraint user_settings_quiet_hours_check check (
+    (quiet_start is null) = (quiet_end is null)
+    and (quiet_start is null or quiet_start between 0 and 23)
+    and (quiet_end is null or quiet_end between 0 and 23)
+  )
 );
 
 -- Categories someone is into. An empty array means "skipped", so we don't ask again.
@@ -101,6 +112,10 @@ create table public.events (
   -- write them. The meetup page uses them to tell people who joined earlier.
   details_changed_at  timestamptz,
   details_before      jsonb,
+  -- Recurring meetups: every date is a normal meetup; a shared series_id ties them together, and
+  -- repeat_every (7 or 14 days) says how often. Set only when posting (see the guard trigger).
+  series_id     uuid,
+  repeat_every  smallint,
   created_at    timestamptz not null default now(),
 
   constraint events_title_length         check (char_length(title) between 1 and 100),
@@ -112,6 +127,7 @@ create table public.events (
   constraint events_max_spots_range      check (max_spots between 1 and 200),
   constraint events_spots_within_capacity check (spots_taken between 0 and max_spots),
   constraint events_feedback_within_total check (feedback_yes between 0 and feedback_total),
+  constraint events_repeat_every_check   check (repeat_every is null or repeat_every in (7, 14)),
   constraint events_age_range_check      check (
     (age_min is null or age_min between 18 and 120)
     and (age_max is null or (age_min is not null and age_max >= age_min and age_max <= 120))
@@ -147,6 +163,10 @@ create table public.rsvps (
   user_id     uuid not null references public.profiles (id) on delete cascade,
   status      text not null default 'approved' check (status in ('pending', 'approved', 'declined')),
   created_at  timestamptz not null default now(),
+  -- Who invited them ("bring a friend"): only a real host or approved guest counts (see the trigger).
+  invited_by  uuid references public.profiles (id) on delete set null,
+  -- When they answered "still coming?" the day of the meetup.
+  confirmed_at timestamptz,
   unique (event_id, user_id)
 );
 
@@ -205,6 +225,25 @@ create table public.reports (
 );
 
 
+-- People waiting for a spot at a full, open meetup. They're told when one opens.
+create table public.event_waitlist (
+  event_id    uuid not null references public.events (id) on delete cascade,
+  user_id     uuid not null references public.profiles (id) on delete cascade,
+  created_at  timestamptz not null default now(),
+  primary key (event_id, user_id)
+);
+
+-- What we've sent, so the daily job never repeats itself and can keep to a limit per person.
+-- Only the server (with its service key) can read or write it.
+create table public.notification_log (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null references public.profiles (id) on delete cascade,
+  kind        text not null check (char_length(kind) <= 40),
+  ref         text not null default '' check (char_length(ref) <= 100),
+  created_at  timestamptz not null default now(),
+  unique (user_id, kind, ref)
+);
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 2. Indexes (primary keys and unique constraints above already have theirs)
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -221,6 +260,10 @@ create index reports_reporter_id_idx  on public.reports (reporter_id);
 create index reports_created_at_idx   on public.reports (created_at desc);
 -- The admin page lists open reports first.
 create index reports_open_idx         on public.reports (created_at desc) where reviewed_at is null;
+create index events_series_idx        on public.events (series_id, starts_at) where series_id is not null;
+create index rsvps_invited_by_idx     on public.rsvps (invited_by) where invited_by is not null;
+create index event_waitlist_user_id_idx on public.event_waitlist (user_id);
+create index notification_log_user_recent_idx on public.notification_log (user_id, created_at desc);
 
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -468,6 +511,20 @@ begin
     new.status := 'approved';
   end if;
 
+  -- Who invited them: the host or an approved guest of this event, and never themselves.
+  if new.invited_by is not null then
+    if new.invited_by = new.user_id
+       or not (
+         new.invited_by = host_uid
+         or exists (
+           select 1 from public.rsvps r
+           where r.event_id = new.event_id and r.user_id = new.invited_by and r.status = 'approved'
+         )
+       ) then
+      new.invited_by := null;
+    end if;
+  end if;
+
   return new;
 end;
 $$;
@@ -644,6 +701,190 @@ create trigger events_track_changes
   before update on public.events
   for each row execute function private.events_track_changes();
 
+-- Recurring meetups: a meetup can only join a series that is the same host's, and a series has a sensible length.
+create function private.events_series_guard()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if new.series_id is not null then
+    if exists (select 1 from public.events e where e.series_id = new.series_id and e.host_id is distinct from new.host_id) then
+      raise exception 'That series belongs to someone else';
+    end if;
+    if (select count(*) from public.events e where e.series_id = new.series_id) >= 26 then
+      raise exception 'A series can have at most 26 meetups';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+create trigger events_series_guard
+  before insert on public.events
+  for each row execute function private.events_series_guard();
+
+-- The host stops a series: cancel this meetup and every later one in it (never earlier ones).
+create function public.cancel_series_from(eid uuid)
+returns setof uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  sid    uuid;
+  begins timestamptz;
+  hid    uuid;
+begin
+  select series_id, starts_at, host_id into sid, begins, hid
+  from public.events
+  where id = eid;
+
+  if not found or hid is distinct from (select auth.uid()) then
+    raise exception 'You can only cancel your own meetups';
+  end if;
+
+  return query
+    update public.events
+    set cancelled_at = now()
+    where host_id = hid
+      and cancelled_at is null
+      and starts_at > now()
+      and (id = eid or (sid is not null and series_id = sid and starts_at >= begins))
+    returning id;
+end;
+$$;
+
+revoke all on function public.cancel_series_from(uuid) from public, anon;
+grant execute on function public.cancel_series_from(uuid) to authenticated;
+
+-- "Still coming?": a guest confirms (leaving already deletes their row).
+create function public.confirm_attendance(eid uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  ev record;
+begin
+  select cancelled_at, starts_at into ev from public.events where id = eid;
+  if not found then
+    raise exception 'That meetup does not exist';
+  end if;
+  if ev.cancelled_at is not null then
+    raise exception 'This event was cancelled';
+  end if;
+  if ev.starts_at <= now() then
+    raise exception 'This meetup has already started';
+  end if;
+
+  update public.rsvps
+  set confirmed_at = coalesce(confirmed_at, now())
+  where event_id = eid and user_id = (select auth.uid()) and status = 'approved';
+
+  if not found then
+    raise exception 'You are not going to this meetup';
+  end if;
+end;
+$$;
+
+revoke all on function public.confirm_attendance(uuid) from public, anon;
+grant execute on function public.confirm_attendance(uuid) to authenticated;
+
+-- Waitlist: only for open meetups that are full.
+create function private.waitlist_before_insert()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  ev    record;
+  taken int;
+begin
+  select host_id, join_mode, cancelled_at, starts_at, max_spots into ev
+  from public.events
+  where id = new.event_id;
+
+  if not found then
+    raise exception 'That meetup does not exist';
+  end if;
+  if ev.cancelled_at is not null then
+    raise exception 'This event was cancelled';
+  end if;
+  if ev.starts_at <= now() then
+    raise exception 'This meetup has already started';
+  end if;
+  if ev.join_mode <> 'open' then
+    raise exception 'The waitlist is only for open meetups';
+  end if;
+  if ev.host_id = new.user_id then
+    raise exception 'You are hosting this meetup';
+  end if;
+  if exists (select 1 from public.rsvps where event_id = new.event_id and user_id = new.user_id) then
+    raise exception 'You have already joined this meetup';
+  end if;
+
+  select count(*) into taken from public.rsvps where event_id = new.event_id and status = 'approved';
+  if taken < ev.max_spots then
+    raise exception 'There are spots left, so you can just join';
+  end if;
+
+  return new;
+end;
+$$;
+
+create trigger event_waitlist_before_insert
+  before insert on public.event_waitlist
+  for each row execute function private.waitlist_before_insert();
+
+-- Joining takes you off the waitlist.
+create function private.rsvps_clear_waitlist()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  delete from public.event_waitlist where event_id = new.event_id and user_id = new.user_id;
+  return null;
+end;
+$$;
+
+create trigger rsvps_clear_waitlist
+  after insert on public.rsvps
+  for each row execute function private.rsvps_clear_waitlist();
+
+-- Host record: counts only, never who. (Repeat guests = people who came to 2+ of their meetups.)
+create function public.host_stats(host uuid)
+returns table (hosted int, guests int, repeat_guests int)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  with past as (
+    select id from public.events
+    where host_id = host and cancelled_at is null and starts_at < now()
+  ),
+  per_guest as (
+    select r.user_id, count(*) as n
+    from public.rsvps r
+    join past on past.id = r.event_id
+    where r.status = 'approved' and r.user_id <> host
+    group by r.user_id
+  )
+  select
+    (select count(*) from past)::int,
+    (select coalesce(sum(n), 0) from per_guest)::int,
+    (select count(*) from per_guest where n >= 2)::int;
+$$;
+
+revoke all on function public.host_stats(uuid) from public;
+grant execute on function public.host_stats(uuid) to anon, authenticated;
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 5. Row level security: which rows each person can see or change
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -662,6 +903,8 @@ alter table public.meetup_feedback  enable row level security;
 alter table public.push_subscriptions enable row level security;
 alter table public.profile_bios     enable row level security;
 alter table public.reports          enable row level security;
+alter table public.event_waitlist   enable row level security;
+alter table public.notification_log enable row level security;
 
 -- profiles: public to read, editable by their owner.
 create policy "profiles are public"
@@ -803,6 +1046,22 @@ create policy "hosts approve or decline requests"
   using (private.is_event_host(event_id))
   with check (private.is_event_host(event_id));
 
+-- The waitlist: you see your own place, the host sees who is waiting.
+create policy "you and the host see the waitlist"
+  on public.event_waitlist for select
+  to authenticated
+  using (user_id = (select auth.uid()) or private.is_event_host(event_id));
+
+create policy "people join the waitlist as themselves"
+  on public.event_waitlist for insert
+  to authenticated
+  with check (user_id = (select auth.uid()));
+
+create policy "people leave the waitlist"
+  on public.event_waitlist for delete
+  to authenticated
+  using (user_id = (select auth.uid()));
+
 create policy "requester and host read a note"
   on public.rsvp_notes for select
   to authenticated
@@ -844,7 +1103,10 @@ grant update (name) on public.profiles to authenticated;
 grant insert (user_id, birth_date) on public.profile_private to authenticated;
 grant insert (user_id, categories, updated_at), update (categories, updated_at)
   on public.user_interests to authenticated;
-grant insert (user_id, email_notifications, updated_at), update (email_notifications, updated_at)
+grant insert (user_id, email_notifications, notify_reminders, notify_matches, notify_activity,
+              quiet_start, quiet_end, updated_at),
+      update (email_notifications, notify_reminders, notify_matches, notify_activity,
+              quiet_start, quiet_end, updated_at)
   on public.user_settings to authenticated;
 grant insert (user_id, bio, linkedin, instagram, x_handle, tiktok, facebook, updated_at),
       update (bio, linkedin, instagram, x_handle, tiktok, facebook, updated_at)
@@ -856,7 +1118,8 @@ grant delete on public.meetup_feedback to authenticated;
 grant delete on public.push_subscriptions to authenticated;
 
 grant insert (host_id, title, category, description, venue_name, address, neighborhood,
-              starts_at, max_spots, join_mode, skill_level, audience, age_min, age_max)
+              starts_at, max_spots, join_mode, skill_level, audience, age_min, age_max,
+              series_id, repeat_every)
   on public.events to authenticated;
 grant update (title, category, description, venue_name, address, neighborhood,
               starts_at, max_spots, skill_level, audience, age_min, age_max)
@@ -866,9 +1129,11 @@ grant delete on public.events to authenticated;
 grant insert, update, delete on public.event_locations to authenticated;
 grant insert, update, delete on public.event_chat_links to authenticated;
 
-grant insert (event_id, user_id), update (status) on public.rsvps to authenticated;
+grant insert (event_id, user_id, invited_by), update (status) on public.rsvps to authenticated;
 grant delete on public.rsvps to authenticated;
 grant insert (event_id, user_id, note) on public.rsvp_notes to authenticated;
+grant select, delete on public.event_waitlist to authenticated;
+grant insert (event_id, user_id) on public.event_waitlist to authenticated;
 grant insert (event_id, reporter_id, reason, details) on public.reports to authenticated;
 
 
