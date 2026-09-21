@@ -79,7 +79,7 @@ export default async function EventPage({ params, searchParams }: { params: { id
   const [{ data }, userResult] = await Promise.all([
     supabase
       .from("events")
-      .select("*, host:profiles!host_id(name, created_at), rsvps(user_id, created_at, status, profiles(name))")
+      .select("*, host:profiles!host_id(name, created_at), rsvps(user_id, created_at, status, profiles!rsvps_user_id_fkey(name))")
       .eq("id", params.id)
       .maybeSingle(),
     supabase.auth.getUser(),

@@ -39,6 +39,51 @@ const hasTable = async (role, t, priv) => (await q(`select has_table_privilege($
 const fnExecutable = async (role, name) =>
   (await q(`select coalesce(bool_or(has_function_privilege($1, p.oid, 'EXECUTE')), false) as ok from pg_proc p where p.pronamespace='public'::regnamespace and p.proname=$2`, [role, name]))[0].ok;
 
+// ---- how tables are linked (foreign keys), to check embedded reads like rsvps(profiles(name)) ----
+// PostgREST refuses an embed when more than one foreign key links the two tables and the query doesn't
+// say which ("Could not embed because more than one relationship was found"). That once took every
+// meetup page down the moment rsvps gained a second link to profiles (invited_by).
+const foreignKeys = (await q(`
+  select c.conname, c.conrelid::regclass::text as src, c.confrelid::regclass::text as dst,
+         (select array_agg(a.attname::text) from pg_attribute a where a.attrelid = c.conrelid and a.attnum = any(c.conkey)) as cols
+  from pg_constraint c where c.contype = 'f' and c.connamespace = 'public'::regnamespace`));
+
+/** "a, b:t!hint(c, u(d))" -> the embedded tables, nested: [{ table, hint, children }] */
+function parseEmbeds(select) {
+  const items = [];
+  let depth = 0, start = 0;
+  for (let i = 0; i <= select.length; i++) {
+    const ch = select[i];
+    if (ch === "(") depth++;
+    else if (ch === ")") depth--;
+    else if ((ch === "," && depth === 0) || i === select.length) { items.push(select.slice(start, i).trim()); start = i + 1; }
+  }
+  const out = [];
+  for (const item of items) {
+    const m = item.match(/^(?:\w+:)?(\w+)((?:![\w]+)*)\(([\s\S]*)\)$/);
+    if (!m || m[1] === "count") continue;
+    const hints = m[2].split("!").filter((h) => h && h !== "inner" && h !== "left");
+    out.push({ table: m[1], hint: hints[0] ?? null, children: parseEmbeds(m[3]) });
+  }
+  return out;
+}
+
+/** What is wrong with each embed in a select, given the table it is read from. */
+function embedProblems(parent, embeds) {
+  const problems = [];
+  for (const e of embeds) {
+    if (tables.has(e.table)) {
+      const links = foreignKeys.filter((f) => (f.src === parent && f.dst === e.table) || (f.src === e.table && f.dst === parent));
+      const chosen = e.hint ? links.filter((f) => f.conname === e.hint || (f.cols ?? []).includes(e.hint)) : links;
+      if (links.length === 0) problems.push(`${parent} and ${e.table} aren't linked, so ${e.table}(...) can't be embedded`);
+      else if (e.hint && chosen.length === 0) problems.push(`the hint !${e.hint} in ${parent} -> ${e.table}(...) matches no link between them`);
+      else if (chosen.length > 1) problems.push(`${parent} -> ${e.table}(...) is ambiguous (${links.map((f) => f.conname).join(", ")}): name one, like ${e.table}!${links[0].conname}(...)`);
+      problems.push(...embedProblems(e.table, e.children));
+    }
+  }
+  return problems;
+}
+
 // ---- find every database call in a piece of source ----
 function analyze(source, fileName) {
   const sf = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true);
@@ -107,7 +152,7 @@ function analyze(source, fileName) {
         if (table) {
           const cols = str(node.arguments[0]) ?? "*";
           const embeds = [...cols.matchAll(/(?:\w+:)?(\w+)(?:![\w]+)?\(/g)].map((m) => m[1]).filter((n) => n !== "count");
-          ops.push({ kind: "select", table, embeds, role, at: line(node) });
+          ops.push({ kind: "select", table, embeds, embedTree: parseEmbeds(cols), role, at: line(node) });
         }
       } else if (method === "rpc") {
         ops.push({ kind: "rpc", name: str(node.arguments[0]), at: line(node) });
@@ -143,6 +188,7 @@ async function check(op, role = "authenticated") {
   if (op.kind === "select") {
     await need(hasTable(role, op.table, "SELECT"), `${role} can't SELECT from ${op.table}`);
     for (const e of op.embeds ?? []) if (tables.has(e)) await need(hasTable(role, e, "SELECT"), `${role} can't SELECT embedded ${e}`);
+    problems.push(...embedProblems(op.table, op.embedTree ?? []));
   }
 
   if (["insert", "update", "upsert", "save"].includes(op.kind)) {
@@ -193,12 +239,25 @@ async function check(op, role = "authenticated") {
 
   const good = analyze(`
     await supabase.from("rsvps").update({ status: s }).eq("event_id", e).select("user_id");
-    await supabase.from("events").select("*, host:profiles!host_id(name), rsvps(status, profiles(name))");
+    await supabase.from("events").select("*, host:profiles!host_id(name), rsvps(status, profiles!rsvps_user_id_fkey(name))");
     await supabase.rpc("cancel_event", { eid: id });
     await updateOrInsert(supabase, "user_interests", { user_id: u }, { categories: c, updated_at: n });
   `, "self-test.ts");
   let clean = true;
   for (const op of good.ops) if ((await check(op)).length) clean = false;
+  const embeds = analyze(`
+    await supabase.from("events").select("*, rsvps(status, profiles(name))");
+    await supabase.from("events").select("*, rsvps(status, profiles!invited_by(name))");
+    await supabase.from("events").select("*, rsvps(status, profiles!nonsense(name))");
+    await supabase.from("events").select("*, profile_private(birth_date)");
+    await supabase.from("events").select("*, host:profiles!host_id(name), rsvps(user_id, profiles!rsvps_user_id_fkey(name))");
+  `, "self-test.ts");
+  const embedResults = [];
+  for (const op of embeds.ops) embedResults.push((await check(op)).join(" | "));
+  ok("self-test: an embed with two possible links and no hint is flagged as ambiguous (the bug that broke every meetup page)", /ambiguous/.test(embedResults[0]), embedResults[0]);
+  ok("self-test: ...naming the link by column or by constraint fixes it", embedResults[1] === "" && embedResults[4] === "", `${embedResults[1]} / ${embedResults[4]}`);
+  ok("self-test: ...a hint that matches nothing is flagged", /matches no link/.test(embedResults[2]), embedResults[2]);
+  ok("self-test: ...tables that aren't linked at all can't be embedded", /aren't linked/.test(embedResults[3]), embedResults[3]);
   const pub = analyze(`
     await createPublicClient().from("events").select("title");
     await createPublicClient().from("profile_private").select("*");

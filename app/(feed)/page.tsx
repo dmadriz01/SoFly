@@ -83,7 +83,7 @@ export default async function FeedPage({
 
   let query = supabase
     .from("events")
-    .select("*, host:profiles!host_id(name), rsvps(status, profiles(name))")
+    .select("*, host:profiles!host_id(name), rsvps(status, profiles!rsvps_user_id_fkey(name))")
     .is("cancelled_at", null)
     .gt("starts_at", new Date().toISOString())
     .order("starts_at", { ascending: true })
