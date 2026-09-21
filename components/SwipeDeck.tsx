@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { passEvent, setRsvp, unpassEvent } from "@/app/actions";
-import { CATEGORY_STYLES, emojiFor, isCategory } from "@/lib/constants";
+import { EventCover } from "@/components/EventCover";
+import { emojiFor } from "@/lib/constants";
 import { NOTE_MAX, validateRequestNote } from "@/lib/validation";
 
 export type DeckEvent = {
@@ -12,6 +13,9 @@ export type DeckEvent = {
   title: string;
   category: string;
   when: string;
+  /** The raw start time and skill level: they shape the cover picture. */
+  startsAt: string;
+  skill: string;
   neighborhood: string;
   venue: string;
   spotsLeft: number;
@@ -421,7 +425,6 @@ function SwipeCard({
     touchAction: "none",
   };
 
-  const heroStyle = isCategory(event.category) ? CATEGORY_STYLES[event.category] : "bg-slate-100";
   const joinOpacity = dx > 0 ? Math.min(dx / THRESHOLD, 1) : 0;
   const passOpacity = dx < 0 ? Math.min(-dx / THRESHOLD, 1) : 0;
 
@@ -444,12 +447,17 @@ function SwipeCard({
     >
       <div className="flex h-full flex-col overflow-hidden rounded-3xl border border-line bg-white shadow-lg">
         {/* The picture shrinks on shorter phones to make room for the words. */}
-        <div
-          className={`flex flex-[0_1_26%] min-h-[4.5rem] items-center justify-center text-6xl [@media(max-height:639px)]:min-h-[2.75rem] [@media(max-height:639px)]:text-4xl ${heroStyle}`}
-          aria-hidden
+        <EventCover
+          id={event.id}
+          category={event.category}
+          neighborhood={event.neighborhood}
+          startsAt={event.startsAt}
+          skill={event.skill}
+          maxSpots={event.maxSpots}
+          className="flex-[0_1_26%] min-h-[4.5rem] text-6xl [@media(max-height:639px)]:min-h-[2.75rem] [@media(max-height:639px)]:text-4xl"
         >
-          {emojiFor(event.category)}
-        </div>
+          <span aria-hidden className="drop-shadow-[0_2px_3px_rgba(0,0,0,0.25)]">{emojiFor(event.category)}</span>
+        </EventCover>
 
         {/* Each line is either shown whole or left out: on shorter phones the extras drop away
             rather than being sliced in half. */}

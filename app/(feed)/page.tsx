@@ -201,6 +201,8 @@ export default async function FeedPage({
         title: e.title,
         category: e.category,
         when: formatWhenShort(e.starts_at),
+        startsAt: e.starts_at,
+        skill: e.skill_level,
         neighborhood: e.neighborhood,
         venue: e.venue_name,
         spotsLeft: Math.max(e.max_spots - e.spots_taken, 0),

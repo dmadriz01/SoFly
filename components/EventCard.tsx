@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { AvatarStack, goingSummary } from "./Avatar";
 import { CategoryBadge } from "./CategoryBadge";
+import { EventCover } from "./EventCover";
 import { EventTags } from "./EventTags";
+import { emojiFor } from "@/lib/constants";
 import { formatWhenShort } from "@/lib/time";
 import { spotsTaken } from "@/lib/utils";
 import type { EventWithCount } from "@/lib/types";
@@ -32,6 +34,17 @@ export function EventCard({
         past || cancelled ? "opacity-60" : ""
       }`}
     >
+      <EventCover
+        id={event.id}
+        category={event.category}
+        neighborhood={event.neighborhood}
+        startsAt={event.starts_at}
+        skill={event.skill_level}
+        maxSpots={event.max_spots}
+        className={`-mx-4 -mt-4 mb-3 h-20 rounded-t-[calc(1rem-1px)] text-3xl ${cancelled ? "grayscale" : ""}`}
+      >
+        <span aria-hidden className="drop-shadow-[0_1px_2px_rgba(0,0,0,0.25)]">{emojiFor(event.category)}</span>
+      </EventCover>
       <div className="flex flex-wrap items-center gap-1.5">
         <CategoryBadge category={event.category} />
         <EventTags event={event} />

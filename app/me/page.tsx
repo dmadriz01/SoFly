@@ -188,6 +188,9 @@ export default async function MePage() {
           id={soon.e.id}
           title={soon.e.title}
           category={soon.e.category}
+          neighborhood={soon.e.neighborhood}
+          skill={soon.e.skill_level}
+          maxSpots={soon.e.max_spots}
           startsAt={soon.e.starts_at}
           venue={nextVenue}
           address={nextAddress}

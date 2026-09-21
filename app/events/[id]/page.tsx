@@ -3,6 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CategoryBadge } from "@/components/CategoryBadge";
 import { DeleteEventButton } from "@/components/DeleteEventButton";
+import { EventCover } from "@/components/EventCover";
+import { emojiFor } from "@/lib/constants";
 import { EventActions } from "@/components/EventActions";
 import { Avatar } from "@/components/Avatar";
 import { EventTags } from "@/components/EventTags";
@@ -210,6 +212,18 @@ export default async function EventPage({ params }: { params: { id: string } }) 
           <p className="text-sm">Please don&rsquo;t show up. It won&rsquo;t be happening.</p>
         </div>
       )}
+
+      <EventCover
+        id={event.id}
+        category={event.category}
+        neighborhood={event.neighborhood}
+        startsAt={event.starts_at}
+        skill={event.skill_level}
+        maxSpots={event.max_spots}
+        className={`h-36 rounded-2xl border border-line text-6xl sm:h-44 ${cancelled ? "grayscale" : ""}`}
+      >
+        <span aria-hidden className="drop-shadow-[0_2px_3px_rgba(0,0,0,0.25)]">{emojiFor(event.category)}</span>
+      </EventCover>
 
       <header>
         <div className="flex flex-wrap items-center gap-1.5">

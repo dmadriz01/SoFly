@@ -30,6 +30,9 @@ function dayKey(d: Date) {
 
 export const pacificDate = (d = new Date()) => dayKey(d);
 
+/** The hour of day (0-23) in Pacific time for a timestamp. */
+export const pacificHour = (iso: string) => Number(wallParts(new Date(iso)).hour);
+
 /** A YYYY-MM-DD date plus (or minus) whole days. Pure calendar math, so daylight saving can't skew it. */
 export function addDaysToKey(key: string, days: number) {
   const [y, m, d] = key.split("-").map(Number);

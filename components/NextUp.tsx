@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { EventCover } from "./EventCover";
 import { emojiFor } from "@/lib/constants";
 import { formatWhenShort } from "@/lib/time";
 
@@ -7,6 +8,9 @@ export function NextUp({
   id,
   title,
   category,
+  neighborhood,
+  skill,
+  maxSpots,
   startsAt,
   venue,
   address,
@@ -15,6 +19,9 @@ export function NextUp({
   id: string;
   title: string;
   category: string;
+  neighborhood: string;
+  skill: string;
+  maxSpots: number;
   startsAt: string;
   venue: string | null;
   address: string | null;
@@ -26,9 +33,19 @@ export function NextUp({
         Next up · {role === "hosting" ? "you're hosting" : "you're going"}
       </p>
       <div className="mt-2 flex items-start gap-3">
-        <span aria-hidden className="text-4xl leading-none">
-          {emojiFor(category)}
-        </span>
+        <EventCover
+          id={id}
+          category={category}
+          neighborhood={neighborhood}
+          startsAt={startsAt}
+          skill={skill}
+          maxSpots={maxSpots}
+          className="h-16 w-16 shrink-0 rounded-2xl text-3xl"
+        >
+          <span aria-hidden className="leading-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.25)]">
+            {emojiFor(category)}
+          </span>
+        </EventCover>
         <div className="min-w-0">
           <h2 className="text-xl font-bold leading-tight">{title}</h2>
           <p className="mt-1 font-semibold text-accent-dark">{formatWhenShort(startsAt)}</p>
