@@ -1,6 +1,7 @@
 // Tests the real email logic (who gets emailed, when, and why someone is skipped) against a fake
 // database and inbox. Run with `npm run test:unit`.
-import { diagnoseEmail } from "../lib/diagnose.ts";
+import { diagnoseEmail, mailErrorHint } from "../lib/diagnose.ts";
+import { cleanSetting, mailConfigured, mailCredentials } from "../lib/mailer.ts";
 import { notifyEventCancelled, notifyEventDeleted, notifyHostOfRequest, notifyRequestDecision, sendDailyEmails, snapshotBeforeDelete } from "../lib/notify.ts";
 import { fakeAdmin, fakeMailbox, type FakeData } from "./fake-supabase.mts";
 
@@ -278,6 +279,32 @@ for (const [label, iso, expected] of [
   t("diagnostic: Gmail rejecting the login -> the reason is shown", failing("", c) === "Test email accepted by the mail server" && (c.find((x) => !x.ok)?.detail ?? "").includes("535"), failing("", c));
 
   t("diagnostic: never prints a secret", JSON.stringify(c).indexOf("sb_secret") === -1 && JSON.stringify(c).indexOf("APP_PASSWORD=") === -1);
+
+  // the exact failure seen in real life: Gmail says 535, "Username and Password not accepted"
+  const real = "EAUTH · 535 · Invalid login: 535-5.7.8 Username and Password not accepted.";
+  const hint = mailErrorHint(real);
+  t("mail hint: a refused Gmail login explains the three usual causes in plain words", /full Gmail address/.test(hint) && /SAME Gmail account/.test(hint) && /apppasswords/.test(hint) && /2-Step Verification/.test(hint) && /redeploy/.test(hint), hint);
+  t("mail hint: it recognises the login failure however it's worded", ["535", "EAUTH", "Username and Password not accepted"].every((k) => mailErrorHint(`x ${k} y`) !== ""));
+  t("mail hint: a network problem is described as a network problem (not blamed on the password)", /network problem/.test(mailErrorHint("ETIMEDOUT · connect timed out")) && !/App Password/.test(mailErrorHint("ECONNECTION")));
+  t("mail hint: a refused message (not login) points at the recipient and the account", /refused the message itself/.test(mailErrorHint("550 · mailbox unavailable")));
+  t("mail hint: nothing to add for an unknown error or no detail", mailErrorHint("something odd") === "" && mailErrorHint(undefined) === "");
+  const failLine = (await diagnoseEmail(who, { admin: fakeAdmin(base(), users), send: async () => ({ ok: false as const, reason: "smtp-error" as const, detail: real }), mailConfigured: true, cronSecretSet: true })).find((x) => !x.ok);
+  t("diagnostic: the failing line shows Gmail's own message AND what to check", (failLine?.detail ?? "").includes("535-5.7.8") && /What to check/.test(failLine?.detail ?? ""), failLine?.detail);
+}
+{
+  // settings pasted into Vercel are tidied before they're used to sign in
+  t("settings: spaces, line breaks and one pair of quotes around a value are removed", cleanSetting("  me@gmail.com \n") === "me@gmail.com" && cleanSetting('"me@gmail.com"') === "me@gmail.com" && cleanSetting("'me@gmail.com'") === "me@gmail.com" && cleanSetting('" me@gmail.com "') === "me@gmail.com");
+  t("settings: nothing else is changed (inner quotes, a lone quote, empty, missing)", cleanSetting("a'b") === "a'b" && cleanSetting('"abc') === '"abc' && cleanSetting("") === "" && cleanSetting(undefined) === "");
+  const saved = { u: process.env.ALERT_EMAIL_USER, p: process.env.ALERT_EMAIL_APP_PASSWORD };
+  process.env.ALERT_EMAIL_USER = ' "sofly@gmail.com" ';
+  process.env.ALERT_EMAIL_APP_PASSWORD = "abcd efgh ijkl mnop\n";
+  t("settings: an app password shown by Google as 'abcd efgh ijkl mnop' is used as the 16 letters, with the address tidied too", mailCredentials().user === "sofly@gmail.com" && mailCredentials().pass === "abcdefghijklmnop", JSON.stringify(mailCredentials()).replace(/[a-z]{16}/, "<16>"));
+  t("settings: with both set (even messily) the mail account counts as set up", mailConfigured() === true);
+  process.env.ALERT_EMAIL_APP_PASSWORD = '""';
+  t("settings: an empty value in quotes counts as NOT set up (so the diagnostic says so, not 'refused')", mailConfigured() === false);
+  delete process.env.ALERT_EMAIL_USER; delete process.env.ALERT_EMAIL_APP_PASSWORD;
+  t("settings: nothing set means not set up", mailConfigured() === false && mailCredentials().user === "" && mailCredentials().pass === "");
+  if (saved.u !== undefined) process.env.ALERT_EMAIL_USER = saved.u; if (saved.p !== undefined) process.env.ALERT_EMAIL_APP_PASSWORD = saved.p;
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

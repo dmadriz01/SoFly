@@ -17,6 +17,24 @@ type Deps = {
 };
 
 /**
+ * What to do about a mail server error, in plain words (never includes a password). The commonest one
+ * is Gmail refusing the login: the address and app password don't belong to the same account.
+ */
+export function mailErrorHint(detail: string | undefined): string {
+  const d = detail ?? "";
+  if (/\b535\b|EAUTH|Username and Password not accepted/i.test(d)) {
+    return " What to check: (1) ALERT_EMAIL_USER is the full Gmail address (name@gmail.com), with nothing else in the box. (2) ALERT_EMAIL_APP_PASSWORD is a 16-letter App Password created in THAT SAME Gmail account (myaccount.google.com/apppasswords, which needs 2-Step Verification on), not the normal Gmail password, and not one from a different account. (3) After changing either one in Vercel, redeploy: the running site keeps the old values until then.";
+  }
+  if (/ETIMEDOUT|ECONNECTION|ECONNREFUSED|ESOCKET|ENOTFOUND/i.test(d)) {
+    return " This looks like a network problem reaching Gmail, not a wrong password. Try again in a minute.";
+  }
+  if (/\b(550|553|554)\b/.test(d)) {
+    return " Gmail refused the message itself (not the login). Check the recipient address, and the Gmail account for a security alert or sending limit.";
+  }
+  return "";
+}
+
+/**
  * Walks the whole email chain for one person and reports which link is broken, without ever
  * revealing a secret: is a mail account set up, is the server key set and accepted, are emails
  * switched on for this person, and does a real test email get accepted by the mail server.
@@ -75,7 +93,7 @@ export async function diagnoseEmail(
       detail: result.ok
         ? `Sent to ${who.userEmail}. If it isn't in your inbox within a minute, check spam.`
         : result.reason === "smtp-error"
-          ? `The mail server refused it: ${result.detail}`
+          ? `The mail server refused it: ${result.detail}${mailErrorHint(result.detail)}`
           : "No mail account.",
     });
   }

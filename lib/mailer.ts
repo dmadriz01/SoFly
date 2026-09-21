@@ -8,9 +8,27 @@ export type MailResult =
   | { ok: true }
   | { ok: false; reason: "not-configured" | "smtp-error"; detail?: string };
 
+/**
+ * A setting as pasted into Vercel, tidied up: surrounding spaces and line breaks removed, and one
+ * pair of quotes around the whole value removed. (A stray space or quote in an email address or
+ * password makes Gmail refuse the login, and it's hard to see in a settings box.)
+ */
+export function cleanSetting(value: string | undefined): string {
+  const v = (value ?? "").trim();
+  return /^(["']).*\1$/.test(v) ? v.slice(1, -1).trim() : v;
+}
+
+/** The Gmail address and app password to sign in with. Google shows an app password in groups of four letters with spaces; the spaces aren't part of it. */
+export const mailCredentials = () => ({
+  user: cleanSetting(process.env.ALERT_EMAIL_USER),
+  pass: cleanSetting(process.env.ALERT_EMAIL_APP_PASSWORD).replace(/\s/g, ""),
+});
+
 /** Whether a mail account is set up at all: the Gmail address and app password. */
-export const mailConfigured = () =>
-  Boolean(process.env.ALERT_EMAIL_USER && process.env.ALERT_EMAIL_APP_PASSWORD);
+export const mailConfigured = () => {
+  const { user, pass } = mailCredentials();
+  return Boolean(user && pass);
+};
 
 let transporter: Transporter | null = null;
 
@@ -19,8 +37,7 @@ let transporter: Transporter | null = null;
  * Says whether it was handed to the mail server, and if not, why.
  */
 export async function sendMail(mail: Mail): Promise<MailResult> {
-  const user = process.env.ALERT_EMAIL_USER;
-  const pass = process.env.ALERT_EMAIL_APP_PASSWORD?.replace(/\s/g, "");
+  const { user, pass } = mailCredentials();
   if (!user || !pass) {
     console.warn("Email not sent: set ALERT_EMAIL_USER and ALERT_EMAIL_APP_PASSWORD.");
     return { ok: false, reason: "not-configured" };
