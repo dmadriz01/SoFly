@@ -4,6 +4,7 @@ import { CategoryBadge } from "./CategoryBadge";
 import { EventCover } from "./EventCover";
 import { EventTags } from "./EventTags";
 import { emojiFor } from "@/lib/constants";
+import { repeatLabel } from "@/lib/recurrence";
 import { formatWhenShort } from "@/lib/time";
 import { spotsTaken } from "@/lib/utils";
 import type { EventWithCount } from "@/lib/types";
@@ -48,6 +49,12 @@ export function EventCard({
       <div className="flex flex-wrap items-center gap-1.5">
         <CategoryBadge category={event.category} />
         <EventTags event={event} />
+        {repeatLabel(event.repeat_every) && (
+          <span className="rounded-full border border-line px-2.5 py-0.5 text-xs font-semibold text-ink">
+            <span aria-hidden>&#8635; </span>
+            {repeatLabel(event.repeat_every)}
+          </span>
+        )}
         {pendingRequests > 0 && (
           <span className="rounded-full bg-accent px-2.5 py-0.5 text-xs font-semibold text-on-accent">
             {pendingRequests} {pendingRequests === 1 ? "request" : "requests"} waiting

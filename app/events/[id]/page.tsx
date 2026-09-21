@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { CategoryBadge } from "@/components/CategoryBadge";
 import { DeleteEventButton } from "@/components/DeleteEventButton";
 import { EventCover } from "@/components/EventCover";
+import { SeriesPanel, type SeriesDate } from "@/components/SeriesPanel";
 import { CoverChangeNote } from "@/components/CoverChangeNote";
 import { emojiFor } from "@/lib/constants";
 import { coverChangeNote } from "@/lib/cover-change";
@@ -178,6 +179,19 @@ export default async function EventPage({ params, searchParams }: { params: { id
   // Whether the viewer has filled in "about you", which hosts see alongside a request.
   const viewerHasAbout = user && !isHost && isRequest ? hasAbout(await getAbout(supabase, user.id)) : true;
 
+  // Other dates in the same recurring series, if this is one.
+  const seriesId = (event as { series_id?: string | null }).series_id ?? null;
+  let seriesDates: SeriesDate[] = [];
+  if (seriesId) {
+    const { data: siblings } = await supabase
+      .from("events")
+      .select("id, starts_at, cancelled_at, spots_taken, max_spots")
+      .eq("series_id", seriesId)
+      .order("starts_at", { ascending: true })
+      .limit(30);
+    seriesDates = (siblings ?? []) as SeriesDate[];
+  }
+
   const when = formatWhenLong(event.starts_at);
   const cancelled = Boolean(event.cancelled_at);
   const ended = new Date(event.starts_at).getTime() <= Date.now();
@@ -283,6 +297,25 @@ export default async function EventPage({ params, searchParams }: { params: { id
           )}
         </div>
       </div>
+
+      {seriesId && (
+        <SeriesPanel
+          currentId={event.id}
+          dates={seriesDates}
+          repeatEvery={(event as { repeat_every?: number | null }).repeat_every ?? null}
+          isHost={isHost}
+        />
+      )}
+
+      {isHost && ended && !cancelled && (
+        <section className="card space-y-2 p-4">
+          <h2 className="text-sm font-semibold">That&rsquo;s a wrap. Run it again?</h2>
+          <p className="text-xs text-muted">Regular meetups are how people become regulars. This copies everything, and you pick the new date.</p>
+          <Link href={`/events/new?from=${event.id}`} className="btn-primary btn w-full !py-2 text-sm">
+            Post the next one
+          </Link>
+        </section>
+      )}
 
       {!isHost && (
         <HostCard

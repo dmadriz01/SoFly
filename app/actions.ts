@@ -13,6 +13,7 @@ import { parseAbout, type AboutErrors, type AboutInput } from "@/lib/about";
 import { MIN_AGE, ageOn, parseBirthDate, resolveAgeRange } from "@/lib/age";
 import { HIDDEN_VENUE, REPORT_REASONS, isCategory } from "@/lib/constants";
 import { describeEdit } from "@/lib/event-edit";
+import { occurrenceStarts } from "@/lib/recurrence";
 import {
   notifyEventCancelled,
   notifyEventDeleted,
@@ -57,52 +58,130 @@ export async function createEvent(formData: FormData): Promise<CreateEventResult
   const ageRange = resolveAgeRange(input.age_min, input.age_max);
   // Request-to-join events keep the real venue and address private (see event_locations).
   const isRequest = input.join_mode === "request";
+  const repeatEvery = input.repeat_every ? Number(input.repeat_every) : null;
 
-  const { data, error } = await supabase
-    .from("events")
-    .insert({
-      host_id: user.id,
-      title: input.title,
-      category: input.category,
-      neighborhood: input.neighborhood,
-      venue_name: isRequest ? HIDDEN_VENUE : input.venue_name,
-      address: isRequest ? input.neighborhood : input.address,
-      join_mode: input.join_mode,
-      starts_at: pacificLocalToUtc(input.starts_at)!.toISOString(),
-      max_spots: Number(input.max_spots),
-      description: input.description,
-      skill_level: input.skill_level,
-      audience: input.audience,
-      age_min: ageRange.min,
-      age_max: ageRange.max,
-    })
-    .select("id")
-    .single();
+  // Every date to post: just one, or the whole series ("every Thursday, 8 times").
+  const starts = repeatEvery
+    ? occurrenceStarts(input.starts_at, repeatEvery, Number(input.repeat_count))
+    : [pacificLocalToUtc(input.starts_at)!.toISOString()];
+  if (!starts) return { errors: { starts_at: "That isn't a valid date and time." } };
 
-  if (error || !data) {
-    return { errors: {}, formError: "Something went wrong posting your meetup. Please try again." };
+  let created: { id: string; starts_at: string }[] = [];
+  if (!repeatEvery) {
+    // A one-off meetup, exactly as before (no new columns, so this works on any database version).
+    const { data, error } = await supabase
+      .from("events")
+      .insert({
+        host_id: user.id,
+        title: input.title,
+        category: input.category,
+        neighborhood: input.neighborhood,
+        venue_name: isRequest ? HIDDEN_VENUE : input.venue_name,
+        address: isRequest ? input.neighborhood : input.address,
+        join_mode: input.join_mode,
+        starts_at: starts[0],
+        max_spots: Number(input.max_spots),
+        description: input.description,
+        skill_level: input.skill_level,
+        audience: input.audience,
+        age_min: ageRange.min,
+        age_max: ageRange.max,
+      })
+      .select("id, starts_at")
+      .single();
+    if (error || !data) {
+      return { errors: {}, formError: "Something went wrong posting your meetup. Please try again." };
+    }
+    created = [data as { id: string; starts_at: string }];
+  } else {
+    // A series: one meetup per date, tied together by a shared series id. All or nothing.
+    const seriesId = crypto.randomUUID();
+    const { data, error } = await supabase
+      .from("events")
+      .insert(
+        starts.map((iso) => ({
+          host_id: user.id,
+          title: input.title,
+          category: input.category,
+          neighborhood: input.neighborhood,
+          venue_name: isRequest ? HIDDEN_VENUE : input.venue_name,
+          address: isRequest ? input.neighborhood : input.address,
+          join_mode: input.join_mode,
+          starts_at: iso,
+          max_spots: Number(input.max_spots),
+          description: input.description,
+          skill_level: input.skill_level,
+          audience: input.audience,
+          age_min: ageRange.min,
+          age_max: ageRange.max,
+          series_id: seriesId,
+          repeat_every: repeatEvery,
+        }))
+      )
+      .select("id, starts_at");
+    if (error || !data || data.length !== starts.length) {
+      // PGRST204 / 42703: the new columns aren't there, i.e. migration 019 hasn't been run yet.
+      if (error?.code === "PGRST204" || error?.code === "42703") {
+        console.error("Posting a repeating meetup failed: run supabase/migrations/019_retention_features.sql in the SQL editor.");
+        return { errors: {}, formError: "Repeating meetups aren't available right now. Post a single one, or try again later." };
+      }
+      if (data?.length) await supabase.from("events").delete().in("id", data.map((e) => e.id as string));
+      return { errors: {}, formError: "Something went wrong posting your meetups. Please try again." };
+    }
+    created = (data as { id: string; starts_at: string }[]).sort((x, y) => new Date(x.starts_at).getTime() - new Date(y.starts_at).getTime());
   }
+  const ids = created.map((e) => e.id);
 
   if (isRequest) {
     const { error: locationError } = await supabase
       .from("event_locations")
-      .insert({ event_id: data.id, venue_name: input.venue_name, address: input.address });
+      .insert(ids.map((id) => ({ event_id: id, venue_name: input.venue_name, address: input.address })));
     if (locationError) {
-      // Without the private location the event would be useless, so undo it.
-      await supabase.from("events").delete().eq("id", data.id);
+      // Without the private location the meetups would be useless, so undo them all.
+      await supabase.from("events").delete().in("id", ids);
       return { errors: {}, formError: "Something went wrong posting your meetup. Please try again." };
     }
   }
 
-  // Optional. If this fails the event still exists; the host can add the link from its page.
+  // Optional. If this fails the meetups still exist; the host can add the link from their pages.
   const chat = input.chat_url ? parseChatUrl(input.chat_url) : null;
   if (chat && "url" in chat) {
-    await supabase.from("event_chat_links").insert({ event_id: data.id, url: chat.url });
+    await supabase.from("event_chat_links").insert(ids.map((id) => ({ event_id: id, url: chat.url })));
   }
 
   revalidatePath("/");
   revalidatePath("/me");
-  redirect(`/events/${data.id}`);
+  redirect(`/events/${ids[0]}`);
+}
+
+/**
+ * The host stops a series: cancels this meetup and every later date in it (never earlier ones), and
+ * tells the people who had joined each one.
+ */
+export async function cancelSeries(eventId: string): Promise<{ error?: string; count?: number }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Please log in." };
+
+  const { data, error } = await supabase.rpc("cancel_series_from", { eid: eventId });
+  if (error) {
+    if (error.code === "PGRST202") {
+      console.error("Cancelling a series failed: run supabase/migrations/019_retention_features.sql in the SQL editor.");
+      return { error: "This isn't available right now. Please try again later." };
+    }
+    return { error: "Couldn't cancel these meetups. Please try again." };
+  }
+  // A function that returns a list of ids comes back as a plain list (or a list of one-field rows).
+  const cancelled = ((data ?? []) as unknown[]).map((x) => (typeof x === "string" ? x : String(Object.values(x as object)[0])));
+  if (cancelled.length === 0) return { error: "There's nothing left to cancel." };
+  for (const id of cancelled) waitUntil(notifyEventCancelled(id));
+
+  revalidatePath(`/events/${eventId}`);
+  revalidatePath("/");
+  revalidatePath("/me");
+  return { count: cancelled.length };
 }
 
 export type UpdateDetailsResult = { errors: Partial<Record<EditField, string>>; formError?: string };

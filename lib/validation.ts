@@ -7,6 +7,7 @@ import {
   isSkillLevel,
 } from "./constants";
 import { parseChatUrl } from "./chat";
+import { repeatProblems } from "./recurrence";
 import { pacificLocalToUtc } from "./time";
 
 export const EVENT_FIELDS = [
@@ -24,6 +25,8 @@ export const EVENT_FIELDS = [
   "age_min",
   "age_max",
   "join_mode",
+  "repeat_every",
+  "repeat_count",
 ] as const;
 
 export type EventField = (typeof EVENT_FIELDS)[number];
@@ -129,6 +132,10 @@ export function validateEvent(input: Record<string, string>): EventErrors {
   if (!minProblem && !maxProblem && v("age_min") !== "" && v("age_max") !== "" && Number(v("age_max")) < Number(v("age_min"))) {
     errors.age_max = "The oldest age can't be lower than the youngest.";
   }
+
+  const repeat = repeatProblems(v("repeat_every"), v("repeat_count"));
+  if (repeat.repeat_every) errors.repeat_every = repeat.repeat_every;
+  if (repeat.repeat_count) errors.repeat_count = repeat.repeat_count;
 
   if (v("chat_url")) {
     const parsed = parseChatUrl(v("chat_url"));

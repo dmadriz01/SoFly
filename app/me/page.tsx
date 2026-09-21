@@ -10,6 +10,7 @@ import { EventCard } from "@/components/EventCard";
 import { NextUp } from "@/components/NextUp";
 import { InterestsForm } from "@/components/InterestsForm";
 import { isAdminUser } from "@/lib/admin-access";
+import { repeatLabel, seriesNeedingMoreDates } from "@/lib/recurrence";
 import { getInterests } from "@/lib/interests";
 import { getAbout, getBirthDate } from "@/lib/profile";
 import { createClient } from "@/lib/supabase/server";
@@ -183,6 +184,18 @@ export default async function MePage() {
           Admin dashboard <span aria-hidden="true">&rarr;</span>
         </Link>
       )}
+
+      {seriesNeedingMoreDates(hosting).map((last) => (
+        <section key={last.id} className="card space-y-2 p-4">
+          <h2 className="text-sm font-semibold">
+            Your {repeatLabel(last.repeat_every)?.toLowerCase()} &ldquo;{last.title}&rdquo; has no dates coming up
+          </h2>
+          <p className="text-xs text-muted">People who came once are most likely to come back when there&rsquo;s a next date to join.</p>
+          <Link href={`/events/new?from=${last.id}&repeat=${last.repeat_every ?? 7}`} className="btn-primary btn !py-2 text-sm">
+            Add more dates
+          </Link>
+        </section>
+      ))}
 
       {soon && (
         <NextUp

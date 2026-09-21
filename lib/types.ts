@@ -26,6 +26,10 @@ export type EventRow = {
   /** When a detail behind the cover picture last changed, and what those details were before. */
   details_changed_at?: string | null;
   details_before?: Record<string, unknown> | null;
+  /** Recurring meetups: the dates in one series share a series_id. Null for a one-off. */
+  series_id?: string | null;
+  /** Days between dates in the series (7 or 14). */
+  repeat_every?: number | null;
 };
 
 /** Kept as an alias: spots_taken now lives on the event row itself. */

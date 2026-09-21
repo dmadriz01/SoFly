@@ -10,6 +10,7 @@ import {
   SKILL_LEVELS,
 } from "@/lib/constants";
 import { NeighborhoodOptions } from "./NeighborhoodOptions";
+import { MAX_OCCURRENCES, MIN_OCCURRENCES } from "@/lib/recurrence";
 import {
   EVENT_FIELDS,
   LIMITS,
@@ -47,14 +48,19 @@ export function Field({
   );
 }
 
-export function EventForm() {
+/** Starting values, e.g. when posting again from a meetup you already ran. */
+export type EventFormInitial = Partial<Record<EventField, string>>;
+
+export function EventForm({ initial }: { initial?: EventFormInitial }) {
   const [errors, setErrors] = useState<EventErrors>({});
   const [formError, setFormError] = useState<string>();
   const [pending, startTransition] = useTransition();
-  const [joinMode, setJoinMode] = useState<"open" | "request">("open");
-  const joinTouched = useRef(false);
-  const [ageMin, setAgeMin] = useState("");
-  const [ageMax, setAgeMax] = useState("");
+  const [joinMode, setJoinMode] = useState<"open" | "request">(initial?.join_mode === "request" ? "request" : "open");
+  const joinTouched = useRef(Boolean(initial?.join_mode));
+  const [ageMin, setAgeMin] = useState(initial?.age_min ?? "");
+  const [repeat, setRepeat] = useState(initial?.repeat_every ?? "");
+  const [repeatCount, setRepeatCount] = useState(initial?.repeat_count ?? "4");
+  const [ageMax, setAgeMax] = useState(initial?.age_max ?? "");
 
   const cls = (name: EventField) => `field ${errors[name] ? "field-error" : ""}`;
   const aria = (name: EventField) => ({
@@ -92,6 +98,7 @@ export function EventForm() {
         <input
           id="title"
           name="title"
+          defaultValue={initial?.title}
           type="text"
           maxLength={LIMITS.title}
           placeholder="Pickup hoops at the park"
@@ -105,7 +112,7 @@ export function EventForm() {
           <select
             id="category"
             name="category"
-            defaultValue=""
+            defaultValue={initial?.category ?? ""}
             className={cls("category")}
             onChange={(e) => {
               // Coffee chats and dinners default to approving each person, until the host chooses.
@@ -133,7 +140,7 @@ export function EventForm() {
           <select
             id="neighborhood"
             name="neighborhood"
-            defaultValue=""
+            defaultValue={initial?.neighborhood ?? ""}
             className={cls("neighborhood")}
             {...aria("neighborhood")}
           >
@@ -176,7 +183,7 @@ export function EventForm() {
           <select
             id="skill_level"
             name="skill_level"
-            defaultValue="All levels"
+            defaultValue={initial?.skill_level ?? "All levels"}
             className={cls("skill_level")}
             {...aria("skill_level")}
           >
@@ -191,7 +198,7 @@ export function EventForm() {
           <select
             id="audience"
             name="audience"
-            defaultValue="Everyone"
+            defaultValue={initial?.audience ?? "Everyone"}
             className={cls("audience")}
             {...aria("audience")}
           >
@@ -271,6 +278,7 @@ export function EventForm() {
         <input
           id="venue_name"
           name="venue_name"
+          defaultValue={initial?.venue_name}
           type="text"
           maxLength={LIMITS.venue_name}
           placeholder="Dolores Park"
@@ -288,6 +296,7 @@ export function EventForm() {
         <input
           id="address"
           name="address"
+          defaultValue={initial?.address}
           type="text"
           maxLength={LIMITS.address}
           placeholder="19th St & Dolores St, San Francisco, CA"
@@ -301,6 +310,7 @@ export function EventForm() {
           <input
             id="starts_at"
             name="starts_at"
+            defaultValue={initial?.starts_at}
             type="datetime-local"
             className={cls("starts_at")}
             {...aria("starts_at")}
@@ -310,6 +320,7 @@ export function EventForm() {
           <input
             id="max_spots"
             name="max_spots"
+            defaultValue={initial?.max_spots}
             type="number"
             inputMode="numeric"
             min={1}
@@ -322,6 +333,46 @@ export function EventForm() {
         </Field>
       </div>
 
+      <div className="grid gap-5 sm:grid-cols-2">
+        <Field
+          label="Repeat"
+          name="repeat_every"
+          error={errors.repeat_every}
+          hint={repeat ? "Each date is its own meetup, with its own list of people. You can cancel one or all later." : "Post a regular one (like every Thursday) in one go."}
+        >
+          <select
+            id="repeat_every"
+            name="repeat_every"
+            value={repeat}
+            onChange={(e) => setRepeat(e.target.value)}
+            className={cls("repeat_every")}
+            {...aria("repeat_every")}
+          >
+            <option value="">Doesn&rsquo;t repeat</option>
+            <option value="7">Every week</option>
+            <option value="14">Every 2 weeks</option>
+          </select>
+        </Field>
+        {repeat && (
+          <Field label="How many meetups" name="repeat_count" error={errors.repeat_count} hint="Including the first date.">
+            <select
+              id="repeat_count"
+              name="repeat_count"
+              value={repeatCount}
+              onChange={(e) => setRepeatCount(e.target.value)}
+              className={cls("repeat_count")}
+              {...aria("repeat_count")}
+            >
+              {Array.from({ length: MAX_OCCURRENCES - MIN_OCCURRENCES + 1 }, (_, i) => MIN_OCCURRENCES + i).map((n) => (
+                <option key={n} value={n}>
+                  {n} meetups
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+      </div>
+
       <Field
         label="Description"
         name="description"
@@ -331,6 +382,7 @@ export function EventForm() {
         <textarea
           id="description"
           name="description"
+          defaultValue={initial?.description}
           rows={5}
           maxLength={LIMITS.description}
           className={cls("description")}
@@ -347,6 +399,7 @@ export function EventForm() {
         <input
           id="chat_url"
           name="chat_url"
+          defaultValue={initial?.chat_url}
           type="url"
           inputMode="url"
           maxLength={500}
@@ -359,7 +412,7 @@ export function EventForm() {
       {formError && <p className="text-sm text-danger">{formError}</p>}
 
       <button type="submit" disabled={pending} className="btn-primary w-full">
-        {pending ? "Posting…" : "Post meetup"}
+        {pending ? "Posting…" : repeat ? `Post ${repeatCount || "several"} meetups` : "Post meetup"}
       </button>
     </form>
   );

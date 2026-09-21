@@ -50,6 +50,16 @@ function analyze(source, fileName) {
       const all = n.elements.map(keysOf);
       return all.some((k) => k === null) ? null : [...new Set(all.flat())];
     }
+    // rows.map((x) => ({ ... })): a bulk insert where every row is the same object literal
+    if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && n.expression.name.text === "map") {
+      const fn = n.arguments[0];
+      if (fn && ts.isArrowFunction(fn)) {
+        let body = fn.body;
+        while (ts.isParenthesizedExpression(body)) body = body.expression;
+        if (ts.isObjectLiteralExpression(body)) return keysOf(body);
+      }
+      return null;
+    }
     if (!ts.isObjectLiteralExpression(n)) return null; // not a literal: can't check
     const keys = [];
     for (const p of n.properties) {
@@ -169,6 +179,17 @@ async function check(op, role = "authenticated") {
   ok("self-test: reading a table the role can't see is flagged", results[3]);
   ok("self-test: calling a function the role can't run is flagged", results[4]);
   ok("self-test: a column that doesn't exist is flagged", results[5]);
+
+  const bulk = analyze(`
+    await supabase.from("events").insert(dates.map((d) => ({ host_id: u, title: t, starts_at: d, series_id: sid, repeat_every: 7 })));
+    await supabase.from("events").insert(dates.map((d) => ({ host_id: u, title: t, starts_at: d, cancelled_at: now })));
+    await supabase.from("events").insert(dates.map((d) => build(d)));
+  `, "self-test.ts");
+  const bulkResults = [];
+  for (const op of bulk.ops) bulkResults.push((await check(op)).length);
+  ok("self-test: a bulk insert built with .map() is read column by column (allowed columns pass)", bulkResults[0] === 0, JSON.stringify(bulkResults));
+  ok("self-test: ...a forbidden column inside a bulk insert is flagged", bulkResults[1] > 0, JSON.stringify(bulkResults));
+  ok("self-test: ...and a bulk insert it can't read is refused rather than waved through", bulkResults[2] > 0, JSON.stringify(bulkResults));
 
   const good = analyze(`
     await supabase.from("rsvps").update({ status: s }).eq("event_id", e).select("user_id");

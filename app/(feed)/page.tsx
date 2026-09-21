@@ -13,6 +13,7 @@ import { isCategory, isNeighborhood, isSkillLevel } from "@/lib/constants";
 import { feedHref, type FeedFilters } from "@/lib/feed";
 import { getInterests } from "@/lib/interests";
 import { hasAbout } from "@/lib/about";
+import { collapseSeries, repeatLabel } from "@/lib/recurrence";
 import { getAbout, getBirthDate } from "@/lib/profile";
 import { FEED_HEADLINE, FEED_INTRO } from "@/lib/site";
 import { createClient } from "@/lib/supabase/server";
@@ -98,6 +99,8 @@ export default async function FeedPage({
 
   let events = (data ?? []) as EventWithHost[];
   if (filters.eligible && birthDate) events = events.filter(fitsAge);
+  // A weekly meetup shows once (its next date) rather than filling the feed, unless you're browsing by date.
+  if (!filters.week && !filters.day) events = collapseSeries(events);
 
   const dateFiltered = Boolean(filters.week || filters.day);
   const filtered = Boolean(
@@ -233,6 +236,7 @@ export default async function FeedPage({
           e.skill_level !== "All levels" ? e.skill_level : null,
           age ? (e.age_max == null ? age : `Ages ${age}`) : null,
           e.join_mode === "request" ? "Approval required" : null,
+          repeatLabel(e.repeat_every),
         ].filter((t): t is string => Boolean(t)),
       };
     });
