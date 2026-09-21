@@ -16,7 +16,10 @@ import { getInterests } from "@/lib/interests";
 import { metCount, summarizeHosting } from "@/lib/engagement";
 import { hostStats } from "@/lib/host-stats";
 import { HostingSummary } from "@/components/HostingSummary";
+import { GettingStarted, Journey } from "@/components/Journey";
+import { computeMilestones, onboardingSteps } from "@/lib/milestones";
 import { parsePrefs } from "@/lib/notify-policy";
+import { hasAbout } from "@/lib/about";
 import { getAbout, getBirthDate } from "@/lib/profile";
 import { createClient } from "@/lib/supabase/server";
 import type { EventWithCount } from "@/lib/types";
@@ -182,6 +185,22 @@ export default async function MePage() {
   const hostingSummary = summarizeHosting(pastHosted, await hostStats(supabase, user.id));
   const lastHosted = [...pastHosted].sort((a, b) => new Date(b.starts_at).getTime() - new Date(a.starts_at).getTime())[0];
 
+  // Milestones: worked out from what has really happened (nothing is stored). Friends brought is best
+  // effort: before migration 019 there is no invite column, so it's just zero.
+  const attended = going.filter((e) => statusByEvent[e.id] === "approved" && e.host_id !== user.id && !e.cancelled_at && new Date(e.starts_at).getTime() < Date.now());
+  let friendsBrought = 0;
+  {
+    const { data: brought, error: broughtError } = await supabase.from("rsvps").select("user_id").eq("invited_by", user.id).eq("status", "approved");
+    if (!broughtError) friendsBrought = new Set((brought ?? []).map((r) => r.user_id as string)).size;
+  }
+  const milestones = computeMilestones({
+    attended: attended.map((e) => ({ starts_at: e.starts_at, category: e.category, neighborhood: e.neighborhood })),
+    hosted: pastHosted.map((e) => ({ starts_at: e.starts_at })),
+    friendsBrought,
+  });
+  const steps = onboardingSteps({ hasInterests: interests.length > 0, hasAbout: hasAbout(about), hasJoined: goingIds.length > 0 || hosting.length > 0 });
+  const started = attended.length > 0 || pastHosted.length > 0;
+
   // "You met N people": from the approved guest lists the person is themselves allowed to see.
   const metByEvent: Record<string, number> = {};
   if (toRate.length > 0) {
@@ -206,6 +225,8 @@ export default async function MePage() {
           Admin dashboard <span aria-hidden="true">&rarr;</span>
         </Link>
       )}
+
+      {started ? <Journey milestones={milestones} /> : <GettingStarted steps={steps} />}
 
       <HostingSummary summary={hostingSummary} lastEventId={lastHosted?.id ?? null} />
 
@@ -295,7 +316,7 @@ export default async function MePage() {
         <AboutForm initial={about} mode="settings" />
       </section>
 
-      <section>
+      <section id="interests">
         <h2 className="mb-1 text-lg font-bold">Your interests</h2>
         <p className="mb-3 text-sm text-muted">We put meetups like these first in your feed.</p>
         <InterestsForm initial={interests} mode="settings" />
