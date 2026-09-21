@@ -4,6 +4,7 @@ import { ModerateEvent, ReviewReport } from "./AdminButtons";
 import type { EventFilter, EventItem, ReportItem } from "@/lib/admin-data";
 import { EVENT_FILTERS, EVENT_PAGE } from "@/lib/admin-data";
 import type { Counted, DayPoint, Stats } from "@/lib/admin-stats";
+import type { Health } from "@/lib/admin-health";
 import { formatWhenShort } from "@/lib/time";
 
 // The admin screens. They only display what they're given; the page decides who may see them.
@@ -105,6 +106,61 @@ function TopList({ title, items }: { title: string; items: Counted[] }) {
   );
 }
 
+function HealthCard({ title, percent, detail, meaning }: { title: string; percent: number | null; detail: string; meaning: string }) {
+  return (
+    <div className="card p-4">
+      <div className="flex items-baseline justify-between gap-3">
+        <h3 className="text-sm font-semibold">{title}</h3>
+        <div className="text-2xl font-bold tracking-tight">{percent === null ? "–" : `${percent}%`}</div>
+      </div>
+      <p className="mt-1 text-sm">{detail}</p>
+      <p className="mt-1 text-xs text-muted">{meaning}</p>
+    </div>
+  );
+}
+
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+/** The three marketplace numbers: crowds, guests coming back, hosts posting again. */
+export function HealthSection({ health: h }: { health: Health }) {
+  return (
+    <section aria-labelledby="health" className="space-y-3">
+      <div>
+        <h2 id="health" className="text-lg font-bold">Is it working?</h2>
+        <p className="text-sm text-muted">The three numbers that matter most. A dash means it&rsquo;s too early to tell.</p>
+      </div>
+      <div className="space-y-3">
+        <HealthCard
+          title="Meetups with a real crowd"
+          percent={h.crowd.percent}
+          detail={h.crowd.of > 0 ? `${h.crowd.yes} of ${plural(h.crowd.of, "meetup")} that happened had the host plus ${h.crowd.minGuests}+ guests` : "No meetups have happened in the last 90 days yet"}
+          meaning={`Last ${h.crowd.windowDays} days, cancelled ones left out. An empty room is how people give up on a new app.`}
+        />
+        <HealthCard
+          title="Guests who came back within 4 weeks"
+          percent={h.guestReturn.percent}
+          detail={
+            h.guestReturn.of > 0
+              ? `${h.guestReturn.yes} of ${plural(h.guestReturn.of, "person", "people")} went to a second meetup within ${h.guestReturn.windowDays} days of their first`
+              : `Needs people whose first meetup was ${h.guestReturn.windowDays}+ days ago${h.guestReturn.waiting ? ` (${plural(h.guestReturn.waiting, "person", "people")} still waiting)` : ""}`
+          }
+          meaning={h.guestReturn.firstTimers > 0 ? `So far, at any age: ${h.guestReturn.repeatEver} of ${plural(h.guestReturn.firstTimers, "guest")} have been to 2 or more meetups.` : "No guest has been to a meetup yet."}
+        />
+        <HealthCard
+          title="Hosts who post again"
+          percent={h.hostAgain.percent}
+          detail={
+            h.hostAgain.of > 0
+              ? `${h.hostAgain.yes} of ${plural(h.hostAgain.of, "host")} posted a second time`
+              : `Needs hosts whose first post is ${h.hostAgain.waitDays}+ days old${h.hostAgain.waiting ? ` (${plural(h.hostAgain.waiting, "host")} still waiting)` : ""}`
+          }
+          meaning={`A weekly series posted in one go counts as one post. ${h.hostAgain.withSeries} of ${plural(h.hostAgain.hosts, "host")} run a recurring series.`}
+        />
+      </div>
+    </section>
+  );
+}
+
 const pct = (n: number | null) => (n === null ? "–" : `${n}%`);
 const share = (part: number, whole: number) => (whole > 0 ? `${Math.round((part / whole) * 100)}% of members` : undefined);
 
@@ -124,6 +180,8 @@ export function OverviewTab({ stats: s }: { stats: Stats }) {
           <Stat value={s.meetups.upcomingWithNoGuests} label="Empty upcoming" sub="nobody has joined" />
         </div>
       </section>
+
+      <HealthSection health={s.health} />
 
       <section aria-labelledby="totals" className="space-y-3">
         <h2 id="totals" className="text-lg font-bold">Totals</h2>

@@ -48,6 +48,16 @@ export async function loadStats(admin: SupabaseClient, now = new Date()): Promis
     count(admin.from("reports").select("id", { count: "exact", head: true }).is("reviewed_at", null)),
     count(admin.from("push_subscriptions").select("id", { count: "exact", head: true })),
   ]);
+  // Which meetups belong to a recurring series (migration 019). Best effort: without it every meetup counts as its own post.
+  try {
+    const series = await fetchAll<{ id: string; series_id: string | null }>((a, b) =>
+      admin.from("events").select("id, series_id").not("series_id", "is", null).order("id").range(a, b)
+    );
+    const seriesOf = new Map(series.rows.map((r) => [r.id, r.series_id]));
+    for (const e of events.rows) e.series_id = seriesOf.get(e.id) ?? null;
+  } catch {
+    // an older database: leave series_id unset
+  }
   return computeStats({
     now,
     profiles: profiles.rows,

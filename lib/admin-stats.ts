@@ -1,3 +1,4 @@
+import { computeHealth, type Health } from "./admin-health";
 import { addDaysToKey, pacificDate } from "./time";
 
 // The numbers on the admin overview, worked out from plain rows so they can be tested without a
@@ -17,6 +18,8 @@ export type EventStat = {
   spots_taken: number;
   feedback_yes: number;
   feedback_total: number;
+  /** Ties the dates of a recurring meetup together (absent on databases from before recurring meetups). */
+  series_id?: string | null;
 };
 export type RsvpStat = { user_id: string; event_id: string; status: string; created_at: string };
 
@@ -40,6 +43,8 @@ export type Stats = {
   joins: { total: number; last7: number; pendingOnUpcoming: number };
   /** Share of seats filled at meetups that already happened (0-100), or null if there are none yet. */
   fillRate: number | null;
+  /** Is it working as a marketplace? See lib/admin-health.ts for exactly what each number means. */
+  health: Health;
   wouldJoinAgain: { yes: number; total: number; percent: number | null };
   reports: { total: number; open: number };
   pushDevices: number;
@@ -126,6 +131,7 @@ export function computeStats(input: StatsInput): Stats {
       pendingOnUpcoming: guestRsvps.filter((r) => r.status === "pending" && eventById.has(r.event_id) && isUpcoming(eventById.get(r.event_id)!)).length,
     },
     fillRate: seats > 0 ? Math.round((taken / seats) * 100) : null,
+    health: computeHealth({ now, events, rsvps }),
     wouldJoinAgain: { yes, total: answered, percent: answered > 0 ? Math.round((yes / answered) * 100) : null },
     reports: input.reports,
     pushDevices: input.pushDevices,
