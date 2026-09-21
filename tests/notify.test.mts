@@ -1,7 +1,7 @@
 // Tests the real email logic (who gets emailed, when, and why someone is skipped) against a fake
 // database and inbox. Run with `npm run test:unit`.
 import { diagnoseEmail, mailErrorHint } from "../lib/diagnose.ts";
-import { cleanSetting, mailConfigured, mailCredentials } from "../lib/mailer.ts";
+import { cleanSetting, mailConfigured, mailCredentials, mailFrom, mailServer } from "../lib/mailer.ts";
 import { notifyEventCancelled, notifyEventDeleted, notifyHostOfRequest, notifyRequestDecision, sendDailyEmails, snapshotBeforeDelete } from "../lib/notify.ts";
 import { fakeAdmin, fakeMailbox, type FakeData } from "./fake-supabase.mts";
 
@@ -307,6 +307,19 @@ for (const [label, iso, expected] of [
   t("settings: an empty value in quotes counts as NOT set up (so the diagnostic says so, not 'refused')", mailConfigured() === false);
   delete process.env.ALERT_EMAIL_USER; delete process.env.ALERT_EMAIL_APP_PASSWORD;
   t("settings: nothing set means not set up", mailConfigured() === false && mailCredentials().user === "" && mailCredentials().pass === "");
+  const other = { h: process.env.ALERT_EMAIL_HOST, p: process.env.ALERT_EMAIL_PORT, f: process.env.ALERT_EMAIL_FROM };
+  delete process.env.ALERT_EMAIL_HOST; delete process.env.ALERT_EMAIL_PORT; delete process.env.ALERT_EMAIL_FROM;
+  t("mail server: with nothing set it is Gmail on port 465, exactly as before", mailServer().host === "smtp.gmail.com" && mailServer().port === 465);
+  process.env.ALERT_EMAIL_USER = "me@gmail.com";
+  t("mail sender: with nothing set the sender is the login address, as before", mailFrom() === "me@gmail.com");
+  process.env.ALERT_EMAIL_HOST = " smtp-relay.brevo.com "; process.env.ALERT_EMAIL_PORT = "587"; process.env.ALERT_EMAIL_FROM = ' "hello@example.com" ';
+  t("mail server: another service can be used (host and port tidied), and its login needn't be an address", mailServer().host === "smtp-relay.brevo.com" && mailServer().port === 587 && mailFrom() === "hello@example.com");
+  process.env.ALERT_EMAIL_PORT = "banana";
+  t("mail server: a nonsense port falls back to 465 rather than breaking", mailServer().port === 465);
+  process.env.ALERT_EMAIL_PORT = "99999";
+  t("mail server: an impossible port falls back too", mailServer().port === 465);
+  for (const [k, v] of [["ALERT_EMAIL_HOST", other.h], ["ALERT_EMAIL_PORT", other.p], ["ALERT_EMAIL_FROM", other.f]] as const) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+  delete process.env.ALERT_EMAIL_USER;
   if (saved.u !== undefined) process.env.ALERT_EMAIL_USER = saved.u; if (saved.p !== undefined) process.env.ALERT_EMAIL_APP_PASSWORD = saved.p;
 }
 

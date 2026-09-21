@@ -47,7 +47,7 @@ t("name: the old name is nowhere in the source (only two old migration lines rem
   const ics = buildIcs({ id: "abc", title: "Run", start: new Date("2027-01-15T18:00:00Z"), location: "Park, 1 Main", description: "", url: "https://x", cancelled: false });
   t("name: calendar files say SoFly (product id and event ids)", /PRODID:-\/\/SoFly\/\/Meetups\/\/EN/.test(ics) && /UID:abc@sofly/.test(ics), ics.slice(0, 200));
   t("name: the downloaded calendar file is named sofly-...", /filename="sofly-\$\{slug\}\.ics"/.test(read("app/events/[id]/calendar.ics/route.ts")));
-  t("name: the sender name on emails is SoFly", /from: `SoFly <\$\{user\}>`/.test(read("lib/mailer.ts")));
+  t("name: the sender name on emails is SoFly", /from: `SoFly <\$\{mailFrom\(\)\}>`/.test(read("lib/mailer.ts")));
   t("name: notifications default to the title SoFly", /data\.title \|\| "SoFly"/.test(read("public/sw.js")));
   t("name: the app's name on a phone's home screen comes from the same setting", /name: SITE_NAME/.test(read("app/manifest.ts")) && /short_name: SITE_NAME/.test(read("app/manifest.ts")));
   t("name: the package is called sofly", JSON.parse(read("package.json")).name === "sofly");

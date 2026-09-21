@@ -24,6 +24,19 @@ export const mailCredentials = () => ({
   pass: cleanSetting(process.env.ALERT_EMAIL_APP_PASSWORD).replace(/\s/g, ""),
 });
 
+/**
+ * Which mail server to use. Gmail unless ALERT_EMAIL_HOST says otherwise (for example Brevo's
+ * smtp-relay.brevo.com), so the app isn't tied to a Gmail account. Port 465 is the encrypted-from-the-start
+ * kind; other ports (like 587) start plain and upgrade, which is what nodemailer does when `secure` is off.
+ */
+export const mailServer = () => {
+  const port = Number(cleanSetting(process.env.ALERT_EMAIL_PORT));
+  return { host: cleanSetting(process.env.ALERT_EMAIL_HOST) || "smtp.gmail.com", port: Number.isInteger(port) && port > 0 && port < 65536 ? port : 465 };
+};
+
+/** The address messages come from: ALERT_EMAIL_FROM if set (needed when the login isn't an address), else the login. */
+export const mailFrom = () => cleanSetting(process.env.ALERT_EMAIL_FROM) || mailCredentials().user;
+
 /** Whether a mail account is set up at all: the Gmail address and app password. */
 export const mailConfigured = () => {
   const { user, pass } = mailCredentials();
@@ -31,6 +44,7 @@ export const mailConfigured = () => {
 };
 
 let transporter: Transporter | null = null;
+let transporterFor = "";
 
 /**
  * Sends one email. Never throws: a failed email must never break what the person was doing.
@@ -44,16 +58,22 @@ export async function sendMail(mail: Mail): Promise<MailResult> {
   }
 
   try {
-    transporter ??= nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 465,
-      secure: true,
-      auth: { user, pass },
-      connectionTimeout: 8000,
-      greetingTimeout: 8000,
-      socketTimeout: 10000,
-    });
-    await transporter.sendMail({ from: `SoFly <${user}>`, ...mail });
+    const { host, port } = mailServer();
+    // Rebuilt if the settings changed (a new deployment normally restarts things anyway).
+    const signature = `${host}:${port}:${user}:${pass.length}`;
+    if (!transporter || transporterFor !== signature) {
+      transporter = nodemailer.createTransport({
+        host,
+        port,
+        secure: port === 465,
+        auth: { user, pass },
+        connectionTimeout: 8000,
+        greetingTimeout: 8000,
+        socketTimeout: 10000,
+      });
+      transporterFor = signature;
+    }
+    await transporter.sendMail({ from: `SoFly <${mailFrom()}>`, ...mail });
     return { ok: true };
   } catch (err) {
     console.error("Email failed to send:", err);

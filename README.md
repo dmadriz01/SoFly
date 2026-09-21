@@ -179,6 +179,7 @@ To set it up (optional; without it the card doesn't appear and nothing else chan
 - **Report email alerts:** add these in Vercel → Settings → Environment Variables (and `.env.local` locally). Mark the password **Sensitive**:
   - `ALERT_EMAIL_USER`: a Gmail address
   - `ALERT_EMAIL_APP_PASSWORD`: a Google app password ([myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)); reusing the one from Supabase SMTP is fine
+  - Not using Gmail? `ALERT_EMAIL_HOST` (for example `smtp-relay.brevo.com`), `ALERT_EMAIL_PORT` (`587`) and `ALERT_EMAIL_FROM` (the sender address you verified) switch the app to another mail service; then `ALERT_EMAIL_USER` and `ALERT_EMAIL_APP_PASSWORD` are that service's SMTP login and key. With none of the three set it uses Gmail exactly as before.
   - `REPORT_ALERT_EMAIL`: where alerts go (optional; defaults to `NEXT_PUBLIC_CONTACT_EMAIL`)
 
   Redeploy afterward. If these aren't set, reports are still saved; only the email is skipped.
