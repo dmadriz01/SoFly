@@ -48,6 +48,9 @@ Write from a real address you own and sign with your real name. Keep it under 12
 [brackets]. Do not pretend to know them: one true, specific sentence about their group is worth more than any
 formatting.
 
+**Link to use in every email:** `https://sofly-ai.com/host`. It explains what a host gets in about a minute and
+has a "Post your first meetup" button. (Use it once the domain is connected; until then use the Vercel address.)
+
 **Email 1, an organizer**
 
 > Subject: Your [Tuesday run] on SoFly?
@@ -63,7 +66,7 @@ formatting.
 >
 > Worth a 15-minute call, or want me to send a short video instead?
 >
-> [Name], [role], SoFly, so-fly-ai.vercel.app
+> [Name], [role], SoFly, sofly-ai.com/host
 > [Mailing address]. Not interested? Reply "no" and I won't email again.
 
 **Follow-up 1 (day 4)**

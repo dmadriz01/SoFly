@@ -6,6 +6,9 @@ export function Footer() {
   return (
     <footer className="mx-auto max-w-2xl px-4 pb-28 pt-2 text-xs text-muted md:pb-12">
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-line pt-2">
+        <Link href="/host" className="tap hover:text-ink">
+          Host on SoFly
+        </Link>
         <Link href="/guidelines" className="tap hover:text-ink">
           Community guidelines
         </Link>
