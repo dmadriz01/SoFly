@@ -195,7 +195,7 @@ for (const [label, iso, expected] of [
 
   const boxM = fakeMailbox();
   await silently(() => notifyEventCancelled("ev1", { admin: fakeAdmin(going(), users), send: boxM.send, now: NOW }, "moderator"));
-  t("moderator cancel: the email says BayMeet cancelled it (not the host)", /BayMeet cancelled Pickeball/.test(boxM.sent[0]?.text) && !/the host cancelled/.test(boxM.sent[0].text), boxM.sent[0]?.text);
+  t("moderator cancel: the email says SoFly cancelled it (not the host)", /SoFly cancelled Pickeball/.test(boxM.sent[0]?.text) && !/the host cancelled/.test(boxM.sent[0].text), boxM.sent[0]?.text);
 
   // delete: the guest list vanishes with the meetup, so the snapshot has to be taken first
   const dd = going();
@@ -252,7 +252,7 @@ for (const [label, iso, expected] of [
 
   let box = fakeMailbox();
   let c = await diagnoseEmail(who, { admin: fakeAdmin(base(), users), send: box.send, mailConfigured: true, cronSecretSet: true });
-  t("diagnostic: everything set up -> all checks pass and a test email is sent", failing("", c) === "(none)" && box.sent.length === 1 && box.sent[0].to === "host@example.com" && box.sent[0].subject === "BayMeet test email", failing("", c));
+  t("diagnostic: everything set up -> all checks pass and a test email is sent", failing("", c) === "(none)" && box.sent.length === 1 && box.sent[0].to === "host@example.com" && box.sent[0].subject === "SoFly test email", failing("", c));
 
   box = fakeMailbox();
   c = await diagnoseEmail(who, { admin: fakeAdmin(base(), users), send: box.send, mailConfigured: false, cronSecretSet: true });

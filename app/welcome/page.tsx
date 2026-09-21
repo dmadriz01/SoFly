@@ -67,7 +67,7 @@ export default async function WelcomePage({ searchParams }: { searchParams: { ne
     <div className="mx-auto max-w-sm space-y-6 pt-4">
       <div>
         <p className="mb-1 text-xs font-bold uppercase tracking-wide text-accent-dark">Step 1 of 3</p>
-        <h1 className="text-2xl font-bold tracking-tight">Welcome to BayMeet</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Welcome to SoFly</h1>
         <p className="mt-1 text-muted">
           Two quick things before you join in. Some meetups have age requirements, so we need your
           birthday.

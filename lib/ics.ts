@@ -49,11 +49,11 @@ export function buildIcs(e: {
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//BayMeet//Meetups//EN",
+    "PRODID:-//SoFly//Meetups//EN",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     "BEGIN:VEVENT",
-    `UID:${e.id}@baymeet`,
+    `UID:${e.id}@sofly`,
     `DTSTAMP:${stamp(new Date())}`,
     `DTSTART:${stamp(e.start)}`,
     `DTEND:${stamp(end)}`,

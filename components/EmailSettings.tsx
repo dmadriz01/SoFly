@@ -5,7 +5,7 @@ import { sendTestEmail, setEmailNotifications } from "@/app/actions";
 import type { Check } from "@/lib/diagnose";
 import { CheckList } from "./CheckList";
 
-/** One switch for all of BayMeet's emails. Login codes are always sent. */
+/** One switch for all of SoFly's emails. Login codes are always sent. */
 export function EmailSettings({ initial }: { initial: boolean }) {
   const [on, setOn] = useState(initial);
   const [error, setError] = useState<string>();

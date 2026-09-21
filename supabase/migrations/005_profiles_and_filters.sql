@@ -1,4 +1,4 @@
--- BayMeet: private birthdays, plus skill level / audience / age requirements on events.
+-- SoFly: private birthdays, plus skill level / audience / age requirements on events.
 -- Paste into the Supabase SQL editor and run once (after 001-004).
 --
 -- Run this right before deploying the matching code. Once it's in, joining and posting
@@ -19,7 +19,7 @@ alter table public.events
     check (skill_level in ('All levels', 'Beginner', 'Intermediate', 'Advanced')),
   add constraint events_audience_check
     check (audience in ('Everyone', 'Women-only')),
-  -- null/null means "anyone 18+" (BayMeet is 18+ only). Ranges are inclusive.
+  -- null/null means "anyone 18+" (SoFly is 18+ only). Ranges are inclusive.
   add constraint events_age_range_check
     check (
       (age_min is null or age_min between 18 and 120)
@@ -53,7 +53,7 @@ create policy "users can add their own private profile"
 -- can edit it to slip into an age-restricted event. If someone made a typo, fix it in the
 -- Supabase table editor.
 
--- BayMeet is 18+.
+-- SoFly is 18+.
 create or replace function public.require_adult()
 returns trigger
 language plpgsql

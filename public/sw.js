@@ -1,4 +1,4 @@
-// BayMeet's service worker. It does one job: when a push notification arrives, show it, and when
+// SoFly's service worker. It does one job: when a push notification arrives, show it, and when
 // it's tapped, open the right page. It caches nothing and never touches page loads.
 
 self.addEventListener("install", () => self.skipWaiting());
@@ -13,9 +13,9 @@ self.addEventListener("push", (event) => {
   }
   // Always show something: browsers (Safari especially) penalise a push that shows nothing.
   event.waitUntil(
-    self.registration.showNotification(data.title || "BayMeet", {
+    self.registration.showNotification(data.title || "SoFly", {
       body: data.body || "",
-      icon: "/pwa-icon/192?v=2a6b5c-1",
+      icon: "/pwa-icon/192?v=2a6b5c-2",
       tag: data.tag || undefined,
       data: { url: data.url || "/" },
     })

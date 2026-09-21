@@ -1,5 +1,5 @@
 -- ═════════════════════════════════════════════════════════════════════════════
--- BayMeet: complete database schema
+-- SoFly: complete database schema
 --
 -- NEW Supabase project?  Paste this whole file into the SQL editor and run it once.
 -- Existing database?     Don't. Run only the numbered files in supabase/migrations/ that
@@ -87,7 +87,7 @@ create table public.events (
   skill_level   text not null default 'All levels'
                   check (skill_level in ('All levels', 'Beginner', 'Intermediate', 'Advanced')),
   audience      text not null default 'Everyone' check (audience in ('Everyone', 'Women-only', 'Men-only')),
-  -- Inclusive age range. null/null = anyone 18+ (BayMeet is 18+ only).
+  -- Inclusive age range. null/null = anyone 18+ (SoFly is 18+ only).
   age_min       int,
   age_max       int,
   -- Set by the host (via cancel_event) or a moderator. Only a moderator can clear it.
@@ -380,7 +380,7 @@ grant execute on function public.update_event_details(uuid, timestamptz, text, t
 -- 4. Triggers
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- BayMeet is 18+.
+-- SoFly is 18+.
 create function private.require_adult()
 returns trigger
 language plpgsql
@@ -388,7 +388,7 @@ set search_path = ''
 as $$
 begin
   if new.birth_date > (current_date - interval '18 years')::date then
-    raise exception 'You must be 18 or older to use BayMeet';
+    raise exception 'You must be 18 or older to use SoFly';
   end if;
   return new;
 end;

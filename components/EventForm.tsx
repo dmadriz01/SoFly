@@ -257,12 +257,12 @@ export function EventForm() {
           </div>
         </div>
         <p className="mt-2 text-xs text-muted">
-          Leave a box blank for no limit. BayMeet is 18+ only.
+          Leave a box blank for no limit. SoFly is 18+ only.
         </p>
       </fieldset>
       <p className="-mt-2 text-xs text-muted">
-        Ages come from the birthday each person enters when they sign up, and BayMeet can&rsquo;t
-        verify them, so for 21+ events at a venue please check ID at the door. BayMeet also can&rsquo;t
+        Ages come from the birthday each person enters when they sign up, and SoFly can&rsquo;t
+        verify them, so for 21+ events at a venue please check ID at the door. SoFly also can&rsquo;t
         verify gender; &ldquo;Women-only&rdquo; and &ldquo;Men-only&rdquo; set expectations for who
         should join.
       </p>

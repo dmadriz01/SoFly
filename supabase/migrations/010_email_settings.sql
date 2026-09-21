@@ -1,4 +1,4 @@
--- BayMeet: email notification preferences.
+-- SoFly: email notification preferences.
 -- Paste into the SQL editor and run it (after 001-009). It is safe to run again, so if you are
 -- unsure whether an earlier run finished, just run it once more.
 

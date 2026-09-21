@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-/** What BayMeet is, in one glance, for someone who hasn't logged in. */
+/** What SoFly is, in one glance, for someone who hasn't logged in. */
 export function Hero() {
   return (
     <section className="fade-up overflow-hidden rounded-3xl bg-accent-soft px-6 py-8">

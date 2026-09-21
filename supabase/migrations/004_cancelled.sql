@@ -1,4 +1,4 @@
--- BayMeet: moderator-cancelled events.
+-- SoFly: moderator-cancelled events.
 -- Paste into the Supabase SQL editor and run once (after 001-003).
 -- Safe to run BEFORE deploying the matching code: it only adds a nullable column.
 

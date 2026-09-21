@@ -1,4 +1,4 @@
--- BayMeet: user reports for events.
+-- SoFly: user reports for events.
 -- Paste into the Supabase SQL editor and run once (after 001_init.sql).
 
 create table public.reports (

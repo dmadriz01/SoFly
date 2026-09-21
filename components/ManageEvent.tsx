@@ -38,7 +38,7 @@ export function ManageEvent({ eventId }: { eventId: string }) {
         </button>
         <p className="mt-1.5 text-xs text-muted">
           Keeps the page up with a cancelled notice and stops new joins. Everyone who joined gets an
-          email and a push notification. Only BayMeet can undo a cancellation.
+          email and a push notification. Only SoFly can undo a cancellation.
         </p>
       </div>
       {message && <p className="text-sm text-red-600">{message}</p>}

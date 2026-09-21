@@ -1,4 +1,4 @@
-# BayMeet
+# SoFly
 
 A hyperlocal activity board for the San Francisco Bay Area. Post a sports or social meetup, and others RSVP.
 
@@ -18,7 +18,7 @@ You need Node 18.17+ and a free [Supabase](https://supabase.com) account.
 1. In your project, open **SQL Editor → New query**.
 2. Paste the entire contents of [`supabase/schema.sql`](supabase/schema.sql) and click **Run**. You should see "Success. No rows returned."
 
-That one file creates every table, index, security rule and trigger the app needs. (Already have a BayMeet database from earlier? Skip this and see "Upgrading an existing database" below.)
+That one file creates every table, index, security rule and trigger the app needs. (Already have a SoFly database from earlier? Skip this and see "Upgrading an existing database" below.)
 
 ### 3. Configure auth redirect URLs
 
@@ -63,7 +63,7 @@ To try it: go to **Me** → enter your email → enter the code from the email (
 3. Under **Environment Variables**, add both:
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-4. Click **Deploy**. Note your production URL, e.g. `https://baymeet.vercel.app`.
+4. Click **Deploy**. Note your production URL, e.g. `https://your-project.vercel.app`.
 5. Back in Supabase, **Authentication → URL Configuration**:
    - Set **Site URL** to your production URL.
    - Add `https://<your-production-domain>/auth/callback` to **Redirect URLs**. (Keep the localhost entry if you still develop locally.)
@@ -79,7 +79,7 @@ Supabase's built-in sender only emails your own team members and is capped at a 
 2. Create an API key (API Keys → Create, "Sending access").
 3. In Supabase, open **Project Settings → Authentication → SMTP Settings** and turn on **Enable custom SMTP**:
    - **Sender email:** an address on your verified domain, e.g. `login@yourdomain.com`
-   - **Sender name:** `BayMeet`
+   - **Sender name:** `SoFly`
    - **Host:** `smtp.resend.com`
    - **Port:** `465`
    - **Username:** `resend`
@@ -94,10 +94,10 @@ Login works two ways: the user types a 6-digit code from the email, or taps the 
 - **Magic Link** (sent to existing users)
 - **Confirm signup** (sent to first-time users)
 
-Set the subject to `Your BayMeet login code` and use this body in each:
+Set the subject to `Your SoFly login code` and use this body in each:
 
 ```html
-<h2>Your BayMeet login code</h2>
+<h2>Your SoFly login code</h2>
 <p>Enter this code on the login page:</p>
 <p style="font-size:28px;font-weight:bold;letter-spacing:4px">{{ .Token }}</p>
 <p>Or <a href="{{ .ConfirmationURL }}">tap here to log in</a> (only works in the browser where you requested it).</p>
@@ -118,7 +118,7 @@ Set the subject to `Your BayMeet login code` and use this body in each:
 | `007_notes_and_host_controls` | intro notes on requests; hosts can cancel and change spots |
 | `008_interests_and_passes` | interests picker and swipe passes |
 | `009_hardening_and_cleanup` | tightened privileges, cleaner policies and functions, extra limits and indexes |
-| `010_email_settings` | each person's on/off switch for BayMeet's emails |
+| `010_email_settings` | each person's on/off switch for SoFly's emails |
 | `011_meetup_feedback` | guests' private "would you join again?" answers, shown only as totals |
 | `012_men_only_audience` | lets a meetup be set for men only (as well as everyone or women only) |
 | `013_push_subscriptions` | the devices that turned on push notifications |
@@ -131,7 +131,7 @@ Set the subject to `Your BayMeet login code` and use this body in each:
 
 ## Email notifications
 
-BayMeet emails people when: someone asks to join their approval-only meetup, a host answers a request, a meetup they were going to is cancelled, the day before a meetup they're part of, and the day after (a one-tap "how was it?"). Each person can switch them off on the Me tab. Login codes are separate and always sent.
+SoFly emails people when: someone asks to join their approval-only meetup, a host answers a request, a meetup they were going to is cancelled, the day before a meetup they're part of, and the day after (a one-tap "how was it?"). Each person can switch them off on the Me tab. Login codes are separate and always sent.
 
 To turn it on (all optional; without these the app works exactly as before, just without the emails):
 
@@ -167,7 +167,7 @@ To set it up (optional; without it the card doesn't appear and nothing else chan
 4. **Redeploy.** The public key is baked into the site when it's built, so it only appears after a new deployment.
 5. On each device: **Me → Push notifications on this device → Turn on**, then **Send a test notification**.
 
-**iPhone and iPad:** Apple only allows web push for sites on the Home Screen (iOS 16.4 or newer). In Safari tap Share → **Add to Home Screen**, open BayMeet from that icon, then turn notifications on. The card explains this itself when it detects it.
+**iPhone and iPad:** Apple only allows web push for sites on the Home Screen (iOS 16.4 or newer). In Safari tap Share → **Add to Home Screen**, open SoFly from that icon, then turn notifications on. The card explains this itself when it detects it.
 
 **Nothing arrives?** The **Send a test notification** button checks each link (keys, contact address, server key, your devices, and whether the push service accepts the message) and shows which is broken. The `Daily emails:` line in Vercel's logs also reports `pushes` and `pushFailed`.
 
@@ -182,7 +182,7 @@ To set it up (optional; without it the card doesn't appear and nothing else chan
 
 - **Contact email:** set `NEXT_PUBLIC_CONTACT_EMAIL` (locally in `.env.local`, and in Vercel → Settings → Environment Variables). It powers the Feedback link and the privacy and guidelines pages.
 
-- **Custom domain:** set `NEXT_PUBLIC_SITE_URL` (e.g. `https://baymeet.app`) so link previews use it. Until then Vercel's production URL is used automatically.
+- **Custom domain:** set `NEXT_PUBLIC_SITE_URL` (e.g. `https://your-domain.com`) so link previews use it. Until then Vercel's production URL is used automatically.
 
 - **Analytics:** in Vercel, open your project → **Analytics** → **Enable**. The code is already in place.
 
@@ -194,14 +194,14 @@ To set it up (optional; without it the card doesn't appear and nothing else chan
 
 `/admin` is a private dashboard for you, with three sections:
 
-- **Overview**: members, meetups, joins, seats filled, "would join again", push devices, a 14-day chart of new members, meetups and joins, and what people host (categories and neighborhoods). It's built from BayMeet's own data. Website visits and page views are in your Vercel dashboard under Analytics.
+- **Overview**: members, meetups, joins, seats filled, "would join again", push devices, a 14-day chart of new members, meetups and joins, and what people host (categories and neighborhoods). It's built from SoFly's own data. Website visits and page views are in your Vercel dashboard under Analytics.
 - **Reports**: open reports first, with the meetup, the host, the reporter and their note. **Cancel meetup** cancels it (the people who joined get an email and a push notification) and closes its reports; **Mark reviewed** closes a report and leaves the meetup up. Reviewed reports can be shown again or reopened.
 - **Meetups**: upcoming, past, cancelled or all, with a title search, and the same **Cancel meetup** / **Reinstate** buttons.
 
 To turn it on:
 
 1. Run `supabase/migrations/015_admin_review.sql` in the Supabase SQL editor.
-2. Set `ADMIN_EMAILS` to the email(s) you log in to BayMeet with (comma separated), in `.env.local` and in Vercel → Settings → Environment Variables, then redeploy. It's a server-only setting (no `NEXT_PUBLIC_`).
+2. Set `ADMIN_EMAILS` to the email(s) you log in to SoFly with (comma separated), in `.env.local` and in Vercel → Settings → Environment Variables, then redeploy. It's a server-only setting (no `NEXT_PUBLIC_`).
 3. `SUPABASE_SERVICE_ROLE_KEY` must also be set (it already is if emails work).
 
 Then log in as that person: an **Admin dashboard** link appears at the top of **Me**, or go to `/admin`.
@@ -231,6 +231,7 @@ Hosts can cancel their own meetups from the event page, but only you can **reins
 ## Things to know
 
 - **Browsing by date and filtering.** On both the List and Swipe tabs, a **Filters** button (next to the List/Swipe toggle, with a count of how many filters are on) opens one panel with the week calendar, the category, neighborhood and skill dropdowns, and the audience and "fits my age" chips. In the calendar, arrows move a week at a time and tapping a day shows just that day, with the number of meetups on each day. The chosen filters are in the address, so they can be shared, and they carry over when you switch tabs. Weeks run Monday to Sunday in Pacific time, up to 26 weeks ahead.
+- **The name and logo.** The app is called SoFly, with a butterfly as its icon (drawn in code in `lib/butterfly.ts`, so it stays sharp and uses the palette; it's the favicon, the home-screen icon, the header logo and part of the link previews). A few things still carry the old name because they live outside the code: the web address (`bay-meet.vercel.app`, until you rename the Vercel project or add a custom domain, and if you do, update the redirect URLs in Supabase and `NEXT_PUBLIC_SITE_URL`), the GitHub repository name, and two settings inside Supabase: the login-code email template and the SMTP sender name (see "Email templates" and "Custom SMTP" above; set both to SoFly). Icons are cached by browsers and phones for a year, so they carry a version (`ICON_REV` in `lib/brand.ts`): bump it whenever the icon changes.
 - **Every meetup gets its own picture.** There are no photo uploads (so nothing to moderate): the picture is drawn from the meetup's public details. The time of day sets the sky (dawn to night, in Pacific time), the neighborhood sets the scene (Golden Gate-style bridge, painted houses in the Mission, Berkeley's Campanile, city skylines, coast, vineyards, redwoods, rolling hills), the category sets the colors and floating shapes, the skill level sets the ridge line (soft hills for beginners, jagged peaks for advanced), and the number of spots sets how many little people are standing there. The meetup's id fills in the small details, so two similar meetups still look different. It's used on the swipe card, the list cards, the meetup page, Next Up on Me, and the link preview. It's all in `lib/cover.ts`. Venues and addresses are never used, so a private address can't show up in a picture. Cancelled meetups are shown in gray. If the time, neighborhood, category, skill level or number of spots change after people have joined, a small note under the picture tells the host and everyone who joined or asked before the change what changed (for example "Spots: 10 → 8"), and says the picture was redrawn when it really looks different. (Spots changing in a way nobody can see, like 12 to 10, stays quiet.) It disappears once the meetup starts or is cancelled. This needs migration 016; without it everything else works and there's just no note.
 - **Editing a meetup.** Hosts get an **Edit** button at the top of their meetup's page (until it starts or is cancelled) to change the date and time, neighborhood, venue, address and the number of spots, all in one form. (Spots can't go below the number of people already going.) The date/time and place are saved in one step, so a meetup can't end up with its new time but its old place; for approval-only meetups the private address stays private. Once a date, time or place change is saved (a change in spots alone tells nobody), everyone who had joined gets an email and a push notification saying what changed from and to (people whose request is still pending or was declined aren't told, and the push never shows the address on a lock screen). Someone who turned emails off still gets the push, and vice versa. Needs migration 017.
 - **Declined requests.** If a host declines your request, it now appears on **Me** under **Declined** (with a gentle note) instead of quietly disappearing.

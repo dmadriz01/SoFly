@@ -1,4 +1,4 @@
--- BayMeet: people's interests (to suggest events) and swiped-away events.
+-- SoFly: people's interests (to suggest events) and swiped-away events.
 -- Paste into the Supabase SQL editor and run once (after 001-007).
 -- Safe to run before deploying the matching code.
 

@@ -14,9 +14,9 @@ const oneLine = (v: string) => v.replace(/[\r\n]+/g, " ").trim();
 
 /** Plain text only, so nothing a user typed can be interpreted as markup. */
 export function buildReportEmail(r: ReportAlert) {
-  const subject = `BayMeet report: ${oneLine(r.eventTitle).slice(0, 80)} (${oneLine(r.reason)})`;
+  const subject = `SoFly report: ${oneLine(r.eventTitle).slice(0, 80)} (${oneLine(r.reason)})`;
   const text = [
-    "Someone reported a meetup on BayMeet.",
+    "Someone reported a meetup on SoFly.",
     "",
     `Meetup:   ${oneLine(r.eventTitle)}`,
     `Host:     ${oneLine(r.hostName) || "unknown"}`,

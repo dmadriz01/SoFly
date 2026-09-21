@@ -37,7 +37,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
   return new Response(ics, {
     headers: {
       "Content-Type": "text/calendar; charset=utf-8",
-      "Content-Disposition": `attachment; filename="baymeet-${slug}.ics"`,
+      "Content-Disposition": `attachment; filename="sofly-${slug}.ics"`,
       "Cache-Control": "private, no-store",
     },
   });

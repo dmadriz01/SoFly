@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import { Analytics } from "@vercel/analytics/react";
 import { Footer } from "@/components/Footer";
+import { Logo } from "@/components/Logo";
 import { BottomNav, TopNav } from "@/components/Nav";
 import { BRAND, iconUrl } from "@/lib/brand";
 import { getPendingRequestCount } from "@/lib/requests";
@@ -46,7 +47,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body className="min-h-screen font-sans">
         <header className="mx-auto flex max-w-2xl items-center justify-between px-4 pt-5">
           <Link href="/" className="tap -ml-1 px-1 text-xl font-bold tracking-tight">
-            Bay<span className="text-accent">Meet</span>
+            <Logo />
           </Link>
           <TopNav pending={pending} />
         </header>

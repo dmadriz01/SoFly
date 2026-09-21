@@ -57,7 +57,7 @@ export async function diagnoseEmail(
     checks.push({
       label: "Emails are switched on for you",
       ok: on,
-      detail: on ? undefined : "You've switched emails off on the Me tab. BayMeet skips people who did that.",
+      detail: on ? undefined : "You've switched emails off on the Me tab. SoFly skips people who did that.",
     });
   }
 
@@ -134,7 +134,7 @@ export async function diagnosePush(who: { userId: string }, deps: PushDeps = {})
     if (count > 0) {
       const push = deps.push ?? ((id, p) => sendPushToUser(admin, id, p));
       const outcome = await push(who.userId, {
-        title: "BayMeet test",
+        title: "SoFly test",
         body: "Push notifications work on this device.",
         url: "/me",
         tag: "test",

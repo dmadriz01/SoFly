@@ -3,7 +3,7 @@ import { CONTACT_EMAIL } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Community guidelines",
-  description: "How to keep BayMeet friendly, safe and useful.",
+  description: "How to keep SoFly friendly, safe and useful.",
 };
 
 export default function GuidelinesPage() {
@@ -11,7 +11,7 @@ export default function GuidelinesPage() {
     <article className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Community guidelines</h1>
-        <p className="mt-1 text-muted">BayMeet exists to get people off their phones and into the same place. Help keep it good.</p>
+        <p className="mt-1 text-muted">SoFly exists to get people off their phones and into the same place. Help keep it good.</p>
       </div>
 
       <section className="space-y-2">
@@ -20,13 +20,13 @@ export default function GuidelinesPage() {
           <li>Post real meetups that you plan to show up to.</li>
           <li>
             Choose a <strong>public place</strong>, such as a park, court, cafe or trailhead.
-            Don&rsquo;t post your home address. Addresses on BayMeet are visible to everyone.
+            Don&rsquo;t post your home address. Addresses on SoFly are visible to everyone.
           </li>
           <li>Be clear about time, place, skill level and what to bring.</li>
           <li>No ads, selling, recruiting or promotions. Free or cost-share meetups only.</li>
           <li>
             Use the skill level, age and audience settings honestly. They help the right people find
-            your meetup. BayMeet can&rsquo;t verify ages or gender, so for 21+ events at a venue,
+            your meetup. SoFly can&rsquo;t verify ages or gender, so for 21+ events at a venue,
             check ID at the door.
           </li>
           <li>
@@ -36,7 +36,7 @@ export default function GuidelinesPage() {
           </li>
           <li>
             If you can&rsquo;t host after all, cancel the meetup from its page so people aren&rsquo;t left
-            waiting. BayMeet may also cancel meetups that break these guidelines.
+            waiting. SoFly may also cancel meetups that break these guidelines.
           </li>
           <li>If plans change, update the event or delete it so people aren&rsquo;t left waiting.</li>
           <li>
@@ -55,7 +55,7 @@ export default function GuidelinesPage() {
           </li>
           <li>Only join if you plan to go. If you can&rsquo;t make it, tap Leave so someone else can have your spot.</li>
           <li>Be kind and inclusive. No harassment, discrimination, or unwanted advances.</li>
-          <li>BayMeet is for people 18 and older.</li>
+          <li>SoFly is for people 18 and older.</li>
           <li>
             Respect who a meetup is for. If it&rsquo;s marked Women-only or Men-only, or has an age range, and that
             isn&rsquo;t you, please don&rsquo;t join.
@@ -68,7 +68,7 @@ export default function GuidelinesPage() {
         <ul className="list-disc space-y-1.5 pl-5 text-ink/90">
           <li>You&rsquo;re meeting people you haven&rsquo;t met before. Tell a friend where you&rsquo;re going.</li>
           <li>Arrange your own transportation, and leave if something feels off.</li>
-          <li>Hosts and attendees aren&rsquo;t screened or vetted by BayMeet. Meetups are organized by individuals, and you take part at your own risk.</li>
+          <li>Hosts and attendees aren&rsquo;t screened or vetted by SoFly. Meetups are organized by individuals, and you take part at your own risk.</li>
         </ul>
       </section>
 

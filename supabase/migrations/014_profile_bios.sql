@@ -1,4 +1,4 @@
--- BayMeet: a short bio and optional social usernames, so hosts know who they're letting in.
+-- SoFly: a short bio and optional social usernames, so hosts know who they're letting in.
 -- Paste into the SQL editor and run it (after 001-013). It is safe to run again, so if you are
 -- unsure whether an earlier run finished, just run it once more.
 

@@ -1,4 +1,4 @@
-export const SITE_NAME = "BayMeet";
+export const SITE_NAME = "SoFly";
 export const TAGLINE = "Find people to play, run, climb and hang out with around the Bay Area.";
 
 /**

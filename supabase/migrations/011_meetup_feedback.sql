@@ -1,4 +1,4 @@
--- BayMeet: guests' private "would you join again?" feedback, shown publicly only as totals.
+-- SoFly: guests' private "would you join again?" feedback, shown publicly only as totals.
 -- Paste into the SQL editor and run it (after 001-010). It is safe to run again, so if you are
 -- unsure whether an earlier run finished, just run it once more.
 

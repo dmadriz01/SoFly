@@ -133,7 +133,7 @@ export type Cancellation = {
   hostId: string;
   /** Approved guests other than the host. */
   guestIds: string[];
-  /** Who called it off: the host, or BayMeet (a moderator). */
+  /** Who called it off: the host, or SoFly (a moderator). */
   by: "host" | "moderator";
   /** True when the meetup page no longer exists (the host deleted it), so tapping goes to the feed. */
   removed: boolean;
@@ -189,7 +189,7 @@ async function deliverCancellation(c: Cancellation, admin: SupabaseClient, deps:
     }
     await push(userId, {
       title: `Cancelled: ${c.title}`,
-      body: c.by === "moderator" ? "BayMeet cancelled this meetup." : "The host cancelled this meetup.",
+      body: c.by === "moderator" ? "SoFly cancelled this meetup." : "The host cancelled this meetup.",
       url: c.removed ? "/" : `/events/${c.eventId}`,
       tag: `cancelled-${c.eventId}`,
     });

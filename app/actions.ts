@@ -420,7 +420,7 @@ export async function completeProfile(formData: FormData, next: string): Promise
   const birth = parseBirthDate(field("birth_year"), field("birth_month"), field("birth_day"));
   if (!birth) errors.birthdate = "Enter your full birthday.";
   else if (ageOn(birth, pacificDate()) < MIN_AGE) {
-    errors.birthdate = `BayMeet is for people ${MIN_AGE} and older.`;
+    errors.birthdate = `SoFly is for people ${MIN_AGE} and older.`;
   }
   if (Object.keys(errors).length > 0) return { errors };
 
@@ -544,7 +544,7 @@ export async function unpassEvent(eventId: string): Promise<{ error?: string }> 
   return {};
 }
 
-/** The on/off switch for BayMeet's emails (requests, approvals, cancellations, reminders). */
+/** The on/off switch for SoFly's emails (requests, approvals, cancellations, reminders). */
 export async function setEmailNotifications(enabled: boolean): Promise<{ error?: string }> {
   const supabase = createClient();
   const {

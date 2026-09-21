@@ -115,8 +115,8 @@ export function PushSettings() {
 
       {status === "ios-install" && (
         <p className="rounded-xl bg-accent-soft p-3 text-sm text-ink/90">
-          On iPhone and iPad, notifications only work once BayMeet is on your Home Screen. Tap the Share
-          button in Safari, choose <strong>Add to Home Screen</strong>, then open BayMeet from there and
+          On iPhone and iPad, notifications only work once SoFly is on your Home Screen. Tap the Share
+          button in Safari, choose <strong>Add to Home Screen</strong>, then open SoFly from there and
           come back to this page.
         </p>
       )}
@@ -127,7 +127,7 @@ export function PushSettings() {
 
       {status === "denied" && (
         <p className="text-sm text-muted">
-          Notifications are blocked for BayMeet. Allow them in your browser or phone settings, then come
+          Notifications are blocked for SoFly. Allow them in your browser or phone settings, then come
           back and turn this on.
         </p>
       )}

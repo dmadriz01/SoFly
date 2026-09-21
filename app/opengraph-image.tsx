@@ -2,7 +2,7 @@ import { ImageResponse } from "next/og";
 import { COLORS, OG_SIZE, Wordmark, loadBoldFont } from "@/lib/og";
 import { TAGLINE } from "@/lib/site";
 
-export const alt = "BayMeet: meetups around the Bay Area";
+export const alt = "SoFly: meetups around the Bay Area";
 export const size = OG_SIZE;
 export const contentType = "image/png";
 

@@ -1,4 +1,4 @@
--- BayMeet: remembers when a detail that shapes a meetup's cover picture last changed, and what it
+-- SoFly: remembers when a detail that shapes a meetup's cover picture last changed, and what it
 -- was before, so people who already joined can be told on the meetup page.
 -- Paste into the SQL editor and run it (after 001-015). It is safe to run again.
 

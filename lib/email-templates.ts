@@ -1,6 +1,6 @@
 import { BRAND } from "./brand";
 
-// The emails BayMeet sends. Pure functions (no network), so they're easy to test.
+// The emails SoFly sends. Pure functions (no network), so they're easy to test.
 // Everything a person typed (names, titles) is HTML-escaped; the plain-text version goes along
 // for mail apps that don't show HTML.
 
@@ -26,20 +26,20 @@ function layout({ heading, paragraphs, cta, siteUrl }: Layout): { text: string; 
     `${cta.label}: ${cta.url}`,
     "",
     "-",
-    `You get these emails because you use BayMeet. Manage them any time: ${settings}`,
+    `You get these emails because you use SoFly. Manage them any time: ${settings}`,
   ].join("\n");
 
   const html = `<!doctype html><html><body style="margin:0;background:${BRAND.cream};">
 <div style="padding:24px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:${BRAND.ink};">
   <div style="max-width:480px;margin:0 auto;background:#ffffff;border:1px solid ${BRAND.line};border-radius:16px;padding:28px;">
-    <p style="margin:0 0 6px;font-size:20px;font-weight:700;letter-spacing:-0.3px;">Bay<span style="color:${BRAND.accent};">Meet</span></p>
+    <p style="margin:0 0 6px;font-size:20px;font-weight:700;letter-spacing:-0.3px;">So<span style="color:${BRAND.accent};">Fly</span></p>
     <div style="width:36px;height:3px;background:${BRAND.gold};border-radius:2px;margin:0 0 20px;"></div>
     <h1 style="margin:0 0 14px;font-size:20px;line-height:1.3;">${esc(heading)}</h1>
     ${paragraphs.map((p) => `<p style="margin:0 0 14px;font-size:16px;line-height:1.5;color:${BRAND.ink};">${esc(p)}</p>`).join("\n    ")}
     <p style="margin:22px 0 0;"><a href="${esc(cta.url)}" style="display:inline-block;background:${BRAND.accent};color:#ffffff;text-decoration:none;font-weight:600;font-size:16px;padding:13px 22px;border-radius:12px;">${esc(cta.label)}</a></p>
   </div>
   <p style="max-width:480px;margin:14px auto 0;font-size:12px;line-height:1.5;color:${BRAND.muted};text-align:center;">
-    You get these emails because you use BayMeet. <a href="${esc(settings)}" style="color:${BRAND.muted};">Manage them</a> any time.
+    You get these emails because you use SoFly. <a href="${esc(settings)}" style="color:${BRAND.muted};">Manage them</a> any time.
   </p>
 </div></body></html>`;
   return { text, html };
@@ -97,7 +97,7 @@ export function requestDecision(a: {
   return { subject: a.approved ? `You're in: ${title.slice(0, 70)}` : `An update on ${title.slice(0, 70)}`, ...body };
 }
 
-/** To everyone who was going: it was cancelled (by the host, or by BayMeet). */
+/** To everyone who was going: it was cancelled (by the host, or by SoFly). */
 export function eventCancelled(a: {
   name: string;
   eventTitle: string;
@@ -109,7 +109,7 @@ export function eventCancelled(a: {
   const title = oneLine(a.eventTitle);
   const line =
     a.by === "moderator"
-      ? `Hi ${a.name}, BayMeet cancelled ${title}, which was planned for ${a.when}.`
+      ? `Hi ${a.name}, SoFly cancelled ${title}, which was planned for ${a.when}.`
       : `Hi ${a.name}, the host cancelled ${title}, which was planned for ${a.when}.`;
   const body = layout({
     heading: `Cancelled: ${title}`,
@@ -182,13 +182,13 @@ export function feedbackRequest(a: { name: string; eventTitle: string; eventUrl:
 /** Sent by the "Send me a test email" button, to prove the whole chain works. */
 export function testEmail(a: { name: string; siteUrl: string }): Email {
   const body = layout({
-    heading: "Your BayMeet emails work",
+    heading: "Your SoFly emails work",
     paragraphs: [
-      `Hi ${a.name}, this is a test email from BayMeet.`,
-      "If you're reading it, BayMeet can email you about join requests, cancellations and reminders.",
+      `Hi ${a.name}, this is a test email from SoFly.`,
+      "If you're reading it, SoFly can email you about join requests, cancellations and reminders.",
     ],
-    cta: { label: "Open BayMeet", url: a.siteUrl },
+    cta: { label: "Open SoFly", url: a.siteUrl },
     siteUrl: a.siteUrl,
   });
-  return { subject: "BayMeet test email", ...body };
+  return { subject: "SoFly test email", ...body };
 }

@@ -44,7 +44,7 @@ export function ageFieldProblem(value: string): string | undefined {
 
 /**
  * Turn the two age boxes into the range stored on the event. Blank means "no limit". Because
- * BayMeet is 18+ only, "from 18" with no upper limit is the same as no restriction, and a limit
+ * SoFly is 18+ only, "from 18" with no upper limit is the same as no restriction, and a limit
  * with no start begins at 18. Assumes the values already passed ageFieldProblem.
  */
 export function resolveAgeRange(minText: string, maxText: string): { min: number | null; max: number | null } {

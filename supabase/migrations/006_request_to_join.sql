@@ -1,4 +1,4 @@
--- BayMeet: "request to join" events, where the host approves who comes.
+-- SoFly: "request to join" events, where the host approves who comes.
 -- Paste into the Supabase SQL editor and run once (after 001-005).
 --
 -- Compatible with the previous version of the app, so run it BEFORE deploying the new code.

@@ -1,7 +1,7 @@
 import { addDaysToKey, pacificDate } from "./time";
 
 // The numbers on the admin overview, worked out from plain rows so they can be tested without a
-// database. (Website visits and page views live in the Vercel dashboard; this is what BayMeet's own
+// database. (Website visits and page views live in the Vercel dashboard; this is what SoFly's own
 // data can tell you.)
 
 export type ProfileStat = { created_at: string };

@@ -1,4 +1,4 @@
--- BayMeet: devices that turned on push notifications.
+-- SoFly: devices that turned on push notifications.
 -- Paste into the SQL editor and run it (after 001-012). It is safe to run again, so if you are
 -- unsure whether an earlier run finished, just run it once more.
 

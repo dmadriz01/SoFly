@@ -27,7 +27,7 @@ export function OnboardingForm({ defaultName, next }: { defaultName: string; nex
     const birth = parseBirthDate(get("birth_year"), get("birth_month"), get("birth_day"));
     if (!birth) found.birthdate = "Enter your full birthday.";
     else if (ageOn(birth, new Date().toISOString().slice(0, 10)) < MIN_AGE)
-      found.birthdate = `BayMeet is for people ${MIN_AGE} and older.`;
+      found.birthdate = `SoFly is for people ${MIN_AGE} and older.`;
     setErrors(found);
     if (Object.keys(found).length > 0) return;
 

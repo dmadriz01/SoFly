@@ -1,4 +1,4 @@
--- BayMeet: tidy-up and hardening. Run after 001-008 (it needs the tables from 008).
+-- SoFly: tidy-up and hardening. Run after 001-008 (it needs the tables from 008).
 -- Paste into the SQL editor and run once. It runs as a single transaction, so if anything
 -- fails, nothing changes.
 --
@@ -157,7 +157,7 @@ grant execute on function public.cancel_event(uuid) to authenticated;
 -- D. Triggers
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- BayMeet is 18+.
+-- SoFly is 18+.
 create function private.require_adult()
 returns trigger
 language plpgsql

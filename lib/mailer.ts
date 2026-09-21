@@ -36,7 +36,7 @@ export async function sendMail(mail: Mail): Promise<MailResult> {
       greetingTimeout: 8000,
       socketTimeout: 10000,
     });
-    await transporter.sendMail({ from: `BayMeet <${user}>`, ...mail });
+    await transporter.sendMail({ from: `SoFly <${user}>`, ...mail });
     return { ok: true };
   } catch (err) {
     console.error("Email failed to send:", err);

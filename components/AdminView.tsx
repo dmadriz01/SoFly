@@ -155,7 +155,7 @@ export function OverviewTab({ stats: s }: { stats: Stats }) {
       </section>
 
       <p className="text-xs text-muted">
-        These come from BayMeet&rsquo;s own data. Website visits and page views are in your Vercel dashboard under Analytics.
+        These come from SoFly&rsquo;s own data. Website visits and page views are in your Vercel dashboard under Analytics.
       </p>
     </div>
   );

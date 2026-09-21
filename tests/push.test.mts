@@ -172,7 +172,7 @@ const NOW = new Date("2026-09-20T19:51:45Z");
   t("...and tapping it opens the (cancelled) meetup page", r.sent[0].payload.url === "/events/ev1" && r.sent[0].payload.body === "The host cancelled this meetup.", JSON.stringify(r.sent[0].payload));
   const rm = recorder();
   await silently(() => notifyEventCancelled("ev1", { admin: fakeAdmin(d, users), send: fakeMailbox().send, push: rm.push, now: NOW }, "moderator"));
-  t("a moderator's cancellation pushes 'BayMeet cancelled this meetup.'", rm.sent[0]?.payload.body === "BayMeet cancelled this meetup.", JSON.stringify(rm.sent));
+  t("a moderator's cancellation pushes 'SoFly cancelled this meetup.'", rm.sent[0]?.payload.body === "SoFly cancelled this meetup.", JSON.stringify(rm.sent));
 }
 {
   // a guest with emails switched off still gets the push (push has its own consent), and vice versa
@@ -284,7 +284,7 @@ const NOW = new Date("2026-09-20T19:51:45Z");
 
   sw = build();
   await sw.fire("push", { data: null });
-  t("service worker: an empty push still shows something (browsers require it)", sw.shown.length === 1 && sw.shown[0].title === "BayMeet");
+  t("service worker: an empty push still shows something (browsers require it)", sw.shown.length === 1 && sw.shown[0].title === "SoFly");
   sw = build();
   await sw.fire("push", { data: { json: () => { throw new Error("not json"); }, text: () => "plain words" } });
   t("service worker: a message that isn't JSON is shown as text, not dropped", sw.shown[0]?.options.body === "plain words");
@@ -302,7 +302,7 @@ const NOW = new Date("2026-09-20T19:51:45Z");
   const elsewhere = { url: "https://bay-meet.vercel.app/me" } as { url: string; focused?: boolean; navigated?: string };
   sw = build([elsewhere]);
   await sw.fire("notificationclick", clickEvent("/events/ev1"));
-  t("service worker: an open BayMeet window is reused and sent to the meetup", elsewhere.focused === true && elsewhere.navigated === "https://bay-meet.vercel.app/events/ev1" && sw.opened.length === 0);
+  t("service worker: an open SoFly window is reused and sent to the meetup", elsewhere.focused === true && elsewhere.navigated === "https://bay-meet.vercel.app/events/ev1" && sw.opened.length === 0);
 
   sw = build();
   await sw.fire("notificationclick", clickEvent("https://evil.example.com/phish"));

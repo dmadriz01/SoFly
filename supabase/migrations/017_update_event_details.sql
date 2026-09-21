@@ -1,4 +1,4 @@
--- BayMeet: lets a host change the date/time and the place of their own meetup.
+-- SoFly: lets a host change the date/time and the place of their own meetup.
 -- Paste into the SQL editor and run it (after 001-016). It is safe to run again.
 
 -- One function does the whole edit in a single step, so a meetup can never end up with its new time

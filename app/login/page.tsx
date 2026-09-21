@@ -21,7 +21,7 @@ export default async function LoginPage({
   return (
     <div className="mx-auto max-w-sm space-y-6 pt-4">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Access BayMeet</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Access SoFly</h1>
         <p className="mt-1 text-muted">
           No password needed for your account. We&rsquo;ll email you a code to log in.
         </p>

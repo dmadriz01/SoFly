@@ -36,12 +36,12 @@ export default async function AdminPage({ searchParams }: { searchParams: Params
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-3">
         <h1 className="text-2xl font-bold tracking-tight">Admin</h1>
-        <Link href="/" className="tap text-sm text-muted hover:text-ink">Back to BayMeet</Link>
+        <Link href="/" className="tap text-sm text-muted hover:text-ink">Back to SoFly</Link>
       </div>
       {!admin ? (
         <Notice title="One more setting needed">
           <p>
-            The admin page reads everything with BayMeet&rsquo;s server key, and <code>SUPABASE_SERVICE_ROLE_KEY</code> isn&rsquo;t set
+            The admin page reads everything with SoFly&rsquo;s server key, and <code>SUPABASE_SERVICE_ROLE_KEY</code> isn&rsquo;t set
             here. Add it (Supabase &rarr; Project Settings &rarr; API) and redeploy. It&rsquo;s the same key that powers the emails.
           </p>
         </Notice>

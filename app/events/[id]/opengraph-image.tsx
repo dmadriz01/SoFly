@@ -3,7 +3,7 @@ import { eventOgImage } from "@/lib/event-og";
 import { COLORS, OG_SIZE, Wordmark, loadBoldFont } from "@/lib/og";
 import { createPublicClient } from "@/lib/supabase/public";
 
-export const alt = "BayMeet meetup";
+export const alt = "SoFly meetup";
 export const size = OG_SIZE;
 export const contentType = "image/png";
 

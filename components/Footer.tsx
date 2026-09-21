@@ -12,7 +12,7 @@ export function Footer() {
           Privacy
         </Link>
         {CONTACT_EMAIL && (
-          <a href={`mailto:${CONTACT_EMAIL}?subject=BayMeet%20feedback`} className="tap hover:text-ink">
+          <a href={`mailto:${CONTACT_EMAIL}?subject=SoFly%20feedback`} className="tap hover:text-ink">
             Feedback
           </a>
         )}

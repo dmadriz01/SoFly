@@ -1,4 +1,4 @@
--- BayMeet: let a meetup be set for men only (it already allowed "Everyone" and "Women-only").
+-- SoFly: let a meetup be set for men only (it already allowed "Everyone" and "Women-only").
 -- Paste into the SQL editor and run it (after 001-011). It is safe to run again, so if you are
 -- unsure whether an earlier run finished, just run it once more.
 -- Run this BEFORE deploying the matching code: the new form can save "Men-only", and the old rule

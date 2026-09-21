@@ -3,7 +3,7 @@ import { CONTACT_EMAIL } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Privacy",
-  description: "What BayMeet collects, who can see it, and how to remove it.",
+  description: "What SoFly collects, who can see it, and how to remove it.",
 };
 
 export default function PrivacyPage() {
@@ -106,7 +106,7 @@ export default function PrivacyPage() {
       <section className="space-y-2">
         <h2 className="text-lg font-bold">Who handles your data</h2>
         <p className="text-ink/90">
-          BayMeet runs on Supabase (database and login), Vercel (hosting and analytics), and an email
+          SoFly runs on Supabase (database and login), Vercel (hosting and analytics), and an email
           provider that delivers your login code. We don&rsquo;t sell your data.
         </p>
       </section>
@@ -132,7 +132,7 @@ export default function PrivacyPage() {
 
       <section className="space-y-2">
         <h2 className="text-lg font-bold">Age</h2>
-        <p className="text-ink/90">BayMeet is intended for people 18 and older.</p>
+        <p className="text-ink/90">SoFly is intended for people 18 and older.</p>
       </section>
     </article>
   );

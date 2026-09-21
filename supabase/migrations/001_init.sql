@@ -1,4 +1,4 @@
--- BayMeet initial schema.
+-- SoFly initial schema.
 -- Paste this whole file into the Supabase SQL editor and run it once.
 
 -- ─────────────────────────────────────────────────────────────

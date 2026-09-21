@@ -1,4 +1,4 @@
--- BayMeet: notes on join requests, and host controls (cancel, change max spots).
+-- SoFly: notes on join requests, and host controls (cancel, change max spots).
 -- Paste into the Supabase SQL editor and run once (after 001-006).
 
 -- ─────────────────────────────────────────────────────────────

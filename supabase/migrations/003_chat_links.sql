@@ -1,4 +1,4 @@
--- BayMeet: optional group chat link per event, visible only to the host and people who joined.
+-- SoFly: optional group chat link per event, visible only to the host and people who joined.
 -- Paste into the Supabase SQL editor and run once (after 001 and 002).
 
 create table public.event_chat_links (
