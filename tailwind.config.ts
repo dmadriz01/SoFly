@@ -11,6 +11,8 @@ const config: Config = {
     extend: {
       colors: {
         cream: BRAND.cream,
+        sand: BRAND.sand,
+        gold: BRAND.gold,
         ink: BRAND.ink,
         muted: BRAND.muted,
         line: BRAND.line,

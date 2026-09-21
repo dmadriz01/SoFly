@@ -35,7 +35,7 @@ export function eventOgImage(event: OgEvent, font: ArrayBuffer) {
         style={{
           width: "100%",
           height: "100%",
-          background: COLORS.accent,
+          background: COLORS.gold,
           display: "flex",
           fontFamily: "Inter",
           position: "relative",

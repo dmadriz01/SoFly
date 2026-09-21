@@ -17,8 +17,8 @@ export function BrandMark({ size }: { size: number }) {
       style={{
         width: size,
         height: size,
-        background: COLORS.accent,
-        color: "white",
+        background: COLORS.accentDark,
+        color: COLORS.gold,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",

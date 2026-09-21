@@ -15,7 +15,7 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(data.title || "BayMeet", {
       body: data.body || "",
-      icon: "/pwa-icon/192?v=64732c-1",
+      icon: "/pwa-icon/192?v=2a6b5c-1",
       tag: data.tag || undefined,
       data: { url: data.url || "/" },
     })

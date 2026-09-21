@@ -88,10 +88,11 @@ export function BottomNav({ pending = 0 }: { pending?: number }) {
               <Link
                 href={item.href}
                 aria-current={active ? "page" : undefined}
-                className={`flex flex-col items-center gap-0.5 py-2.5 text-xs font-medium ${
+                className={`relative flex flex-col items-center gap-0.5 py-2.5 text-xs font-medium ${
                   active ? "text-accent" : "text-muted"
                 }`}
               >
+                {active && <span aria-hidden className="absolute inset-x-[30%] top-0 h-0.5 rounded-full bg-gold" />}
                 <span className="relative">
                   {item.icon}
                   {item.href === "/me" && pending > 0 && <Badge count={pending} />}

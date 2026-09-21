@@ -20,7 +20,7 @@ export default async function Image() {
           justifyContent: "center",
           padding: 90,
           fontFamily: "Inter",
-          borderBottom: `24px solid ${COLORS.accent}`,
+          borderBottom: `24px solid ${COLORS.gold}`,
         }}
       >
         <Wordmark size={150} />

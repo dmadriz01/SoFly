@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Analytics } from "@vercel/analytics/react";
 import { Footer } from "@/components/Footer";
 import { BottomNav, TopNav } from "@/components/Nav";
-import { iconUrl } from "@/lib/brand";
+import { BRAND, iconUrl } from "@/lib/brand";
 import { getPendingRequestCount } from "@/lib/requests";
 import { SITE_NAME, SITE_URL, TAGLINE } from "@/lib/site";
 import "./globals.css";
@@ -36,7 +36,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#fbf8f3",
+  themeColor: BRAND.cream,
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

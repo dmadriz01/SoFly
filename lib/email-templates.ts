@@ -32,9 +32,10 @@ function layout({ heading, paragraphs, cta, siteUrl }: Layout): { text: string; 
   const html = `<!doctype html><html><body style="margin:0;background:${BRAND.cream};">
 <div style="padding:24px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:${BRAND.ink};">
   <div style="max-width:480px;margin:0 auto;background:#ffffff;border:1px solid ${BRAND.line};border-radius:16px;padding:28px;">
-    <p style="margin:0 0 20px;font-size:20px;font-weight:700;letter-spacing:-0.3px;">Bay<span style="color:${BRAND.accent};">Meet</span></p>
+    <p style="margin:0 0 6px;font-size:20px;font-weight:700;letter-spacing:-0.3px;">Bay<span style="color:${BRAND.accent};">Meet</span></p>
+    <div style="width:36px;height:3px;background:${BRAND.gold};border-radius:2px;margin:0 0 20px;"></div>
     <h1 style="margin:0 0 14px;font-size:20px;line-height:1.3;">${esc(heading)}</h1>
-    ${paragraphs.map((p) => `<p style="margin:0 0 14px;font-size:16px;line-height:1.5;color:#4a423c;">${esc(p)}</p>`).join("\n    ")}
+    ${paragraphs.map((p) => `<p style="margin:0 0 14px;font-size:16px;line-height:1.5;color:${BRAND.ink};">${esc(p)}</p>`).join("\n    ")}
     <p style="margin:22px 0 0;"><a href="${esc(cta.url)}" style="display:inline-block;background:${BRAND.accent};color:#ffffff;text-decoration:none;font-weight:600;font-size:16px;padding:13px 22px;border-radius:12px;">${esc(cta.label)}</a></p>
   </div>
   <p style="max-width:480px;margin:14px auto 0;font-size:12px;line-height:1.5;color:${BRAND.muted};text-align:center;">

@@ -139,11 +139,19 @@ t("weeks: only real dates are accepted", isDateKey("2026-09-21") && !isDateKey("
   t("brand: dark accent text on the soft tint is readable", contrast(BRAND.accentDark, BRAND.accentSoft) >= AA, contrast(BRAND.accentDark, BRAND.accentSoft).toFixed(2));
   t("brand: dark accent text on the page background is readable", contrast(BRAND.accentDark, BRAND.cream) >= AA);
   t("brand: main text on the soft tint is readable", contrast(BRAND.ink, BRAND.accentSoft) >= AA);
-  t("brand: secondary text on the page background is readable enough (3:1+)", contrast(BRAND.muted, BRAND.cream) >= 3);
+  t("brand: accent-colored text on the soft (sand) tint is readable", contrast(BRAND.accent, BRAND.accentSoft) >= AA, contrast(BRAND.accent, BRAND.accentSoft).toFixed(2));
+  t("brand: secondary text is readable (4.5:1+) on the page, on white cards and on the sand tint", [BRAND.cream, "#ffffff", BRAND.accentSoft].every((bg) => contrast(BRAND.muted, bg) >= AA), [BRAND.cream, "#ffffff", BRAND.accentSoft].map((bg) => contrast(BRAND.muted, bg).toFixed(2)).join(" / "));
+  t("brand: main text is very readable on the page and on white", contrast(BRAND.ink, BRAND.cream) >= 7 && contrast(BRAND.ink, "#ffffff") >= 7);
+  t("brand: the border colour is visible against the page background (it must not vanish)", BRAND.line !== BRAND.cream);
+  t("brand: the gold letter on the deep-green app icon is legible (3:1+ for large graphics)", contrast(BRAND.gold, BRAND.accentDark) >= 3, contrast(BRAND.gold, BRAND.accentDark).toFixed(2));
+  t("brand: gold is too light for text on any light background (that's why it is decoration only)", contrast(BRAND.gold, BRAND.cream) < AA && contrast(BRAND.gold, "#ffffff") < AA);
   // the old orange must not survive anywhere in the source: everything reads from lib/brand.ts
   const walk = (dir: string): string[] => fs.readdirSync(dir, { withFileTypes: true }).flatMap((d) => (d.isDirectory() ? (d.name === "node_modules" || d.name === ".next" ? [] : walk(path.join(dir, d.name))) : /\.(ts|tsx|css|mjs)$/.test(d.name) ? [path.join(dir, d.name)] : []));
-  const stray = ["app", "components", "lib"].flatMap((d) => walk(path.join(process.cwd(), d))).filter((f) => /d9552f|bd4523|fcebe4/i.test(fs.readFileSync(f, "utf8")));
-  t("brand: no hard-coded copy of the old orange is left in the source", stray.length === 0, stray.join(", "));
+  const stray = ["app", "components", "lib"].flatMap((d) => walk(path.join(process.cwd(), d))).filter((f) => /d9552f|bd4523|fcebe4|64732c|4a571f|eef1dc|fbf8f3|2b2622|7d726a|ebe2d7/i.test(fs.readFileSync(f, "utf8")));
+  t("brand: no hard-coded copy of an old colour (the orange or the olive) is left in the source", stray.length === 0, stray.join(", "));
+  // gold is decoration only: it is never used as a text colour anywhere
+  const gold = ["app", "components", "lib"].flatMap((d) => walk(path.join(process.cwd(), d))).filter((f) => /\btext-gold\b|text-\[#c49a45\]|color:\s*\$\{BRAND\.gold\}(?![^;]*background)/i.test(fs.readFileSync(f, "utf8")) && !f.endsWith("brand.ts"));
+  t("brand: gold is never used as a text colour in the app (decoration only)", gold.length === 0, gold.join(", "));
   const cfg = fs.readFileSync(path.join(process.cwd(), "tailwind.config.ts"), "utf8");
   t("brand: the styling config reads the shared palette, not its own copy", cfg.includes("BRAND.accent") && !/#[0-9a-fA-F]{6}/.test(cfg));
 

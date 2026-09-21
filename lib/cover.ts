@@ -1,3 +1,4 @@
+import { BRAND } from "./brand";
 import { pacificHour } from "./time";
 
 // Generated cover art for a meetup. Nobody uploads anything, so there is nothing to moderate: the
@@ -92,7 +93,7 @@ export const CATEGORY_COLOR: Record<string, string> = {
   Swimming: "#2aa7c9", Dance: "#9a5fd0", "Board Games": "#7a5fd0", "Video Games": "#5a5fd0",
   "Coffee Chat": "#b7793a", Dinner: "#c2483d", Conversation: "#e08a4a", "Book Club": "#8d63a8",
   "Language Exchange": "#4a7fd0", Networking: "#6b7a90", "Food & Drink": "#d0574a", Music: "#c04fc0",
-  "Arts & Crafts": "#8a9a5a", Photography: "#6b7a8a", Volunteering: "#4faf6a", Other: "#64732c",
+  "Arts & Crafts": "#8a9a5a", Photography: "#6b7a8a", Volunteering: "#4faf6a", Other: BRAND.accent,
 };
 
 type Family = "sport" | "game" | "social" | "art" | "outdoor";

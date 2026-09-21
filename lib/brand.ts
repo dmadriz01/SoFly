@@ -1,13 +1,15 @@
 // BayMeet's colors, in ONE place. The site's styling, the app icon, the link-preview images and the
 // emails all read from here, so changing the look is a single edit.
 export const BRAND = {
-  cream: "#fbf8f3", // page background
-  ink: "#2b2622", // main text
-  muted: "#7d726a", // secondary text
-  line: "#ebe2d7", // borders
-  accent: "#64732c", // olive: buttons, links, highlights
-  accentDark: "#4a571f", // olive, darker: hover states and text on tinted backgrounds
-  accentSoft: "#eef1dc", // olive tint: soft backgrounds
+  cream: "#f8f4ec", // page background: the sand, lightened
+  sand: "#e8dcc4", // warm surfaces (soft backgrounds) and borders
+  ink: "#123f36", // deep green: main text
+  muted: "#41655e", // secondary text (still 4.5:1+ on every background it sits on)
+  line: "#e8dcc4", // borders
+  accent: "#2a6b5c", // teal green: buttons, links, highlights
+  accentDark: "#123f36", // deep green: hover states and text on tinted backgrounds
+  accentSoft: "#e8dcc4", // sand: soft backgrounds (pills, the active tab, notes)
+  gold: "#c49a45", // decoration ONLY (lines, the icon letter, small marks): too light to be text
 } as const;
 
 /**

@@ -24,7 +24,7 @@
     @apply inline-flex min-h-[2.75rem] items-center justify-center;
   }
   .skeleton {
-    background: linear-gradient(90deg, #f1e9df 25%, #f8f2ea 37%, #f1e9df 63%);
+    background: linear-gradient(90deg, theme("colors.line") 25%, theme("colors.cream") 37%, theme("colors.line") 63%);
     background-size: 400% 100%;
     animation: shimmer 1.4s ease infinite;
     @apply rounded-xl;
