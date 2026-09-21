@@ -8,14 +8,16 @@ export type FakeData = Record<string, Row[]>;
 export function fakeAdmin(
   data: FakeData,
   users: Record<string, { email: string | null }>,
-  opts: { lookupError?: string } = {}
+  opts: { lookupError?: string; /** act like a database without the new settings columns (migration 019) */ noPrefColumns?: boolean; /** act like a database without the send log table */ logError?: boolean } = {}
 ) {
   const from = (table: string) => {
     const filters: ((r: Row) => boolean)[] = [];
     const sorts: { col: string; asc: boolean }[] = [];
     let deleting = false;
     let updating: Row | null = null;
+    let inserting: Row | null = null;
     let headCount = false;
+    let selected = "";
     let window: [number, number] | null = null;
     const matching = () => (data[table] ?? []).filter((r) => filters.every((f) => f(r)));
     const ordered = () => {
@@ -28,9 +30,10 @@ export function fakeAdmin(
     };
     const cmp = (r: Row, c: string, v: unknown) => [new Date(r[c] as string).getTime(), new Date(v as string).getTime()] as const;
     const api = {
-      select: (_cols?: string, opts?: { count?: string; head?: boolean }) => ((headCount = Boolean(opts?.head)), api),
+      select: (cols?: string, o?: { count?: string; head?: boolean }) => ((selected = cols ?? ""), (headCount = Boolean(o?.head)), api),
       delete: () => ((deleting = true), api),
       update: (values: Row) => ((updating = values), api),
+      insert: (row: Row) => ((inserting = row), api),
       eq: (c: string, v: unknown) => (filters.push((r) => r[c] === v), api),
       neq: (c: string, v: unknown) => (filters.push((r) => r[c] !== v), api),
       is: (c: string, v: unknown) => (filters.push((r) => (v === null ? r[c] == null : r[c] === v)), api),
@@ -58,7 +61,17 @@ export function fakeAdmin(
       range: (a: number, b: number) => ((window = [a, b]), api),
       limit: (n: number) => ((window = [0, n - 1]), api),
       maybeSingle: async () => ({ data: matching()[0] ?? null, error: null }),
-      then: (resolve: (v: { data: Row[] | null; error: null; count?: number }) => unknown) => {
+      then: (resolve: (v: { data: Row[] | null; error: { code?: string; message: string } | null; count?: number }) => unknown) => {
+        if (inserting) {
+          if (table === "notification_log" && opts.logError) return resolve({ data: null, error: { code: "42P01", message: 'relation "notification_log" does not exist' } });
+          const rows = (data[table] ??= []);
+          // the send log is unique per (person, kind, ref), like the real table
+          if (table === "notification_log" && rows.some((r) => r.user_id === inserting!.user_id && r.kind === inserting!.kind && (r.ref ?? "") === (inserting!.ref ?? ""))) {
+            return resolve({ data: null, error: { code: "23505", message: "duplicate key value violates unique constraint" } as never });
+          }
+          rows.push({ created_at: new Date().toISOString(), ...inserting });
+          return resolve({ data: null, error: null });
+        }
         if (deleting) {
           const doomed = matching();
           data[table] = (data[table] ?? []).filter((r) => !doomed.includes(r));
@@ -69,6 +82,8 @@ export function fakeAdmin(
           rows.forEach((r) => Object.assign(r, updating));
           return resolve({ data: rows.map((r) => ({ ...r })), error: null });
         }
+        if (table === "user_settings" && opts.noPrefColumns && /notify_|quiet_/.test(selected)) return resolve({ data: null, error: { message: "column user_settings.notify_reminders does not exist" } });
+        if (table === "notification_log" && opts.logError) return resolve({ data: null, error: { code: "42P01", message: 'relation "notification_log" does not exist' } });
         if (headCount) return resolve({ data: null, error: null, count: matching().length });
         return resolve({ data: ordered(), error: null });
       },

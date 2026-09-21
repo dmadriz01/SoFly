@@ -578,6 +578,46 @@ export async function cancelEvent(eventId: string): Promise<{ error?: string }> 
   return {};
 }
 
+/** Which kinds of notification to send, and quiet hours (Pacific time). */
+export async function saveNotificationPrefs(input: {
+  reminders: boolean;
+  matches: boolean;
+  activity: boolean;
+  quietStart: number | null;
+  quietEnd: number | null;
+}): Promise<{ error?: string }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Please log in." };
+
+  const flags = [input?.reminders, input?.matches, input?.activity];
+  if (!flags.every((f) => typeof f === "boolean")) return { error: "Couldn't save that." };
+  const hour = (v: unknown) => (typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 23 ? v : null);
+  const start = hour(input.quietStart);
+  const end = hour(input.quietEnd);
+  // Quiet hours need both ends; an empty window (the same hour twice) means none.
+  const quiet = start !== null && end !== null && start !== end ? { quiet_start: start, quiet_end: end } : { quiet_start: null, quiet_end: null };
+
+  const { error } = await updateOrInsert(
+    supabase,
+    "user_settings",
+    { user_id: user.id },
+    {
+      notify_reminders: input.reminders,
+      notify_matches: input.matches,
+      notify_activity: input.activity,
+      quiet_start: quiet.quiet_start,
+      quiet_end: quiet.quiet_end,
+      updated_at: new Date().toISOString(),
+    }
+  );
+  if (error) return { error: "Couldn't save that. Please try again." };
+  revalidatePath("/me");
+  return {};
+}
+
 /** Saves interests. With `next` it continues there (onboarding); without, it just returns. */
 export async function saveInterests(categories: string[], next?: string): Promise<{ error?: string }> {
   const supabase = createClient();

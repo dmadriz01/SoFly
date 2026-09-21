@@ -41,3 +41,30 @@ export function explainPushError(err: unknown): string {
     return "Your browser couldn't reach its notification service. Check your connection and try again.";
   return `Couldn't turn push on${e?.message ? `: ${e.message.slice(0, 120)}` : "."}`;
 }
+
+/**
+ * Turns push notifications on for this device: asks permission, subscribes, and hands the details to
+ * `save` (which stores them on the server). Says what happened in words a person can act on.
+ */
+export async function enableThisDevice(
+  publicKey: string,
+  save: (device: { endpoint: string; p256dh: string; auth: string }) => Promise<{ error?: string }>
+): Promise<{ ok: true } | { ok: false; reason: "denied" | "dismissed" | "error"; message?: string }> {
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") return { ok: false, reason: permission === "denied" ? "denied" : "dismissed" };
+    const reg = await pushRegistration();
+    const sub =
+      (await reg.pushManager.getSubscription()) ??
+      (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) as BufferSource }));
+    const keys = sub.toJSON().keys;
+    const saved = await save({ endpoint: sub.endpoint, p256dh: keys?.p256dh ?? "", auth: keys?.auth ?? "" });
+    if (saved.error) {
+      await sub.unsubscribe();
+      return { ok: false, reason: "error", message: saved.error };
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, reason: "error", message: explainPushError(err) };
+  }
+}

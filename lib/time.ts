@@ -36,6 +36,10 @@ export function pacificLocalValue(iso: string) {
   return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
 }
 
+/** The weekday in Pacific time: 0 = Sunday ... 6 = Saturday. */
+export const pacificWeekday = (at: Date = new Date()) =>
+  ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(new Intl.DateTimeFormat("en-US", { timeZone: TZ, weekday: "short" }).format(at));
+
 /** The hour of day (0-23) in Pacific time for a timestamp. */
 export const pacificHour = (iso: string) => Number(wallParts(new Date(iso)).hour);
 

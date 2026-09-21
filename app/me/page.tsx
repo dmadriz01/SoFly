@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { AboutForm } from "@/components/AboutForm";
 import { EmailSettings } from "@/components/EmailSettings";
 import { LogoutButton } from "@/components/LogoutButton";
+import { NotificationSettings } from "@/components/NotificationSettings";
 import { PushSettings } from "@/components/PushSettings";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { FeedbackPrompt } from "@/components/FeedbackPrompt";
@@ -12,6 +13,7 @@ import { InterestsForm } from "@/components/InterestsForm";
 import { isAdminUser } from "@/lib/admin-access";
 import { repeatLabel, seriesNeedingMoreDates } from "@/lib/recurrence";
 import { getInterests } from "@/lib/interests";
+import { parsePrefs } from "@/lib/notify-policy";
 import { getAbout, getBirthDate } from "@/lib/profile";
 import { createClient } from "@/lib/supabase/server";
 import type { EventWithCount } from "@/lib/types";
@@ -85,12 +87,15 @@ export default async function MePage() {
   ]);
 
   const interests = (await getInterests(supabase, user.id)) ?? [];
-  const { data: settings } = await supabase
+  // The notification settings. Before migration 019 only the email switch exists; that still works.
+  let settingsRes = await supabase
     .from("user_settings")
-    .select("email_notifications")
+    .select("email_notifications, notify_reminders, notify_matches, notify_activity, quiet_start, quiet_end")
     .eq("user_id", user.id)
     .maybeSingle();
-  const emailsOn = settings?.email_notifications ?? true;
+  if (settingsRes.error) settingsRes = await supabase.from("user_settings").select("email_notifications").eq("user_id", user.id).maybeSingle() as typeof settingsRes;
+  const prefs = parsePrefs(settingsRes.data as Record<string, unknown> | null);
+  const emailsOn = prefs.email;
   const about = await getAbout(supabase, user.id);
   const hosting = (hostingRes.data ?? []) as EventWithCount[];
   const myRows = (myRsvps.data ?? []) as { event_id: string; status: string }[];
@@ -287,6 +292,7 @@ export default async function MePage() {
         <h2 className="mb-3 text-lg font-bold">Notifications</h2>
         <div className="space-y-3">
           <EmailSettings initial={emailsOn} />
+          <NotificationSettings initial={prefs} />
           <PushSettings />
         </div>
       </section>

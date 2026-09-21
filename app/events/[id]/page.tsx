@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { CategoryBadge } from "@/components/CategoryBadge";
 import { DeleteEventButton } from "@/components/DeleteEventButton";
 import { EventCover } from "@/components/EventCover";
+import { PushPrompt } from "@/components/PushPrompt";
 import { SeriesPanel, type SeriesDate } from "@/components/SeriesPanel";
 import { CoverChangeNote } from "@/components/CoverChangeNote";
 import { emojiFor } from "@/lib/constants";
@@ -345,6 +346,9 @@ export default async function EventPage({ params, searchParams }: { params: { id
         myNote={(user && notes.get(user.id)) || null}
         hasAbout={viewerHasAbout}
       />
+
+      {/* Right after joining is when a reminder is worth having: ask then, not on arrival. */}
+      {!isHost && (myStatus === "approved" || myStatus === "pending") && !cancelled && !ended && <PushPrompt />}
 
       {insider && !cancelled && !ended && (
         <EventActions eventId={event.id} address={hasRealLocation ? address : null} />

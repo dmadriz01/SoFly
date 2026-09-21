@@ -144,6 +144,24 @@ export function eventUpdated(a: {
   return { subject: `Updated: ${title.slice(0, 70)}`, ...body };
 }
 
+/** The weekly note: a few meetups that match what someone likes. */
+export function weeklyDigest(a: {
+  name: string;
+  items: { title: string; when: string; place: string; spotsLeft: number; why: string; url: string }[];
+  siteUrl: string;
+}): Email {
+  const lines = a.items.map(
+    (i) => `${oneLine(i.title)}: ${i.when}, ${oneLine(i.place)}. ${i.spotsLeft} ${i.spotsLeft === 1 ? "spot" : "spots"} left. (${i.why}) ${i.url}`
+  );
+  const body = layout({
+    heading: "Meetups you might like this week",
+    paragraphs: [`Hi ${a.name}, here are a few coming up that match what you like:`, ...lines],
+    cta: { label: "See what's on", url: a.siteUrl },
+    siteUrl: a.siteUrl,
+  });
+  return { subject: `${a.items.length} ${a.items.length === 1 ? "meetup" : "meetups"} you might like this week`, ...body };
+}
+
 /** The day before: what, when, where. */
 export function reminder(a: {
   name: string;

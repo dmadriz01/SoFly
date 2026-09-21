@@ -4,9 +4,12 @@ import * as email from "./email-templates";
 import { mailConfigured, sendMail, type Mail, type MailResult } from "./mailer";
 import { pushConfigured, sendPushToUser, type PushOutcome, type PushPayload } from "./push";
 import { pushSummary, type DetailChange } from "./event-edit";
+import { rankMeetups, whyThis, type Candidate, type Taste } from "./engagement";
+import { claimSend, digestSentRecently, underNudgeCap } from "./notify-log";
+import { channelsFor, parsePrefs, type Category, type Prefs } from "./notify-policy";
 import { SITE_URL } from "./site";
 import { createAdminClient } from "./supabase/admin";
-import { addDaysToKey, formatWhenLong, pacificDate, pacificLocalToUtc } from "./time";
+import { addDaysToKey, formatWhenLong, formatWhenShort, pacificDate, pacificLocalToUtc, pacificWeekday } from "./time";
 import { firstName } from "./utils";
 
 // Everything here is best effort and never throws: an email problem must not break the action
@@ -41,23 +44,34 @@ const eventUrl = (id: string) => `${SITE_URL}/events/${id}`;
 
 type Recipient = { email: string; name: string };
 type Skip = "noEmail" | "optedOut" | "lookupFailed";
-type Lookup = { ok: true; to: Recipient } | { ok: false; skip: Skip };
+type Lookup = { ok: true; to: Recipient; prefs: Prefs } | { ok: false; skip: Skip; prefs: Prefs };
 
-/** Someone's email address and first name, unless they've turned emails off. */
-async function recipient(admin: SupabaseClient, userId: string): Promise<Lookup> {
-  const [user, settings, profile] = await Promise.all([
+/** Someone's notification settings. Before migration 019 only the email switch exists; that still works. */
+export async function loadPrefs(admin: SupabaseClient, userId: string): Promise<Prefs> {
+  let res = await admin
+    .from("user_settings")
+    .select("email_notifications, notify_reminders, notify_matches, notify_activity, quiet_start, quiet_end")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (res.error) res = await admin.from("user_settings").select("email_notifications").eq("user_id", userId).maybeSingle();
+  return parsePrefs(res.data as Record<string, unknown> | null);
+}
+
+/** Someone's email address and first name, and their settings, unless they've turned emails off. */
+async function recipient(admin: SupabaseClient, userId: string, known?: Prefs): Promise<Lookup> {
+  const [user, prefs, profile] = await Promise.all([
     admin.auth.admin.getUserById(userId),
-    admin.from("user_settings").select("email_notifications").eq("user_id", userId).maybeSingle(),
+    known ? Promise.resolve(known) : loadPrefs(admin, userId),
     admin.from("profiles").select("name").eq("id", userId).maybeSingle(),
   ]);
   if (user.error) {
     console.error("Email lookup failed for a recipient:", user.error.message);
-    return { ok: false, skip: "lookupFailed" };
+    return { ok: false, skip: "lookupFailed", prefs };
   }
   const address = user.data?.user?.email;
-  if (!address) return { ok: false, skip: "noEmail" };
-  if (settings.data?.email_notifications === false) return { ok: false, skip: "optedOut" };
-  return { ok: true, to: { email: address, name: firstName(profile.data?.name) } };
+  if (!address) return { ok: false, skip: "noEmail", prefs };
+  if (!prefs.email) return { ok: false, skip: "optedOut", prefs };
+  return { ok: true, to: { email: address, name: firstName(profile.data?.name) }, prefs };
 }
 
 async function safely(label: string, work: () => Promise<void>) {
@@ -81,7 +95,8 @@ export function notifyHostOfRequest(eventId: string, requesterId: string, deps: 
       admin.from("profiles").select("name").eq("id", requesterId).maybeSingle(),
     ]);
     const requesterName = firstName(requester.data?.name);
-    if (host.ok) {
+    const via = channelsFor(host.prefs, "activity", deps.now ?? new Date());
+    if (host.ok && via.email) {
       await send({
         to: host.to.email,
         ...email.requestReceived({
@@ -93,12 +108,14 @@ export function notifyHostOfRequest(eventId: string, requesterId: string, deps: 
         }),
       });
     }
-    await push(event.host_id, {
-      title: `${requesterName} wants to join`,
-      body: event.title,
-      url: `/events/${eventId}`,
-      tag: `request-${eventId}`,
-    });
+    if (via.push) {
+      await push(event.host_id, {
+        title: `${requesterName} wants to join`,
+        body: event.title,
+        url: `/events/${eventId}`,
+        tag: `request-${eventId}`,
+      });
+    }
   });
 }
 
@@ -301,13 +318,23 @@ async function approvedGuestIds(admin: SupabaseClient, eventId: string): Promise
   return (data ?? []).map((g) => g.user_id as string);
 }
 
+/** The weekly digest goes out on this day (Pacific time; 4 = Thursday), for meetups in the next 10 days. */
+const DIGEST_WEEKDAY = 4;
+const DIGEST_WINDOW_DAYS = 10;
+const DIGEST_ITEMS = 4;
+
 export type DailyResult = {
   reminders: number;
   feedbackRequests: number;
+  /** Weekly "meetups you might like" notes sent (email or push). */
+  digests: number;
   eventsTomorrow: number;
   eventsYesterday: number;
   /** People who would have been emailed but weren't, and why. */
   skipped: Record<Skip, number>;
+  /** Emails and pushes held back because the person switched that kind off, or it was their quiet hours. */
+  mutedByPrefs: number;
+  pushMuted: number;
   /** Emails the mail server refused, with the first reason. */
   failed: number;
   firstFailure?: string;
@@ -330,9 +357,12 @@ export async function sendDailyEmails(now = new Date(), deps: Deps = {}): Promis
   const result: DailyResult = {
     reminders: 0,
     feedbackRequests: 0,
+    digests: 0,
     eventsTomorrow: 0,
     eventsYesterday: 0,
     skipped: { noEmail: 0, optedOut: 0, lookupFailed: 0 },
+    mutedByPrefs: 0,
+    pushMuted: 0,
     failed: 0,
     mailConfigured: deps.mailConfigured ?? (deps.send ? true : mailConfigured()),
     pushes: 0,
@@ -355,15 +385,25 @@ export async function sendDailyEmails(now = new Date(), deps: Deps = {}): Promis
   const [yesterday, startOfToday, tomorrow, dayAfter] = [day(-1), day(0), day(1), day(2)];
   if (!yesterday || !startOfToday || !tomorrow || !dayAfter) return done("could not work out the day windows");
 
+  const prefsCache = new Map<string, Prefs>();
+  const prefsOf = async (userId: string) => {
+    if (!prefsCache.has(userId)) prefsCache.set(userId, await loadPrefs(admin, userId));
+    return prefsCache.get(userId)!;
+  };
+
   const CAP = 250; // stays well inside a Gmail account's daily sending limit
-  const capped = () => result.reminders + result.feedbackRequests >= CAP;
+  const capped = () => result.reminders + result.feedbackRequests + result.digests >= CAP;
 
   /** Look someone up and email them; returns whether it was sent. Skips and failures are counted. */
-  const emailPerson = async (userId: string, build: (r: Recipient) => Omit<Mail, "to">) => {
+  const emailPerson = async (userId: string, build: (r: Recipient) => Omit<Mail, "to">, category: Category = "reminders") => {
     if (!result.mailConfigured) return false; // email is off; push may still go out
-    const found = await recipient(admin, userId);
+    const found = await recipient(admin, userId, await prefsOf(userId));
     if (!found.ok) {
       result.skipped[found.skip]++;
+      return false;
+    }
+    if (!channelsFor(found.prefs, category, now).email) {
+      result.mutedByPrefs++; // they've switched this kind off
       return false;
     }
     const sent = await send({ to: found.to.email, ...build(found.to) });
@@ -376,8 +416,12 @@ export async function sendDailyEmails(now = new Date(), deps: Deps = {}): Promis
   };
 
   /** A push notification to everyone's devices; counted separately from email. */
-  const pushPerson = async (userId: string, payload: PushPayload) => {
+  const pushPerson = async (userId: string, payload: PushPayload, category: Category = "reminders") => {
     if (!result.pushConfigured) return;
+    if (!channelsFor(await prefsOf(userId), category, now).push) {
+      result.pushMuted++; // switched off, or inside their quiet hours
+      return;
+    }
     const o = await push(userId, payload);
     result.pushes += o.sent;
     result.pushFailed += o.failed;
@@ -437,6 +481,89 @@ export async function sendDailyEmails(now = new Date(), deps: Deps = {}): Promis
         url: `/events/${event.id}`,
         tag: `feedback-${event.id}`,
       });
+    }
+  }
+
+  // Weekly digest (Thursdays): a few meetups that match what someone likes. Only to people who picked
+  // interests, only when there is something worth sending, and never twice in a week.
+  if (pacificWeekday(now) === DIGEST_WEEKDAY) {
+    const horizon = new Date(now.getTime() + DIGEST_WINDOW_DAYS * 86400000);
+    const { data: rows } = await admin
+      .from("events")
+      .select("id, title, category, neighborhood, starts_at, max_spots, spots_taken, audience, age_min, age_max, host_id, series_id")
+      .is("cancelled_at", null)
+      .gt("starts_at", now.toISOString())
+      .lt("starts_at", horizon.toISOString())
+      .order("starts_at", { ascending: true })
+      .limit(300);
+    const pool: Candidate[] = (rows ?? []).map((e) => ({
+      id: e.id as string,
+      title: e.title as string,
+      category: e.category as string,
+      neighborhood: e.neighborhood as string,
+      starts_at: e.starts_at as string,
+      spots_left: Math.max((e.max_spots as number) - (e.spots_taken as number), 0),
+      audience: e.audience as string,
+      age_min: (e.age_min as number | null) ?? null,
+      age_max: (e.age_max as number | null) ?? null,
+      host_id: e.host_id as string,
+      series_id: (e.series_id as string | null | undefined) ?? null,
+    }));
+    if (pool.length > 0) {
+      const { data: members } = await admin.from("user_interests").select("user_id, categories").limit(1000);
+      for (const m of members ?? []) {
+        const categories = (m.categories as string[] | null) ?? [];
+        if (categories.length === 0) continue;
+        const id = m.user_id as string;
+        if (capped()) return done("stopped at the daily cap");
+        const prefs = await prefsOf(id);
+        if (!prefs.matches) {
+          result.mutedByPrefs++;
+          continue;
+        }
+        if (await digestSentRecently(admin, id, now)) continue;
+
+        const poolIds = pool.map((c) => c.id);
+        const [mine, priv] = await Promise.all([
+          admin.from("rsvps").select("event_id").eq("user_id", id).in("event_id", poolIds),
+          admin.from("profile_private").select("birth_date").eq("user_id", id).maybeSingle(),
+        ]);
+        const exclude = new Set<string>([...(mine.data ?? []).map((r) => r.event_id as string), ...pool.filter((c) => c.host_id === id).map((c) => c.id)]);
+        const taste: Taste = { categories, neighborhoods: [] };
+        const picks = rankMeetups(pool, taste, {
+          now,
+          withinDays: DIGEST_WINDOW_DAYS,
+          exclude,
+          birthDate: (priv.data?.birth_date as string | null | undefined) ?? null,
+          limit: DIGEST_ITEMS,
+        });
+        if (picks.length === 0) continue; // nothing worth sending: send nothing
+
+        if (!(await claimSend(admin, id, "digest", today))) continue;
+        await emailPerson(
+          id,
+          (r) =>
+            email.weeklyDigest({
+              name: r.name,
+              siteUrl: SITE_URL,
+              items: picks.map((c) => ({ title: c.title, when: formatWhenShort(c.starts_at), place: c.neighborhood, spotsLeft: c.spots_left, why: whyThis(c, taste), url: eventUrl(c.id) })),
+            }),
+          "matches"
+        );
+        if (await underNudgeCap(admin, id, now)) {
+          await pushPerson(
+            id,
+            {
+              title: `${picks.length} ${picks.length === 1 ? "meetup" : "meetups"} you might like`,
+              body: `${picks[0].title}, ${formatWhenShort(picks[0].starts_at)}${picks.length > 1 ? ` and ${picks.length - 1} more` : ""}`,
+              url: "/",
+              tag: `digest-${today}`,
+            },
+            "matches"
+          );
+        }
+        result.digests++;
+      }
     }
   }
 
