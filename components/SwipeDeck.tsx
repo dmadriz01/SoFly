@@ -226,7 +226,7 @@ export function SwipeDeck({
               aria-label={`Details for ${top.title}`}
               className="flex flex-col items-center gap-1 text-[0.7rem] font-medium text-muted"
             >
-              <span className="flex h-11 w-11 items-center justify-center rounded-full border border-line bg-white text-lg text-ink shadow-sm">
+              <span className="flex h-11 w-11 items-center justify-center rounded-full border border-line bg-surface text-lg text-ink shadow-sm">
                 ⓘ
               </span>
               <span className="[@media(max-height:639px)]:hidden">Details</span>
@@ -242,7 +242,7 @@ export function SwipeDeck({
         <div
           role="status"
           aria-live="polite"
-          className="absolute inset-x-2 top-1 z-30 mx-auto flex max-w-sm items-center justify-between gap-3 rounded-xl bg-ink px-4 py-3 text-sm text-white shadow-lg"
+          className="absolute inset-x-2 top-1 z-30 mx-auto flex max-w-sm items-center justify-between gap-3 rounded-xl bg-ink px-4 py-3 text-sm text-cream shadow-lg"
         >
           <span className="min-w-0 truncate">{toast.text}</span>
           {toast.undo && (
@@ -307,7 +307,7 @@ function RoundButton({
     <button type="button" onClick={onClick} aria-label={label} className="flex flex-col items-center gap-1 text-[0.7rem] font-medium text-muted">
       <span
         className={`flex h-14 w-14 items-center justify-center rounded-full text-xl font-bold shadow-md transition active:scale-95 ${
-          tone === "join" ? "bg-accent text-white" : "border border-line bg-white text-ink"
+          tone === "join" ? "bg-accent text-on-accent" : "border border-line bg-surface text-ink"
         }`}
       >
         {children}
@@ -445,7 +445,7 @@ function SwipeCard({
         front ? "cursor-grab active:cursor-grabbing" : "pointer-events-none"
       }`}
     >
-      <div className="flex h-full flex-col overflow-hidden rounded-3xl border border-line bg-white shadow-lg">
+      <div className="flex h-full flex-col overflow-hidden rounded-3xl border border-line bg-surface shadow-lg">
         {/* The picture shrinks on shorter phones to make room for the words. */}
         <EventCover
           id={event.id}
@@ -494,14 +494,14 @@ function SwipeCard({
       <span
         aria-hidden
         style={{ opacity: joinOpacity }}
-        className="pointer-events-none absolute left-5 top-5 -rotate-12 rounded-lg border-4 border-emerald-600 bg-white/70 px-3 py-1 text-2xl font-extrabold text-emerald-600"
+        className="pointer-events-none absolute left-5 top-5 -rotate-12 rounded-lg border-4 border-emerald-600 bg-surface/70 px-3 py-1 text-2xl font-extrabold text-emerald-600"
       >
         {event.requestMode ? "REQUEST" : "JOIN"}
       </span>
       <span
         aria-hidden
         style={{ opacity: passOpacity }}
-        className="pointer-events-none absolute right-5 top-5 rotate-12 rounded-lg border-4 border-slate-500 bg-white/70 px-3 py-1 text-2xl font-extrabold text-slate-500"
+        className="pointer-events-none absolute right-5 top-5 rotate-12 rounded-lg border-4 border-slate-500 bg-surface/70 px-3 py-1 text-2xl font-extrabold text-slate-500"
       >
         PASS
       </span>
@@ -531,7 +531,7 @@ function Sheet({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="absolute inset-x-0 bottom-0 mx-auto max-w-md rounded-t-3xl bg-white p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-xl"
+        className="absolute inset-x-0 bottom-0 mx-auto max-w-md rounded-t-3xl bg-surface p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-xl"
       >
         <h2 className="mb-2 text-lg font-bold">{title}</h2>
         {children}
@@ -595,7 +595,7 @@ function NoteSheet({
             </a>
           </div>
         )}
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-danger">{error}</p>}
         <button type="submit" disabled={sending} className="btn-primary w-full">
           {sending ? "Sending…" : "Send request"}
         </button>

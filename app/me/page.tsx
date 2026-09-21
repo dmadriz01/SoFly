@@ -4,6 +4,7 @@ import { AboutForm } from "@/components/AboutForm";
 import { EmailSettings } from "@/components/EmailSettings";
 import { LogoutButton } from "@/components/LogoutButton";
 import { PushSettings } from "@/components/PushSettings";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { FeedbackPrompt } from "@/components/FeedbackPrompt";
 import { EventCard } from "@/components/EventCard";
 import { NextUp } from "@/components/NextUp";
@@ -261,6 +262,12 @@ export default async function MePage() {
         <h2 className="mb-1 text-lg font-bold">Your interests</h2>
         <p className="mb-3 text-sm text-muted">We put meetups like these first in your feed.</p>
         <InterestsForm initial={interests} mode="settings" />
+      </section>
+
+      <section>
+        <h2 className="mb-1 text-lg font-bold">Appearance</h2>
+        <p className="mb-3 text-sm text-muted">Auto follows your phone&rsquo;s light or dark setting.</p>
+        <ThemeToggle />
       </section>
 
       <section>

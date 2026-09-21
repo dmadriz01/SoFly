@@ -14,7 +14,7 @@ export function ViewToggle({ filters, active }: { filters: FeedFilters; active: 
   };
   const seg = (on: boolean) =>
     `tap rounded-full px-4 text-sm font-semibold transition ${
-      on ? "bg-white text-ink shadow-sm" : "text-muted hover:text-ink"
+      on ? "bg-surface text-ink shadow-sm" : "text-muted hover:text-ink"
     }`;
 
   return (

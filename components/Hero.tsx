@@ -1,17 +1,16 @@
 import Link from "next/link";
+import { FEED_HEADLINE, FEED_INTRO } from "@/lib/site";
 
 /** What SoFly is, in one glance, for someone who hasn't logged in. */
 export function Hero() {
   return (
     <section className="fade-up overflow-hidden rounded-3xl bg-accent-soft px-6 py-8">
       <h1 className="text-3xl font-bold leading-tight tracking-tight sm:text-4xl">
-        Do more things
+        {FEED_HEADLINE[0]}
         <br />
-        with real people.
+        {FEED_HEADLINE[1]}
       </h1>
-      <p className="mt-3 max-w-md text-lg text-ink/80">
-        Pickup games, dinners and coffee chats around the Bay Area. Find one you like and join in a tap.
-      </p>
+      <p className="mt-3 max-w-md text-lg text-ink/80">{FEED_INTRO}</p>
       <div className="mt-6 flex flex-wrap gap-3">
         <Link href="/login" className="btn-primary">
           Get started

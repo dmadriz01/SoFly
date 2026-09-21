@@ -79,7 +79,7 @@ export function ReportEvent({ eventId, loggedIn }: { eventId: string; loggedIn: 
         placeholder="Anything else we should know? (optional)"
         className="field text-sm"
       />
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-danger">{error}</p>}
       <div className="flex gap-2">
         <button type="submit" disabled={pending} className="btn-primary !py-2 text-sm">
           {pending ? "Sending…" : "Send report"}

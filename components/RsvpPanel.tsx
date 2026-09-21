@@ -148,7 +148,7 @@ export function RsvpPanel({
             </Link>
           </div>
         )}
-        {noteError && <p className="text-sm text-red-600">{noteError}</p>}
+        {noteError && <p className="text-sm text-danger">{noteError}</p>}
         <div className="flex gap-2">
           <button type="submit" disabled={pending} className="btn-primary">
             {pending ? "Sending…" : "Send request"}
@@ -187,7 +187,7 @@ export function RsvpPanel({
         </p>
       )}
       {body}
-      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+      {error && <p className="mt-2 text-sm text-danger">{error}</p>}
     </div>
   );
 }

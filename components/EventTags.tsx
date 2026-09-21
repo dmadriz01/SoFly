@@ -14,16 +14,16 @@ export function EventTags({ event }: { event: Rules }) {
         <span className={`${tag} bg-accent-soft text-accent-dark`}>Women-only</span>
       )}
       {event.audience === "Men-only" && (
-        <span className={`${tag} bg-sky-100 text-sky-900`}>Men-only</span>
+        <span className={`${tag} bg-sky-100 text-sky-900 dark:bg-sky-400/20 dark:text-sky-200`}>Men-only</span>
       )}
       {event.join_mode === "request" && (
-        <span className={`${tag} border border-line bg-white text-ink`}>Approval required</span>
+        <span className={`${tag} border border-line bg-surface text-ink`}>Approval required</span>
       )}
       {event.skill_level && event.skill_level !== "All levels" && (
-        <span className={`${tag} border border-line bg-white text-ink`}>{event.skill_level}</span>
+        <span className={`${tag} border border-line bg-surface text-ink`}>{event.skill_level}</span>
       )}
       {age && (
-        <span className={`${tag} border border-line bg-white text-ink`}>
+        <span className={`${tag} border border-line bg-surface text-ink`}>
           {event.age_max == null ? age : `Ages ${age}`}
         </span>
       )}

@@ -46,7 +46,7 @@ export function EmailSettings({ initial }: { initial: boolean }) {
           Join requests and answers, cancellations, and a reminder the day before. Login codes always
           come through.
         </p>
-        {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
+        {error && <p className="mt-1 text-sm text-danger">{error}</p>}
       </div>
       <button
         role="switch"
@@ -59,7 +59,7 @@ export function EmailSettings({ initial }: { initial: boolean }) {
         }`}
       >
         <span
-          className={`inline-block h-6 w-6 rounded-full bg-white shadow transition-transform ${
+          className={`inline-block h-6 w-6 rounded-full bg-surface shadow transition-transform ${
             on ? "translate-x-7" : "translate-x-1"
           }`}
         />
@@ -70,7 +70,7 @@ export function EmailSettings({ initial }: { initial: boolean }) {
         <button type="button" onClick={runTest} disabled={testing} className="btn-secondary tap !py-2 text-sm">
           {testing ? "Checking…" : "Send me a test email"}
         </button>
-        {testError && <p className="mt-2 text-sm text-red-600">{testError}</p>}
+        {testError && <p className="mt-2 text-sm text-danger">{testError}</p>}
         {checks && <CheckList checks={checks} />}
       </div>
     </div>

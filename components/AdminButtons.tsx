@@ -34,12 +34,12 @@ export function ModerateEvent({ eventId, title, cancelled }: { eventId: string; 
         onClick={click}
         disabled={pending}
         className={`btn !px-3.5 !py-2 text-sm disabled:opacity-60 ${
-          cancelled ? "border border-line bg-white text-ink hover:border-accent/50" : "border border-red-200 bg-white text-red-700 hover:bg-red-50"
+          cancelled ? "border border-line bg-surface text-ink hover:border-accent/50" : "border border-danger-line bg-surface text-danger-strong hover:bg-danger-soft"
         }`}
       >
         {pending ? "Working…" : cancelled ? "Reinstate" : "Cancel meetup"}
       </button>
-      {error && <span role="alert" className="mt-1 text-xs text-red-600">{error}</span>}
+      {error && <span role="alert" className="mt-1 text-xs text-danger">{error}</span>}
     </span>
   );
 }
@@ -56,7 +56,7 @@ export function ReviewReport({ reportId, reviewed }: { reportId: string; reviewe
       >
         {pending ? "Working…" : reviewed ? "Reopen" : "Mark reviewed"}
       </button>
-      {error && <span role="alert" className="mt-1 text-xs text-red-600">{error}</span>}
+      {error && <span role="alert" className="mt-1 text-xs text-danger">{error}</span>}
     </span>
   );
 }

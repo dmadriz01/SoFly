@@ -14,6 +14,7 @@ import { feedHref, type FeedFilters } from "@/lib/feed";
 import { getInterests } from "@/lib/interests";
 import { hasAbout } from "@/lib/about";
 import { getAbout, getBirthDate } from "@/lib/profile";
+import { FEED_HEADLINE, FEED_INTRO } from "@/lib/site";
 import { createClient } from "@/lib/supabase/server";
 import { addDaysToKey, formatWhenShort, pacificDate, pacificLocalToUtc } from "@/lib/time";
 import type { EventWithCount } from "@/lib/types";
@@ -159,8 +160,12 @@ export default async function FeedPage({
       {user ? (
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-3">
           <div className="min-w-0 flex-1 basis-40">
-            <h1 className="text-2xl font-bold tracking-tight">What&rsquo;s happening</h1>
-            <p className="mt-1 text-muted">Find people to connect with!</p>
+            <h1 className="text-3xl font-bold leading-tight tracking-tight">
+              {FEED_HEADLINE[0]}
+              <br />
+              {FEED_HEADLINE[1]}
+            </h1>
+            <p className="mt-2 max-w-md text-base text-ink/80">{FEED_INTRO}</p>
           </div>
           {controls}
         </div>

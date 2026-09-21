@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { BRAND, ICON_VERSION, iconUrl, mixHex } from "../lib/brand.ts";
-import { ON_DARK, ON_LIGHT, butterflyMarkup, butterflySvg, iconSvg, logoSvg } from "../lib/butterfly.ts";
+import { ON_DARK, butterflyMarkup, butterflySvg, iconSvg } from "../lib/butterfly.ts";
 import * as email from "../lib/email-templates.ts";
 import { buildIcs } from "../lib/ics.ts";
 import { SITE_NAME, TAGLINE } from "../lib/site.ts";
@@ -76,19 +76,19 @@ const problems = (markup: string) => {
   return bad;
 };
 {
-  for (const [name, svg] of [["icon", iconSvg()], ["logo", logoSvg()]] as const) t(`butterfly: the ${name} is well-formed SVG with only known tags, attributes and plain values`, svg.startsWith("<svg") && svg.endsWith("</svg>") && problems(svg).length === 0, problems(svg).join("; "));
-  t("butterfly: it is drawn the same every time", iconSvg() === iconSvg() && logoSvg() === logoSvg());
-  const m = butterflyMarkup(ON_LIGHT);
+  for (const [name, svg] of [["icon", iconSvg()], ["bare butterfly", butterflySvg(ON_DARK)]] as const) t(`butterfly: the ${name} is well-formed SVG with only known tags, attributes and plain values`, svg.startsWith("<svg") && svg.endsWith("</svg>") && problems(svg).length === 0, problems(svg).join("; "));
+  t("butterfly: it is drawn the same every time", iconSvg() === iconSvg());
+  const m = butterflyMarkup(ON_DARK);
   t("butterfly: two mirrored sides and a body (symmetric)", (m.match(/<g/g) ?? []).length === 2 && /transform="translate\(100 0\) scale\(-1 1\)"/.test(m) && /<rect x="47\.2"[^>]*width="5\.6"/.test(m) && 47.2 + 5.6 / 2 === 50);
-  const colours = new Set([...(iconSvg() + logoSvg()).matchAll(/#[0-9a-f]{6}/gi)].map((c) => c[0].toLowerCase()));
+  const colours = new Set([...iconSvg().matchAll(/#[0-9a-f]{6}/gi)].map((c) => c[0].toLowerCase()));
   const palette = new Set([BRAND.accent, BRAND.accentDark, BRAND.gold, BRAND.sand, BRAND.ink, mixHex(BRAND.gold, "#ffffff", 0.3)].map((c) => c.toLowerCase()));
   t("butterfly: it uses only palette colours (or a lighter gold made from the gold)", [...colours].every((c) => palette.has(c)), [...colours].filter((c) => !palette.has(c)).join());
-  t("butterfly: the icon is on the deep-green tile, the logo has no background", iconSvg().includes(`<rect width="100" height="100" fill="${BRAND.accentDark}"/>`) && !logoSvg().includes('width="100" height="100"'));
+  t("butterfly: the icon is on the deep-green tile; the bare butterfly has no background", iconSvg().includes(`<rect width="100" height="100" fill="${BRAND.accentDark}"/>`) && !butterflySvg(ON_DARK).includes('width="100" height="100"'));
   // an app icon may be cropped to a circle or squircle: keep everything inside the middle 80%
   const tile = iconSvg().match(/translate\((\d+) (\d+)\) scale\(([\d.]+)\)/)!;
   const [off, scale] = [Number(tile[1]), Number(tile[3])];
   t("butterfly: on the icon it stays inside the safe middle 80% (so rounded or circular crops don't cut it)", off >= 10 && off + scale * 100 <= 90, `${off}..${off + scale * 100}`);
-  t("butterfly: it stands out from the icon background (contrast 3:1+ for the wings)", (() => { const lum = (h: string) => { const [r, g, b] = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)); return 0.2126 * r + 0.7152 * g + 0.0722 * b; }; const c = (a: string, b: string) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05); return c(ON_DARK.upper, BRAND.accentDark) >= 3 && c(ON_DARK.lower, BRAND.accentDark) >= 3 && c(ON_LIGHT.upper, BRAND.cream) >= 3 && c(ON_LIGHT.lower, BRAND.cream) >= 1.8; })());
+  t("butterfly: the wings stand out from the icon background (contrast 3:1+)", (() => { const lum = (h: string) => { const [r, g, b] = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)); return 0.2126 * r + 0.7152 * g + 0.0722 * b; }; const c = (a: string, b: string) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05); return c(ON_DARK.upper, BRAND.accentDark) >= 3 && c(ON_DARK.lower, BRAND.accentDark) >= 3; })());
   t("butterfly: the bigger function signatures take colours, never free text", /export function butterflySvg\(colors: ButterflyColors, tile\?: \{ background: string \}\)/.test(read("lib/butterfly.ts")));
 }
 
@@ -96,11 +96,11 @@ const problems = (markup: string) => {
 {
   const og = read("lib/og.tsx");
   t("icon: the app icon is the butterfly (no letter B any more)", /iconSvg\(\)/.test(og) && !/>\s*B\s*</.test(og) && !/fontSize: size \* 0\.68/.test(og));
-  t("wordmark: link previews show the butterfly with 'So' + 'Fly'", /logoSvg\(\)/.test(og) && />So<\/span>/.test(og) && />Fly<\/span>/.test(og) && !/>Bay<|>Meet</.test(og));
+  t("wordmark: link previews show the app icon with 'So' + 'Fly'", /iconSvg\(\)/.test(og) && !/logoSvg/.test(og) && />So<\/span>/.test(og) && />Fly<\/span>/.test(og) && !/>Bay<|>Meet</.test(og));
   const layout = read("app/layout.tsx");
   t("header: every page shows the butterfly logo, linking home", /<Link href="\/"[^>]*>\s*\n\s*<Logo \/>/.test(layout) && /import \{ Logo \}/.test(layout));
   const logo = read("components/Logo.tsx");
-  t("header: the logo is the butterfly plus 'So' and 'Fly' in two colours, and the butterfly is hidden from screen readers", /logoSvg\(\)/.test(logo) && /So<span className="text-accent">Fly<\/span>/.test(logo) && /aria-hidden/.test(logo));
+  t("header: the logo is the app icon itself (same tile and colours) plus 'So' and 'Fly' in two colours, and the picture is hidden from screen readers", /iconSvg\(\)/.test(logo) && !/logoSvg/.test(logo) && /rounded-\[22%\]/.test(logo) && /So<span className="text-accent">Fly<\/span>/.test(logo) && /aria-hidden/.test(logo));
   t("icons: the icon changed shape, so its web address version changed too (phones and browsers cache icons for a year)", ICON_VERSION.endsWith("-2") && iconUrl(180).includes("?v=" + ICON_VERSION) && read("public/sw.js").includes(iconUrl(192)));
   t("icons: the favicon, home-screen and manifest icons all come from the one icon route", /iconUrl\(64\)/.test(layout) && /iconUrl\(180\)/.test(layout) && /iconUrl\(192\)/.test(read("app/manifest.ts")) && /BrandMark/.test(read("app/pwa-icon/[size]/route.tsx")));
 }

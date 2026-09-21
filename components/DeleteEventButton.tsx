@@ -40,7 +40,7 @@ export function DeleteEventButton({
       <button
         onClick={onClick}
         disabled={pending}
-        className="btn w-full border border-red-200 bg-white text-red-700 hover:bg-red-50 disabled:opacity-60"
+        className="btn w-full border border-danger-line bg-surface text-danger-strong hover:bg-danger-soft disabled:opacity-60"
       >
         {pending ? "Deleting…" : "Delete this meetup"}
       </button>
@@ -49,7 +49,7 @@ export function DeleteEventButton({
         {toNotify > 0 && " People who joined get an email and a push notification."}
         {canCancelInstead && " To keep the page up with a cancelled notice, use Cancel above instead."}
       </p>
-      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+      {error && <p className="mt-2 text-sm text-danger">{error}</p>}
     </div>
   );
 }

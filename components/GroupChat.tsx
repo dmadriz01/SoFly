@@ -78,7 +78,7 @@ export function GroupChat({
           <p className="text-xs text-muted">
             {CHAT_APPS_HINT} invite links. Only you and people who join can see it.
           </p>
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-danger">{error}</p>}
           {saved && !error && <p className="text-sm text-muted">Saved.</p>}
           <div className="flex gap-2">
             <button type="submit" disabled={pending || !value.trim()} className="btn-secondary !py-2 text-sm">

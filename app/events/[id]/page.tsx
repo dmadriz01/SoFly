@@ -230,7 +230,7 @@ export default async function EventPage({ params, searchParams }: { params: { id
       )}
 
       {cancelled && (
-        <div role="status" className="rounded-2xl border border-red-200 bg-red-50 p-4 text-red-900">
+        <div role="status" className="rounded-2xl border border-danger-line bg-danger-soft p-4 text-danger-strong">
           <p className="font-semibold">This meetup was cancelled.</p>
           <p className="text-sm">Please don&rsquo;t show up. It won&rsquo;t be happening.</p>
         </div>
@@ -347,7 +347,7 @@ export default async function EventPage({ params, searchParams }: { params: { id
             {attendees.map((r) => (
               <li
                 key={r.user_id}
-                className="flex items-center gap-2 rounded-full border border-line bg-white py-1 pl-1 pr-3 text-sm"
+                className="flex items-center gap-2 rounded-full border border-line bg-surface py-1 pl-1 pr-3 text-sm"
               >
                 <Avatar name={r.profiles?.name ?? ""} size="sm" />
                 {firstName(r.profiles?.name)}

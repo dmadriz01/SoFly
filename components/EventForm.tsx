@@ -39,7 +39,7 @@ export function Field({
       {children}
       {hint && !error && <p className="mt-1 text-xs text-muted">{hint}</p>}
       {error && (
-        <p id={`${name}-error`} className="mt-1 text-sm text-red-600">
+        <p id={`${name}-error`} className="mt-1 text-sm text-danger">
           {error}
         </p>
       )}
@@ -226,7 +226,7 @@ export function EventForm() {
               {...aria("age_min")}
             />
             {errors.age_min && (
-              <p id="age_min-error" className="mt-1 text-sm text-red-600">
+              <p id="age_min-error" className="mt-1 text-sm text-danger">
                 {errors.age_min}
               </p>
             )}
@@ -250,7 +250,7 @@ export function EventForm() {
               {...aria("age_max")}
             />
             {errors.age_max && (
-              <p id="age_max-error" className="mt-1 text-sm text-red-600">
+              <p id="age_max-error" className="mt-1 text-sm text-danger">
                 {errors.age_max}
               </p>
             )}
@@ -356,7 +356,7 @@ export function EventForm() {
         />
       </Field>
 
-      {formError && <p className="text-sm text-red-600">{formError}</p>}
+      {formError && <p className="text-sm text-danger">{formError}</p>}
 
       <button type="submit" disabled={pending} className="btn-primary w-full">
         {pending ? "Posting…" : "Post meetup"}

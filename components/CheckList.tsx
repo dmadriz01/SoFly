@@ -6,7 +6,7 @@ export function CheckList({ checks }: { checks: Check[] }) {
     <ul className="mt-3 space-y-2 text-sm" aria-live="polite">
       {checks.map((c) => (
         <li key={c.label} className="flex gap-2">
-          <span aria-hidden className={c.ok ? "text-emerald-600" : "text-red-600"}>
+          <span aria-hidden className={c.ok ? "text-emerald-600" : "text-danger"}>
             {c.ok ? "✓" : "✗"}
           </span>
           <span>

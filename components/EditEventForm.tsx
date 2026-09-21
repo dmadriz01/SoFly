@@ -124,7 +124,7 @@ export function EditEventForm({
       </p>
 
       {formError && (
-        <p role="alert" className="text-sm text-red-600">
+        <p role="alert" className="text-sm text-danger">
           {formError}
         </p>
       )}

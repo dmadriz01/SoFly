@@ -32,7 +32,7 @@ export function ManageEvent({ eventId }: { eventId: string }) {
         <button
           onClick={cancel}
           disabled={pending}
-          className="btn w-full border border-red-200 bg-white text-red-700 hover:bg-red-50 disabled:opacity-60"
+          className="btn w-full border border-danger-line bg-surface text-danger-strong hover:bg-danger-soft disabled:opacity-60"
         >
           Cancel this meetup
         </button>
@@ -41,7 +41,7 @@ export function ManageEvent({ eventId }: { eventId: string }) {
           email and a push notification. Only SoFly can undo a cancellation.
         </p>
       </div>
-      {message && <p className="text-sm text-red-600">{message}</p>}
+      {message && <p className="text-sm text-danger">{message}</p>}
     </section>
   );
 }

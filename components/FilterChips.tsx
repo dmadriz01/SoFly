@@ -5,7 +5,7 @@ const chip = (active: boolean) =>
   `tap shrink-0 rounded-full border px-4 text-sm font-medium transition ${
     active
       ? "border-accent bg-accent-soft text-accent-dark"
-      : "border-line bg-white text-ink hover:border-accent/50"
+      : "border-line bg-surface text-ink hover:border-accent/50"
   }`;
 
 /** On/off filters: tap to turn one on, tap again to turn it off. */

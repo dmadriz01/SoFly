@@ -17,7 +17,7 @@ export function BioBlock({ about }: { about: About | null | undefined }) {
                 href={l.url}
                 target="_blank"
                 rel="noopener noreferrer nofollow"
-                className="tap rounded-full border border-line bg-white px-3.5 text-sm font-medium text-ink hover:border-accent/50"
+                className="tap rounded-full border border-line bg-surface px-3.5 text-sm font-medium text-ink hover:border-accent/50"
               >
                 {l.label} ↗
               </a>

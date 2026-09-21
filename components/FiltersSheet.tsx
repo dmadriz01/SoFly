@@ -21,11 +21,11 @@ export function FiltersSheet({ count, children }: { count: number; children: Rea
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="tap inline-flex items-center gap-1.5 rounded-full border border-line bg-white px-4 text-sm font-semibold hover:border-accent/50"
+        className="tap inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-4 text-sm font-semibold hover:border-accent/50"
       >
         Filters
         {count > 0 && (
-          <span className="rounded-full bg-accent px-1.5 text-xs font-bold leading-5 text-white">{count}</span>
+          <span className="rounded-full bg-accent px-1.5 text-xs font-bold leading-5 text-on-accent">{count}</span>
         )}
       </button>
 

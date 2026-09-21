@@ -38,8 +38,8 @@ export function FeedbackPrompt({
       aria-pressed={answer === value}
       className={`tap flex-1 rounded-xl border px-4 text-base font-semibold transition active:scale-[0.98] ${
         answer === value
-          ? "border-accent bg-accent text-white"
-          : "border-line bg-white text-ink hover:border-accent/50"
+          ? "border-accent bg-accent text-on-accent"
+          : "border-line bg-surface text-ink hover:border-accent/50"
       }`}
     >
       {label}
@@ -61,7 +61,7 @@ export function FeedbackPrompt({
       {answer !== null && !error && (
         <p className="text-sm text-muted">Thanks! You can change your answer any time.</p>
       )}
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-danger">{error}</p>}
     </section>
   );
 }

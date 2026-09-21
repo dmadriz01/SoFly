@@ -1,7 +1,7 @@
 import { BRAND, mixHex } from "./brand";
 
 // The SoFly butterfly, drawn in code so it stays sharp at any size and always uses the palette. It
-// is used for the app icon, the favicon, the logo in the page header and the link-preview images.
+// is used for the app icon, the favicon, the logo in the page header and the link-preview images (all the same deep-green tile).
 // Only numbers and colours from the palette go into the markup, never text.
 
 export type ButterflyColors = {
@@ -17,8 +17,6 @@ export type ButterflyColors = {
 
 /** For the deep-green app icon: gold wings with sand details. */
 export const ON_DARK: ButterflyColors = { upper: BRAND.gold, lower: mixHex(BRAND.gold, "#ffffff", 0.3), body: BRAND.sand, spot: BRAND.accentDark };
-/** For light backgrounds (the header): teal and gold. */
-export const ON_LIGHT: ButterflyColors = { upper: BRAND.accent, lower: BRAND.gold, body: BRAND.ink, spot: BRAND.sand };
 
 // One side of the butterfly, drawn on a 100 x 100 grid with the body on x = 50. The other side is
 // this one mirrored.
@@ -55,5 +53,3 @@ export function butterflySvg(colors: ButterflyColors, tile?: { background: strin
 
 /** The app icon: the butterfly on a deep-green tile. */
 export const iconSvg = () => butterflySvg(ON_DARK, { background: BRAND.accentDark });
-/** The logo mark for light backgrounds. */
-export const logoSvg = () => butterflySvg(ON_LIGHT);

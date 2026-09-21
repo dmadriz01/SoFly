@@ -50,7 +50,7 @@ export function NextUp({
           <h2 className="text-xl font-bold leading-tight">{title}</h2>
           <p className="mt-1 font-semibold text-accent-dark">{formatWhenShort(startsAt)}</p>
           {venue && (
-            <p className="text-sm text-ink/70">
+            <p className="text-sm text-ink/80">
               {venue}
               {address && address !== venue ? ` · ${address}` : ""}
             </p>

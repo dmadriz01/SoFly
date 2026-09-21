@@ -83,7 +83,7 @@ export function AboutForm({
             {values.bio.length}/{BIO_MAX}
           </span>
         </p>
-        {errors.bio && <p className="mt-1 text-sm text-red-600">{errors.bio}</p>}
+        {errors.bio && <p className="mt-1 text-sm text-danger">{errors.bio}</p>}
       </div>
 
       <fieldset>
@@ -105,7 +105,7 @@ export function AboutForm({
                 placeholder={s.placeholder}
                 className={`field text-sm ${errors[s.key] ? "field-error" : ""}`}
               />
-              {errors[s.key] && <p className="mt-1 text-sm text-red-600">{errors[s.key]}</p>}
+              {errors[s.key] && <p className="mt-1 text-sm text-danger">{errors[s.key]}</p>}
             </div>
           ))}
         </div>
@@ -129,7 +129,7 @@ export function AboutForm({
             Skip for now
           </button>
         )}
-        {message && <p className={`text-sm ${message.ok ? "text-muted" : "text-red-600"}`}>{message.text}</p>}
+        {message && <p className={`text-sm ${message.ok ? "text-muted" : "text-danger"}`}>{message.text}</p>}
       </div>
     </form>
   );

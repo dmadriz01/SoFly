@@ -29,7 +29,7 @@ export function AdminTabs({ tab, openReports }: { tab: Tab; openReports: number 
         >
           {t.label}
           {t.id === "reports" && openReports > 0 && (
-            <span className="ml-1.5 rounded-full bg-accent px-1.5 py-0.5 text-xs font-bold text-white">{openReports}</span>
+            <span className="ml-1.5 rounded-full bg-accent px-1.5 py-0.5 text-xs font-bold text-on-accent">{openReports}</span>
           )}
         </Link>
       ))}
@@ -112,7 +112,7 @@ export function OverviewTab({ stats: s }: { stats: Stats }) {
   return (
     <div className="space-y-6">
       {s.truncated && (
-        <p className="card border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+        <p className="card border-warn-line bg-warn-soft p-3 text-sm text-warn-strong">
           There is more data than fits on this page, so these numbers cover the newest 10,000 rows of each kind.
         </p>
       )}
@@ -177,7 +177,7 @@ export function ReportsTab({ reports, showReviewed }: { reports: ReportItem[]; s
           {reports.map((r) => (
             <li key={r.id} className={`card space-y-2 p-4 ${r.reviewedAt ? "opacity-70" : ""}`}>
               <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700">{r.reason}</span>
+                <span className="rounded-full bg-danger-soft px-2.5 py-0.5 text-xs font-semibold text-danger-strong">{r.reason}</span>
                 {r.reviewedAt && <span className="rounded-full bg-line px-2.5 py-0.5 text-xs font-semibold text-muted">Reviewed</span>}
                 {r.eventCancelled && <span className="rounded-full bg-line px-2.5 py-0.5 text-xs font-semibold text-muted">Cancelled</span>}
                 {r.reportsOnEvent > 1 && <span className="text-xs text-muted">{r.reportsOnEvent} reports on this meetup</span>}
@@ -235,7 +235,7 @@ export function MeetupsTab({ events, filter, q, limit }: { events: EventItem[]; 
                 <CategoryBadge category={e.category} />
                 {e.cancelled && <span className="rounded-full bg-line px-2.5 py-0.5 text-xs font-semibold text-muted">Cancelled</span>}
                 {e.openReports > 0 && (
-                  <Link href="/admin?tab=reports" className="rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700">
+                  <Link href="/admin?tab=reports" className="rounded-full bg-danger-soft px-2.5 py-0.5 text-xs font-semibold text-danger-strong">
                     {e.openReports} open {e.openReports === 1 ? "report" : "reports"}
                   </Link>
                 )}

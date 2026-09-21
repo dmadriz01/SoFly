@@ -86,7 +86,7 @@ export function LoginForm({ next, initialError }: { next: string; initialError?:
               className="field text-center text-2xl tracking-[0.3em]"
             />
           </div>
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-danger">{error}</p>}
           <button
             type="submit"
             disabled={status === "verifying" || code.length < 6}
@@ -132,7 +132,7 @@ export function LoginForm({ next, initialError }: { next: string; initialError?:
           className="field"
         />
       </div>
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-danger">{error}</p>}
       <button type="submit" disabled={status === "sending"} className="btn-primary w-full">
         {status === "sending" ? "Sending…" : "Email me a login code"}
       </button>

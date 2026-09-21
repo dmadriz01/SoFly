@@ -13,3 +13,7 @@ export const SITE_URL =
 
 /** Where feedback, reports and privacy requests go. Set NEXT_PUBLIC_CONTACT_EMAIL. */
 export const CONTACT_EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL || "";
+
+/** The feed's headline and the sentence under it: the first thing you see on the Feed. */
+export const FEED_HEADLINE = ["Do more things", "with real people."] as const;
+export const FEED_INTRO = "Pickup games, dinners and coffee chats around the Bay Area. Find one you like and join in a tap.";

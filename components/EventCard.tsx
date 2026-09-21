@@ -49,12 +49,12 @@ export function EventCard({
         <CategoryBadge category={event.category} />
         <EventTags event={event} />
         {pendingRequests > 0 && (
-          <span className="rounded-full bg-accent px-2.5 py-0.5 text-xs font-semibold text-white">
+          <span className="rounded-full bg-accent px-2.5 py-0.5 text-xs font-semibold text-on-accent">
             {pendingRequests} {pendingRequests === 1 ? "request" : "requests"} waiting
           </span>
         )}
         {myStatus === "declined" && (
-          <span className="rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700">
+          <span className="rounded-full bg-danger-soft px-2.5 py-0.5 text-xs font-semibold text-danger-strong">
             Declined
           </span>
         )}
@@ -64,7 +64,7 @@ export function EventCard({
           </span>
         )}
         {cancelled && (
-          <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-800">
+          <span className="rounded-full bg-danger-soft px-2.5 py-0.5 text-xs font-semibold text-danger-strong">
             Cancelled
           </span>
         )}

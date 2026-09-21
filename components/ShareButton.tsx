@@ -23,7 +23,7 @@ export function ShareButton({ title, text }: { title: string; text: string }) {
   return (
     <button
       onClick={share}
-      className="tap rounded-full border border-line bg-white px-4 text-sm font-medium hover:border-accent/50"
+      className="tap rounded-full border border-line bg-surface px-4 text-sm font-medium hover:border-accent/50"
     >
       {copied ? "Link copied" : "Share"}
     </button>

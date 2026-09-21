@@ -153,7 +153,7 @@ t("weeks: only real dates are accepted", isDateKey("2026-09-21") && !isDateKey("
   const gold = ["app", "components", "lib"].flatMap((d) => walk(path.join(process.cwd(), d))).filter((f) => /\btext-gold\b|text-\[#c49a45\]|color:\s*\$\{BRAND\.gold\}(?![^;]*background)/i.test(fs.readFileSync(f, "utf8")) && !f.endsWith("brand.ts"));
   t("brand: gold is never used as a text colour in the app (decoration only)", gold.length === 0, gold.join(", "));
   const cfg = fs.readFileSync(path.join(process.cwd(), "tailwind.config.ts"), "utf8");
-  t("brand: the styling config reads the shared palette, not its own copy", cfg.includes("BRAND.accent") && !/#[0-9a-fA-F]{6}/.test(cfg));
+  t("brand: the styling config reads the shared palette (light and dark), not its own copy", cfg.includes("BRAND_DARK") && cfg.includes("THEME_TOKENS") && !/#[0-9a-fA-F]{6}/.test(cfg));
 
   // Icons are cached for a year and phones keep their own copy: every icon URL must carry a version
   // that changes with the colour, or an old-colour icon keeps showing.

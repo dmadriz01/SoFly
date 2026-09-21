@@ -59,7 +59,7 @@ export function OnboardingForm({ defaultName, next }: { defaultName: string; nex
         <p className="mt-1 text-xs text-muted">
           This is what others see on meetups you host or join.
         </p>
-        {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name}</p>}
+        {errors.name && <p className="mt-1 text-sm text-danger">{errors.name}</p>}
       </div>
 
       <fieldset>
@@ -100,7 +100,7 @@ export function OnboardingForm({ defaultName, next }: { defaultName: string; nex
           Only used to check age requirements on meetups. Other people never see it, and it
           can&rsquo;t be changed later, so double-check it.
         </p>
-        {errors.birthdate && <p className="mt-1 text-sm text-red-600">{errors.birthdate}</p>}
+        {errors.birthdate && <p className="mt-1 text-sm text-danger">{errors.birthdate}</p>}
       </fieldset>
 
       <button type="submit" disabled={pending} className="btn-primary w-full">

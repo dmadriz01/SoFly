@@ -57,8 +57,8 @@ export function InterestsForm({
                   aria-pressed={on}
                   className={`rounded-full border px-3.5 py-2 text-sm font-medium transition active:scale-95 ${
                     on
-                      ? "border-accent bg-accent text-white"
-                      : "border-line bg-white text-ink hover:border-accent/50"
+                      ? "border-accent bg-accent text-on-accent"
+                      : "border-line bg-surface text-ink hover:border-accent/50"
                   }`}
                 >
                   <span aria-hidden className="mr-1.5">
@@ -98,7 +98,7 @@ export function InterestsForm({
           </button>
         )}
         {message && (
-          <p className={`text-sm ${message.ok ? "text-muted" : "text-red-600"}`}>{message.text}</p>
+          <p className={`text-sm ${message.ok ? "text-muted" : "text-danger"}`}>{message.text}</p>
         )}
       </div>
     </div>

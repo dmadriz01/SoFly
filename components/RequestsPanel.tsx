@@ -84,7 +84,7 @@ export function RequestsPanel({
       {spotsLeft <= 0 && requests.length > 0 && (
         <p className="text-xs text-muted">You&rsquo;re out of spots, so approving is turned off.</p>
       )}
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-danger">{error}</p>}
       <p className="text-xs text-muted">
         Approved people can see the exact address and the group chat link.
       </p>

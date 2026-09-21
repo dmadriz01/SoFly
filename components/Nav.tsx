@@ -52,7 +52,7 @@ function Badge({ count }: { count: number }) {
   return (
     <span
       aria-label={`${count} pending ${count === 1 ? "request" : "requests"}`}
-      className="absolute -right-2 -top-1.5 min-w-[1.1rem] rounded-full bg-accent px-1 text-center text-[0.65rem] font-bold leading-[1.1rem] text-white"
+      className="absolute -right-2 -top-1.5 min-w-[1.1rem] rounded-full bg-accent px-1 text-center text-[0.65rem] font-bold leading-[1.1rem] text-on-accent"
     >
       {count > 9 ? "9+" : count}
     </span>
@@ -124,7 +124,7 @@ export function TopNav({ pending = 0 }: { pending?: number }) {
           >
             {item.label}
             {item.href === "/me" && pending > 0 && (
-              <span className="ml-1.5 rounded-full bg-accent px-1.5 py-0.5 text-xs font-bold text-white">
+              <span className="ml-1.5 rounded-full bg-accent px-1.5 py-0.5 text-xs font-bold text-on-accent">
                 {pending}
               </span>
             )}
