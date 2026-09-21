@@ -21,6 +21,7 @@ export function RsvpPanel({
   hostName,
   myNote,
   hasAbout,
+  invite,
 }: {
   eventId: string;
   maxSpots: number;
@@ -39,6 +40,8 @@ export function RsvpPanel({
   myNote: string | null;
   /** Whether the viewer has filled in "about you", which hosts see with a request. */
   hasAbout: boolean;
+  /** The signed token from an invite link (?ref=...), passed along when joining. */
+  invite?: string;
 }) {
   const isRequest = joinMode === "request";
   const [error, setError] = useState<string>();
@@ -64,7 +67,7 @@ export function RsvpPanel({
     setError(undefined);
     startTransition(async () => {
       setOptimistic(action);
-      const result = await setRsvp(eventId, action === "join", intro);
+      const result = await setRsvp(eventId, action === "join", intro, invite);
       if (result.error) setError(result.error);
     });
   }
@@ -111,7 +114,7 @@ export function RsvpPanel({
   else if (full) body = disabled("Full");
   else if (!loggedIn) {
     body = (
-      <Link href={`/login?next=/events/${eventId}`} className="btn-primary w-full">
+      <Link href={`/login?next=${encodeURIComponent(invite ? `/events/${eventId}?ref=${invite}` : `/events/${eventId}`)}`} className="btn-primary w-full">
         {isRequest ? "Request to join" : "Join"}
       </Link>
     );

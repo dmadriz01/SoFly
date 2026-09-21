@@ -253,6 +253,45 @@ export function notifyEventDeleted(snapshot: Cancellation, deps: Deps = {}) {
 }
 
 /**
+ * Someone came along because a friend invited them: tell the friend. Only for an approved guest
+ * (so for approval-only meetups it waits for the host's yes), once per friend and meetup, as a
+ * nudge (limited per person, quiet hours respected).
+ */
+export function notifyFriendJoined(eventId: string, friendId: string, deps: Deps = {}) {
+  return safely("friend joined", async () => {
+    const { admin, send, push } = use(deps);
+    if (!admin) return;
+    const now = deps.now ?? new Date();
+    const { data: rsvp } = await admin.from("rsvps").select("status, invited_by").eq("event_id", eventId).eq("user_id", friendId).maybeSingle();
+    const inviterId = rsvp?.invited_by as string | null | undefined;
+    if (!rsvp || rsvp.status !== "approved" || !inviterId || inviterId === friendId) return;
+    const { data: event } = await admin.from("events").select("title, starts_at, cancelled_at").eq("id", eventId).maybeSingle();
+    if (!event || event.cancelled_at || new Date(event.starts_at as string) <= now) return;
+    if (!(await claimSend(admin, inviterId, "friend_joined", `${eventId}:${friendId}`))) return;
+
+    const [to, friend] = await Promise.all([recipient(admin, inviterId), admin.from("profiles").select("name").eq("id", friendId).maybeSingle()]);
+    const friendName = firstName(friend.data?.name);
+    const via = channelsFor(to.prefs, "activity", now);
+    if (to.ok && via.email) {
+      await send({
+        to: to.to.email,
+        ...email.friendJoined({
+          name: to.to.name,
+          friendName,
+          eventTitle: event.title as string,
+          when: formatWhenShort(event.starts_at as string),
+          eventUrl: eventUrl(eventId),
+          siteUrl: SITE_URL,
+        }),
+      });
+    }
+    if (via.push && (await underNudgeCap(admin, inviterId, now))) {
+      await push(inviterId, { title: `${friendName} is coming!`, body: `They joined ${event.title} because you invited them.`, url: `/events/${eventId}`, tag: `friend-${eventId}` });
+    }
+  });
+}
+
+/**
  * The host changed a meetup's time or place: tell everyone who was going, by email and push. The push
  * says what kind of thing changed but never the address itself (it would show on a lock screen).
  * Quiet for a meetup that already started or was cancelled, and if nothing actually changed.

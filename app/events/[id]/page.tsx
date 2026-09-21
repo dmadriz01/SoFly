@@ -4,11 +4,14 @@ import { notFound } from "next/navigation";
 import { CategoryBadge } from "@/components/CategoryBadge";
 import { DeleteEventButton } from "@/components/DeleteEventButton";
 import { EventCover } from "@/components/EventCover";
+import { BringAFriend } from "@/components/BringAFriend";
 import { PushPrompt } from "@/components/PushPrompt";
 import { SeriesPanel, type SeriesDate } from "@/components/SeriesPanel";
 import { CoverChangeNote } from "@/components/CoverChangeNote";
 import { emojiFor } from "@/lib/constants";
 import { coverChangeNote } from "@/lib/cover-change";
+import { signInvite, verifyInvite } from "@/lib/invite";
+import { SITE_URL } from "@/lib/site";
 import { EventActions } from "@/components/EventActions";
 import { Avatar } from "@/components/Avatar";
 import { EventTags } from "@/components/EventTags";
@@ -68,7 +71,7 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   };
 }
 
-export default async function EventPage({ params, searchParams }: { params: { id: string }; searchParams: { edited?: string | string[] } }) {
+export default async function EventPage({ params, searchParams }: { params: { id: string }; searchParams: { edited?: string | string[]; ref?: string | string[] } }) {
   const supabase = createClient();
   const [{ data }, userResult] = await Promise.all([
     supabase
@@ -148,6 +151,17 @@ export default async function EventPage({ params, searchParams }: { params: { id
         event.rsvps.filter((r) => r.user_id !== event.host_id && r.status !== "declined").map((r) => r.user_id)
       )
     : {};
+  // For the host: who invited whom (best effort: before migration 019 there is nothing to show).
+  const invitedBy: Record<string, string> = {};
+  if (isHost) {
+    const { data: invited, error: invitedError } = await supabase.from("rsvps").select("user_id, invited_by").eq("event_id", event.id).not("invited_by", "is", null);
+    if (!invitedError && invited && invited.length > 0) {
+      const { data: inviters } = await supabase.from("profiles").select("id, name").in("id", Array.from(new Set(invited.map((r) => r.invited_by as string))));
+      const names = new Map((inviters ?? []).map((p) => [p.id as string, (p.name as string).trim().split(/\s+/)[0] || "a guest"]));
+      for (const r of invited) invitedBy[r.user_id as string] = names.get(r.invited_by as string) ?? "a guest";
+    }
+  }
+
   const requests = isHost
     ? event.rsvps
         .filter((r) => r.status === "pending")
@@ -157,6 +171,7 @@ export default async function EventPage({ params, searchParams }: { params: { id
           name: r.profiles?.name?.trim() || "Someone",
           note: notes.get(r.user_id) ?? "",
           about: guestBios[r.user_id] ?? null,
+          invitedBy: invitedBy[r.user_id],
         }))
     : [];
 
@@ -175,7 +190,7 @@ export default async function EventPage({ params, searchParams }: { params: { id
   const guests = isHost
     ? attendees
         .filter((r) => r.user_id !== event.host_id)
-        .map((r) => ({ userId: r.user_id, name: r.profiles?.name?.trim() || "Someone", about: guestBios[r.user_id] ?? null }))
+        .map((r) => ({ userId: r.user_id, name: r.profiles?.name?.trim() || "Someone", about: guestBios[r.user_id] ?? null, invitedBy: invitedBy[r.user_id] }))
     : [];
   // Whether the viewer has filled in "about you", which hosts see alongside a request.
   const viewerHasAbout = user && !isHost && isRequest ? hasAbout(await getAbout(supabase, user.id)) : true;
@@ -191,6 +206,15 @@ export default async function EventPage({ params, searchParams }: { params: { id
       .order("starts_at", { ascending: true })
       .limit(30);
     seriesDates = (siblings ?? []) as SeriesDate[];
+  }
+
+  // A friend's invite link (?ref=...): only a genuine, unaltered link for THIS meetup counts.
+  const inviteToken = typeof searchParams.ref === "string" ? searchParams.ref : "";
+  const inviterId = inviteToken ? verifyInvite(event.id, inviteToken) : null;
+  let inviterName: string | null = null;
+  if (inviterId && inviterId !== user?.id) {
+    const { data: inviter } = await supabase.from("profiles").select("name").eq("id", inviterId).maybeSingle();
+    inviterName = inviter?.name?.trim() || null;
   }
 
   const when = formatWhenLong(event.starts_at);
@@ -331,6 +355,12 @@ export default async function EventPage({ params, searchParams }: { params: { id
 
       {canRate && <FeedbackPrompt eventId={event.id} title={event.title} initial={myAnswer} />}
 
+      {inviterName && !isHost && !myStatus && !cancelled && !ended && (
+        <p role="note" className="rounded-2xl bg-accent-soft px-4 py-3 text-sm text-accent-dark">
+          <span className="font-semibold">{inviterName.split(/\s+/)[0]} invited you</span> to this meetup.
+        </p>
+      )}
+
       <RsvpPanel
         eventId={event.id}
         maxSpots={event.max_spots}
@@ -345,10 +375,24 @@ export default async function EventPage({ params, searchParams }: { params: { id
         hostName={event.host?.name?.trim() || "the host"}
         myNote={(user && notes.get(user.id)) || null}
         hasAbout={viewerHasAbout}
+        invite={inviterName ? inviteToken : undefined}
       />
 
       {/* Right after joining is when a reminder is worth having: ask then, not on arrival. */}
       {!isHost && (myStatus === "approved" || myStatus === "pending") && !cancelled && !ended && <PushPrompt />}
+
+      {/* Anyone going (or hosting) can bring a friend, while there's still room. */}
+      {user && (isHost || myStatus === "approved") && !cancelled && !ended && event.spots_taken < event.max_spots && (() => {
+        const token = signInvite(event.id, user.id);
+        return token ? (
+          <BringAFriend
+            url={`${SITE_URL}/events/${event.id}?ref=${token}`}
+            title={event.title}
+            text={`I'm going to ${event.title}: ${when.day}, ${when.time} in ${event.neighborhood}. Come with me!`}
+            approvalOnly={isRequest}
+          />
+        ) : null;
+      })()}
 
       {insider && !cancelled && !ended && (
         <EventActions eventId={event.id} address={hasRealLocation ? address : null} />

@@ -162,6 +162,18 @@ export function weeklyDigest(a: {
   return { subject: `${a.items.length} ${a.items.length === 1 ? "meetup" : "meetups"} you might like this week`, ...body };
 }
 
+/** To someone who invited a friend: the friend is in. */
+export function friendJoined(a: { name: string; friendName: string; eventTitle: string; when: string; eventUrl: string; siteUrl: string }): Email {
+  const title = oneLine(a.eventTitle);
+  const body = layout({
+    heading: `${a.friendName} is coming to ${title}`,
+    paragraphs: [`Hi ${a.name}, ${a.friendName} joined ${title} (${a.when}) because you invited them.`, "It's more fun with a friend. See you there!"],
+    cta: { label: "See the meetup", url: a.eventUrl },
+    siteUrl: a.siteUrl,
+  });
+  return { subject: `${oneLine(a.friendName)} is coming to ${title.slice(0, 60)}`, ...body };
+}
+
 /** The day before: what, when, where. */
 export function reminder(a: {
   name: string;

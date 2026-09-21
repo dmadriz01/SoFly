@@ -4,7 +4,7 @@ import { Avatar } from "./Avatar";
 import { BioBlock } from "./BioBlock";
 
 /** For the host: who's coming, with each guest's profile one tap away. */
-export function GuestProfiles({ guests }: { guests: { userId: string; name: string; about: About | null }[] }) {
+export function GuestProfiles({ guests }: { guests: { userId: string; name: string; about: About | null; invitedBy?: string }[] }) {
   if (guests.length === 0) return null;
   return (
     <section className="card p-4">
@@ -16,6 +16,7 @@ export function GuestProfiles({ guests }: { guests: { userId: string; name: stri
               <summary className="tap flex cursor-pointer list-none items-center gap-2 text-sm font-medium">
                 <Avatar name={g.name} size="sm" />
                 {firstName(g.name)}
+                {g.invitedBy && <span className="rounded-full bg-accent-soft px-2 py-0.5 text-xs font-semibold text-accent-dark">Invited by {g.invitedBy}</span>}
                 <span aria-hidden className="ml-auto text-muted transition group-open:rotate-90">
                   ›
                 </span>

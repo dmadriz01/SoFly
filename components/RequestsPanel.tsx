@@ -5,7 +5,7 @@ import { respondToRequest } from "@/app/actions";
 import type { About } from "@/lib/about";
 import { BioBlock } from "./BioBlock";
 
-export type PendingRequest = { userId: string; name: string; note: string; about: About | null };
+export type PendingRequest = { userId: string; name: string; note: string; about: About | null; invitedBy?: string };
 
 /** The host's inbox for a request-to-join event. */
 export function RequestsPanel({
@@ -49,7 +49,10 @@ export function RequestsPanel({
           {requests.map((r) => (
             <li key={r.userId} className="space-y-2 py-3">
               <div className="flex items-center justify-between gap-3">
-                <span className="min-w-0 truncate font-medium">{r.name}</span>
+                <span className="min-w-0 font-medium">
+                  <span className="block truncate">{r.name}</span>
+                  {r.invitedBy && <span className="mt-0.5 inline-block rounded-full bg-accent-soft px-2 py-0.5 text-xs font-semibold text-accent-dark">Invited by {r.invitedBy}</span>}
+                </span>
                 <span className="flex shrink-0 gap-2">
                 <button
                   onClick={() => respond(r.userId, "decline")}

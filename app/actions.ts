@@ -13,11 +13,13 @@ import { parseAbout, type AboutErrors, type AboutInput } from "@/lib/about";
 import { MIN_AGE, ageOn, parseBirthDate, resolveAgeRange } from "@/lib/age";
 import { HIDDEN_VENUE, REPORT_REASONS, isCategory } from "@/lib/constants";
 import { describeEdit } from "@/lib/event-edit";
+import { verifyInvite } from "@/lib/invite";
 import { occurrenceStarts } from "@/lib/recurrence";
 import {
   notifyEventCancelled,
   notifyEventDeleted,
   notifyEventUpdated,
+  notifyFriendJoined,
   notifyHostOfRequest,
   notifyRequestDecision,
   snapshotBeforeDelete,
@@ -299,7 +301,8 @@ export async function updateEventDetails(eventId: string, formData: FormData): P
 export async function setRsvp(
   eventId: string,
   join: boolean,
-  note = ""
+  note = "",
+  invite = ""
 ): Promise<{ error?: string }> {
   const supabase = createClient();
   const {
@@ -321,9 +324,17 @@ export async function setRsvp(
       if (noteError) return { error: noteError };
     }
 
-    const { error } = await supabase
-      .from("rsvps")
-      .insert({ event_id: eventId, user_id: user.id });
+    // Someone invited them: the signed link must be genuine for THIS meetup, and not from themselves.
+    const inviterId = invite ? verifyInvite(eventId, invite) : null;
+    const invitedBy = inviterId && inviterId !== user.id ? inviterId : null;
+
+    let { error } = invitedBy
+      ? await supabase.from("rsvps").insert({ event_id: eventId, user_id: user.id, invited_by: invitedBy })
+      : await supabase.from("rsvps").insert({ event_id: eventId, user_id: user.id });
+    if (invitedBy && (error?.code === "PGRST204" || error?.code === "42703")) {
+      // The invite column isn't there yet (migration 019 not run): join without recording who invited them.
+      ({ error } = await supabase.from("rsvps").insert({ event_id: eventId, user_id: user.id }));
+    }
     // 23505 = already joined or requested; nothing more to do.
     if (error?.code === "23505") return {};
     if (error) {
@@ -339,6 +350,9 @@ export async function setRsvp(
                 : "Couldn't join. Please try again.",
       };
     }
+
+    // Tell whoever invited them that their friend is in (for approval-only meetups, when they're approved).
+    if (invitedBy && !isRequest) waitUntil(notifyFriendJoined(eventId, user.id));
 
     if (isRequest) {
       if (cleanNote) {
@@ -551,6 +565,7 @@ export async function respondToRequest(
   if (!data || data.length === 0) return { error: "That request is no longer pending." };
 
   waitUntil(notifyRequestDecision(eventId, userId, decision === "approve"));
+  if (decision === "approve") waitUntil(notifyFriendJoined(eventId, userId));
   revalidatePath(`/events/${eventId}`);
   revalidatePath("/me");
   revalidatePath("/");
