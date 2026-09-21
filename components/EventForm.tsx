@@ -18,7 +18,7 @@ import {
   type EventField,
 } from "@/lib/validation";
 
-function Field({
+export function Field({
   label,
   name,
   error,

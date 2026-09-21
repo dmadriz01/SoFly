@@ -37,6 +37,48 @@ export const LIMITS = {
   maxSpots: 200,
 };
 
+// One rule per field, shared by posting and editing so the two can never drift apart.
+const neighborhoodError = (v: string) => (isNeighborhood(v) ? undefined : "Pick a neighborhood.");
+
+const venueError = (v: string) =>
+  !v
+    ? "Where are you meeting?"
+    : v.length > LIMITS.venue_name
+      ? `Keep it under ${LIMITS.venue_name} characters.`
+      : undefined;
+
+const addressError = (v: string) =>
+  !v
+    ? "Add the full address so people can find you."
+    : v.length > LIMITS.address
+      ? `Keep it under ${LIMITS.address} characters.`
+      : undefined;
+
+const startsAtError = (v: string) => {
+  if (!v) return "Pick a date and time.";
+  const when = pacificLocalToUtc(v);
+  if (!when) return "That isn't a valid date and time.";
+  if (when.getTime() <= Date.now()) return "Pick a time in the future.";
+  return undefined;
+};
+
+export type EventDetailsField = "starts_at" | "neighborhood" | "venue_name" | "address";
+export const DETAILS_FIELDS: readonly EventDetailsField[] = ["starts_at", "neighborhood", "venue_name", "address"];
+
+/** The date/time and place of a meetup: what a host can change after posting. */
+export function validateEventDetails(input: Record<string, string>): Partial<Record<EventDetailsField, string>> {
+  const v = (k: EventDetailsField) => (input[k] ?? "").trim();
+  const errors: Partial<Record<EventDetailsField, string>> = {};
+  const checks: [EventDetailsField, string | undefined][] = [
+    ["neighborhood", neighborhoodError(v("neighborhood"))],
+    ["venue_name", venueError(v("venue_name"))],
+    ["address", addressError(v("address"))],
+    ["starts_at", startsAtError(v("starts_at"))],
+  ];
+  for (const [field, message] of checks) if (message) errors[field] = message;
+  return errors;
+}
+
 /** Shared by the form (client) and the server action so the rules can't drift. */
 export function validateEvent(input: Record<string, string>): EventErrors {
   const errors: EventErrors = {};
@@ -47,24 +89,11 @@ export function validateEvent(input: Record<string, string>): EventErrors {
     errors.title = `Keep it under ${LIMITS.title} characters.`;
 
   if (!isCategory(v("category"))) errors.category = "Pick a category.";
-  if (!isNeighborhood(v("neighborhood")))
-    errors.neighborhood = "Pick a neighborhood.";
-
-  if (!v("venue_name")) errors.venue_name = "Where are you meeting?";
-  else if (v("venue_name").length > LIMITS.venue_name)
-    errors.venue_name = `Keep it under ${LIMITS.venue_name} characters.`;
-
-  if (!v("address")) errors.address = "Add the full address so people can find you.";
-  else if (v("address").length > LIMITS.address)
-    errors.address = `Keep it under ${LIMITS.address} characters.`;
-
-  if (!v("starts_at")) errors.starts_at = "Pick a date and time.";
-  else {
-    const when = pacificLocalToUtc(v("starts_at"));
-    if (!when) errors.starts_at = "That isn't a valid date and time.";
-    else if (when.getTime() <= Date.now())
-      errors.starts_at = "Pick a time in the future.";
-  }
+  const place = validateEventDetails(input);
+  if (place.neighborhood) errors.neighborhood = place.neighborhood;
+  if (place.venue_name) errors.venue_name = place.venue_name;
+  if (place.address) errors.address = place.address;
+  if (place.starts_at) errors.starts_at = place.starts_at;
 
   const spots = Number(v("max_spots"));
   if (!v("max_spots")) errors.max_spots = "How many people can join?";

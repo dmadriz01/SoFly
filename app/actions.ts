@@ -12,9 +12,11 @@ import { parseChatUrl } from "@/lib/chat";
 import { parseAbout, type AboutErrors, type AboutInput } from "@/lib/about";
 import { MIN_AGE, ageOn, parseBirthDate, resolveAgeRange } from "@/lib/age";
 import { HIDDEN_VENUE, REPORT_REASONS, isCategory } from "@/lib/constants";
+import { describeEdit } from "@/lib/event-edit";
 import {
   notifyEventCancelled,
   notifyEventDeleted,
+  notifyEventUpdated,
   notifyHostOfRequest,
   notifyRequestDecision,
   snapshotBeforeDelete,
@@ -25,9 +27,12 @@ import { pacificDate, pacificLocalToUtc } from "@/lib/time";
 import { safeNext } from "@/lib/utils";
 import {
   EVENT_FIELDS,
+  DETAILS_FIELDS,
   validateEvent,
+  validateEventDetails,
   validateMaxSpots,
   validateRequestNote,
+  type EventDetailsField,
   type EventErrors,
 } from "@/lib/validation";
 
@@ -99,6 +104,89 @@ export async function createEvent(formData: FormData): Promise<CreateEventResult
   revalidatePath("/");
   revalidatePath("/me");
   redirect(`/events/${data.id}`);
+}
+
+export type UpdateDetailsResult = { errors: Partial<Record<EventDetailsField, string>>; formError?: string };
+
+/**
+ * A host changing the date/time or place of their meetup. Everything is changed in one step by the
+ * database (update_event_details), which also re-checks that they own it and that it hasn't started
+ * or been cancelled. The people who were going are told only after the change went through.
+ */
+export async function updateEventDetails(eventId: string, formData: FormData): Promise<UpdateDetailsResult> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect(`/login?next=/events/${eventId}/edit`);
+
+  const input: Record<string, string> = {};
+  for (const field of DETAILS_FIELDS) {
+    const value = formData.get(field);
+    input[field] = typeof value === "string" ? value.trim() : "";
+  }
+  const errors = validateEventDetails(input);
+  if (Object.keys(errors).length > 0) return { errors };
+
+  const { data: event } = await supabase
+    .from("events")
+    .select("host_id, join_mode, starts_at, neighborhood, venue_name, address, cancelled_at")
+    .eq("id", eventId)
+    .maybeSingle();
+  if (!event || event.host_id !== user.id) return { errors: {}, formError: "You can only edit your own meetups." };
+  if (event.cancelled_at) return { errors: {}, formError: "This meetup was cancelled, so it can't be changed." };
+  if (new Date(event.starts_at).getTime() <= Date.now()) {
+    return { errors: {}, formError: "This meetup has already started, so it can't be changed." };
+  }
+
+  // Where it is now. For approval-only meetups the real place is the private location.
+  let venue = event.venue_name as string;
+  let address = event.address as string;
+  if (event.join_mode === "request") {
+    const { data: location } = await supabase.from("event_locations").select("venue_name, address").eq("event_id", eventId).maybeSingle();
+    venue = (location?.venue_name as string | undefined) ?? "";
+    address = (location?.address as string | undefined) ?? "";
+  }
+
+  const startsAt = pacificLocalToUtc(input.starts_at)!.toISOString();
+  const changes = describeEdit(
+    { starts_at: event.starts_at, neighborhood: event.neighborhood, venue_name: venue, address },
+    { starts_at: startsAt, neighborhood: input.neighborhood, venue_name: input.venue_name, address: input.address }
+  );
+  if (changes.length === 0) return { errors: {}, formError: "You haven't changed anything." };
+
+  const { error } = await supabase.rpc("update_event_details", {
+    eid: eventId,
+    new_starts_at: startsAt,
+    new_neighborhood: input.neighborhood,
+    new_venue: input.venue_name,
+    new_address: input.address,
+  });
+  if (error) {
+    // PGRST202: the database function isn't there, i.e. migration 017 hasn't been run yet.
+    if (error.code === "PGRST202") {
+      console.error("Editing a meetup failed: run supabase/migrations/017_update_event_details.sql in the SQL editor.");
+      return { errors: {}, formError: "Editing isn't available right now. Please try again later." };
+    }
+    return {
+      errors: {},
+      formError: error.message.includes("already started")
+        ? "This meetup has already started, so it can't be changed."
+        : error.message.includes("cancelled")
+          ? "This meetup was cancelled, so it can't be changed."
+          : error.message.includes("future")
+            ? "Pick a time in the future."
+            : "Couldn't save your changes. Please try again.",
+    };
+  }
+
+  // Only now that the change is saved: tell the people who were going.
+  waitUntil(notifyEventUpdated(eventId, changes));
+
+  revalidatePath(`/events/${eventId}`);
+  revalidatePath("/");
+  revalidatePath("/me");
+  redirect(`/events/${eventId}?edited=1`);
 }
 
 export async function setRsvp(

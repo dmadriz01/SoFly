@@ -119,6 +119,30 @@ export function eventCancelled(a: {
   return { subject: `Cancelled: ${title.slice(0, 70)}`, ...body };
 }
 
+/** To everyone who was going: the host changed the time or place. */
+export function eventUpdated(a: {
+  name: string;
+  eventTitle: string;
+  changes: { what: string; from: string; to: string }[];
+  when: string;
+  eventUrl: string;
+  siteUrl: string;
+}): Email {
+  const title = oneLine(a.eventTitle);
+  const body = layout({
+    heading: `Updated: ${title}`,
+    paragraphs: [
+      `Hi ${a.name}, the host changed the details for ${title}.`,
+      ...a.changes.map((c) => `${c.what}: ${oneLine(c.from)} \u2192 ${oneLine(c.to)}`),
+      `It's now on ${a.when}.`,
+      "If the new plan doesn't work for you, you can leave the meetup from its page.",
+    ],
+    cta: { label: "See the new details", url: a.eventUrl },
+    siteUrl: a.siteUrl,
+  });
+  return { subject: `Updated: ${title.slice(0, 70)}`, ...body };
+}
+
 /** The day before: what, when, where. */
 export function reminder(a: {
   name: string;

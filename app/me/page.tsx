@@ -74,12 +74,12 @@ export default async function MePage() {
 
   const [hostingRes, myRsvps] = await Promise.all([
     supabase.from("events").select("*").eq("host_id", user.id),
-    // Approved and pending only; a declined request just drops off this list.
+    // Everything you've joined or asked to join, including requests the host declined.
     supabase
       .from("rsvps")
       .select("event_id, status")
       .eq("user_id", user.id)
-      .in("status", ["approved", "pending"]),
+      .in("status", ["approved", "pending", "declined"]),
   ]);
 
   const interests = (await getInterests(supabase, user.id)) ?? [];
@@ -217,7 +217,7 @@ export default async function MePage() {
       />
       <Section
         title="Going to"
-        events={going}
+        events={going.filter((e) => statusByEvent[e.id] !== "declined")}
         statusByEvent={statusByEvent}
         empty={
           <>
@@ -228,6 +228,25 @@ export default async function MePage() {
           </>
         }
       />
+
+      {going.some((e) => statusByEvent[e.id] === "declined") && (
+        <section>
+          <h2 className="mb-1 text-lg font-bold">Declined</h2>
+          <p className="mb-3 text-sm text-muted">
+            Hosts couldn&rsquo;t fit you into these. It isn&rsquo;t a judgment on you: small meetups have limited spots.
+          </p>
+          <ul className="space-y-3">
+            {going
+              .filter((e) => statusByEvent[e.id] === "declined")
+              .sort((a, b) => new Date(b.starts_at).getTime() - new Date(a.starts_at).getTime())
+              .map((e) => (
+                <li key={e.id}>
+                  <EventCard event={e} past myStatus="declined" />
+                </li>
+              ))}
+          </ul>
+        </section>
+      )}
 
       <section id="about">
         <h2 className="mb-1 text-lg font-bold">About you</h2>

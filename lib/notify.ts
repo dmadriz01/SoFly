@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import * as email from "./email-templates";
 import { mailConfigured, sendMail, type Mail, type MailResult } from "./mailer";
 import { pushConfigured, sendPushToUser, type PushOutcome, type PushPayload } from "./push";
+import { pushSummary, type DetailChange } from "./event-edit";
 import { SITE_URL } from "./site";
 import { createAdminClient } from "./supabase/admin";
 import { addDaysToKey, formatWhenLong, pacificDate, pacificLocalToUtc } from "./time";
@@ -231,6 +232,46 @@ export function notifyEventDeleted(snapshot: Cancellation, deps: Deps = {}) {
     const { admin } = use(deps);
     if (!admin) return;
     await deliverCancellation(snapshot, admin, deps);
+  });
+}
+
+/**
+ * The host changed a meetup's time or place: tell everyone who was going, by email and push. The push
+ * says what kind of thing changed but never the address itself (it would show on a lock screen).
+ * Quiet for a meetup that already started or was cancelled, and if nothing actually changed.
+ */
+export function notifyEventUpdated(eventId: string, changes: DetailChange[], deps: Deps = {}) {
+  return safely("event updated", async () => {
+    if (changes.length === 0) return;
+    const { admin, send, push } = use(deps);
+    if (!admin) return;
+    const { data: event } = await admin.from("events").select("title, starts_at, host_id, cancelled_at").eq("id", eventId).maybeSingle();
+    if (!event || event.cancelled_at || new Date(event.starts_at as string) <= (deps.now ?? new Date())) return;
+    const { data: guests } = await admin.from("rsvps").select("user_id").eq("event_id", eventId).eq("status", "approved");
+
+    const when = formatWhenLong(event.starts_at as string);
+    for (const g of (guests ?? []).filter((g) => g.user_id !== event.host_id).slice(0, 200)) {
+      const to = await recipient(admin, g.user_id as string);
+      if (to.ok) {
+        await send({
+          to: to.to.email,
+          ...email.eventUpdated({
+            name: to.to.name,
+            eventTitle: event.title as string,
+            changes,
+            when: `${when.day} at ${when.time}`,
+            eventUrl: eventUrl(eventId),
+            siteUrl: SITE_URL,
+          }),
+        });
+      }
+      await push(g.user_id as string, {
+        title: `Updated: ${event.title}`,
+        body: pushSummary(changes),
+        url: `/events/${eventId}`,
+        tag: `updated-${eventId}`,
+      });
+    }
   });
 }
 

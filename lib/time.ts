@@ -30,6 +30,12 @@ function dayKey(d: Date) {
 
 export const pacificDate = (d = new Date()) => dayKey(d);
 
+/** A timestamp as the value of a `datetime-local` input, in Pacific time: "2026-09-20T18:30". */
+export function pacificLocalValue(iso: string) {
+  const p = wallParts(new Date(iso));
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
+}
+
 /** The hour of day (0-23) in Pacific time for a timestamp. */
 export const pacificHour = (iso: string) => Number(wallParts(new Date(iso)).hour);
 

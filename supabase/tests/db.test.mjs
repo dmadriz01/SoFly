@@ -595,6 +595,71 @@ async function behaviour({ db, U, oldEvent }, { migrated }) {
   ok("the record is readable by anyone (it only holds details that were already public)", !r.error && sees(r) === 1, JSON.stringify(r));
   await db.query(`delete from public.events where id=$1`, [TR]);
 
+  // ---- a host editing the date/time and place (update_event_details) ----
+  const edit = (who, id, when, hood, venue, addr) => as(who, `select public.update_event_details($1,$2,$3,$4,$5)`, [id, when, hood, venue, addr]);
+  const row = (id) => one(`select starts_at, neighborhood, venue_name, address from public.events where id=$1`, [id]);
+  const loc = async (id) => (await q(`select venue_name, address from public.event_locations where event_id=$1`, [id]))[0];
+  const OPEN = await mkEvent("host", { title: "edit open", max: 6 });
+  r = await edit("host", OPEN, "2027-02-01T18:00:00Z", "Berkeley", "Cesar Chavez Park", "11 Spinnaker Way, Berkeley, CA");
+  let e = await row(OPEN);
+  ok("host can change the time, neighborhood, venue and address of an open meetup", !r.error && new Date(e.starts_at).toISOString() === "2027-02-01T18:00:00.000Z" && e.neighborhood === "Berkeley" && e.venue_name === "Cesar Chavez Park" && e.address === "11 Spinnaker Way, Berkeley, CA", JSON.stringify({ r, e }));
+  ok("...and an open meetup gets no private location row", (await loc(OPEN)) === undefined);
+  const trk = await one(`select details_before from public.events where id=$1`, [OPEN]);
+  ok("...which the picture's change tracking notices (old neighborhood and time are remembered)", trk.details_before?.neighborhood === "Oakland" && /^2027-01-15/.test(trk.details_before?.starts_at), JSON.stringify(trk));
+
+  const REQ = await mkEvent("host", { title: "edit request", max: 6, mode: "request", venue: "Shared after approval", addr: "Oakland" });
+  await as("host", `insert into public.event_locations (event_id, venue_name, address) values ($1,'Old Court','1 Old St, Oakland')`, [REQ]);
+  r = await edit("host", REQ, "2027-02-02T19:30:00Z", "Alameda", "New Court", "9 New Ave, Alameda, CA");
+  e = await row(REQ);
+  ok("approval-only: the public row keeps its placeholder venue and shows only the neighborhood", !r.error && e.venue_name === "Shared after approval" && e.address === "Alameda" && e.neighborhood === "Alameda", JSON.stringify({ r, e }));
+  ok("approval-only: the real venue and address go to the private location", (await loc(REQ))?.venue_name === "New Court" && (await loc(REQ))?.address === "9 New Ave, Alameda, CA");
+  ok("approval-only: the private address never appears on the public row", !JSON.stringify(e).includes("New Ave") && !JSON.stringify(e).includes("New Court"));
+  await q(`delete from public.event_locations where event_id=$1`, [REQ]);
+  r = await edit("host", REQ, "2027-02-03T19:30:00Z", "Oakland", "Fresh Court", "3 Fresh Rd, Oakland, CA");
+  ok("approval-only: a missing private location is created rather than failing", !r.error && (await loc(REQ))?.venue_name === "Fresh Court", JSON.stringify(r));
+
+  r = await edit("ann", OPEN, "2027-03-01T18:00:00Z", "Oakland", "Hijack", "1 Hijack St");
+  ok("someone else cannot edit the meetup", failsWith(r, "only edit your own") && (await row(OPEN)).venue_name === "Cesar Chavez Park", JSON.stringify(r));
+  r = await edit("anon", OPEN, "2027-03-01T18:00:00Z", "Oakland", "Hijack", "1 Hijack St");
+  ok("a logged-out visitor cannot run it at all", denied(r), JSON.stringify(r));
+  r = await edit("host", "00000000-0000-4000-8000-00000000dead", "2027-03-01T18:00:00Z", "Oakland", "x", "y");
+  ok("an unknown meetup is refused", failsWith(r, "only edit your own"), JSON.stringify(r));
+
+  const before = await row(OPEN);
+  const same = async (label) => ok(label, JSON.stringify(await row(OPEN)) === JSON.stringify(before));
+  r = await edit("host", OPEN, "2020-01-01T18:00:00Z", "Oakland", "v", "a");
+  ok("a time in the past is refused", failsWith(r, "future"), JSON.stringify(r)); await same("...and nothing changed");
+  r = await edit("host", OPEN, "2027-03-01T18:00:00Z", "Oakland", "v".repeat(101), "a");
+  ok("a venue over 100 characters is refused", failsWith(r, "venue name"), JSON.stringify(r)); await same("...and nothing changed");
+  r = await edit("host", OPEN, "2027-03-01T18:00:00Z", "Oakland", "v", "a".repeat(201));
+  ok("an address over 200 characters is refused (for approval-only meetups too)", failsWith(r, "address") && failsWith(await edit("host", REQ, "2027-03-01T18:00:00Z", "Oakland", "v", "a".repeat(201)), "address"), JSON.stringify(r));
+  r = await edit("host", OPEN, "2027-03-01T18:00:00Z", "", "v", "a");
+  ok("an empty neighborhood is refused", failsWith(r, "neighborhood"), JSON.stringify(r));
+  r = await edit("host", OPEN, "2027-03-01T18:00:00Z", "Oakland", "", "a");
+  ok("an empty venue is refused", failsWith(r, "venue name"), JSON.stringify(r)); await same("...and nothing changed");
+  const REQ2 = await mkEvent("host", { title: "edit request 2", max: 6, mode: "request" });
+  await as("host", `insert into public.event_locations (event_id, venue_name, address) values ($1,'Keep Me','2 Keep St')`, [REQ2]);
+  await edit("host", REQ2, "2027-03-01T18:00:00Z", "Oakland", "v".repeat(101), "a");
+  ok("a refused edit leaves the private location untouched too", (await loc(REQ2))?.venue_name === "Keep Me");
+
+  const PASTED = await mkPast("edit started");
+  r = await edit("host", PASTED, "2027-03-01T18:00:00Z", "Oakland", "v", "a");
+  ok("a meetup that already started can't be edited", failsWith(r, "already started"), JSON.stringify(r));
+  const CXL = await mkEvent("host", { title: "edit cancelled", max: 4 });
+  await as("host", `select public.cancel_event($1)`, [CXL]);
+  r = await edit("host", CXL, "2027-03-01T18:00:00Z", "Oakland", "v", "a");
+  ok("a cancelled meetup can't be edited", failsWith(r, "cancelled"), JSON.stringify(r));
+
+  // the approved guest can read the new private place, and a pending or declined person still can't
+  await q(`insert into public.rsvps (event_id,user_id) values ($1,$2)`, [REQ, U.ann]);
+  await q(`update public.rsvps set status='approved' where event_id=$1 and user_id=$2`, [REQ, U.ann]);
+  r = await as("ann", `select venue_name, address from public.event_locations where event_id=$1`, [REQ]);
+  ok("after an edit, an approved guest reads the new private place", sees(r) === 1 && r.rows[0].venue_name === "Fresh Court", JSON.stringify(r));
+  await q(`insert into public.rsvps (event_id,user_id) values ($1,$2)`, [REQ, U.bob]);
+  r = await as("bob", `select venue_name from public.event_locations where event_id=$1`, [REQ]);
+  ok("...while someone whose request is still pending can't", sees(r) === 0, JSON.stringify(r));
+  for (const id of [OPEN, REQ, REQ2, CXL, PASTED]) await db.query(`delete from public.events where id=$1`, [id]);
+
   // ---- cleanup and cascades ----
   await as("host", `delete from public.events where id=$1`, [EP]);
   ok("deleting an event clears its passes and reports", (await one(`select (select count(*) from public.event_passes where event_id=$1) + (select count(*) from public.reports where event_id=$1) as c`, [EP])).c == 0);
@@ -652,7 +717,7 @@ await behaviour(fromSchema, { migrated: false });
 // require the same database as a clean install.
 label = "rerun";
 {
-  const RECENT = MIGRATIONS.filter((f) => /^01[0-6]/.test(f));
+  const RECENT = MIGRATIONS.filter((f) => /^01[0-7]/.test(f));
   const clean = await catalog((await buildFromSchema()).db);
   const same = (x) => x.length === clean.length && x.every((line, i) => line === clean[i]);
 

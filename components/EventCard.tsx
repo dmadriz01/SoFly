@@ -53,6 +53,11 @@ export function EventCard({
             {pendingRequests} {pendingRequests === 1 ? "request" : "requests"} waiting
           </span>
         )}
+        {myStatus === "declined" && (
+          <span className="rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700">
+            Declined
+          </span>
+        )}
         {myStatus === "pending" && (
           <span className="rounded-full bg-accent-soft px-2.5 py-0.5 text-xs font-semibold text-accent-dark">
             Requested

@@ -66,7 +66,7 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   };
 }
 
-export default async function EventPage({ params }: { params: { id: string } }) {
+export default async function EventPage({ params, searchParams }: { params: { id: string }; searchParams: { edited?: string | string[] } }) {
   const supabase = createClient();
   const [{ data }, userResult] = await Promise.all([
     supabase
@@ -209,11 +209,24 @@ export default async function EventPage({ params }: { params: { id: string } }) 
         <Link href="/" className="text-sm font-medium text-muted hover:text-ink">
           ← All meetups
         </Link>
-        <ShareButton
-          title={event.title}
-          text={`${event.title}: ${when.day} · ${when.time}, ${event.neighborhood}`}
-        />
+        <div className="flex items-center gap-2">
+          {isHost && !cancelled && !ended && (
+            <Link href={`/events/${event.id}/edit`} className="btn-secondary !px-4 !py-2 text-sm">
+              Edit
+            </Link>
+          )}
+          <ShareButton
+            title={event.title}
+            text={`${event.title}: ${when.day} · ${when.time}, ${event.neighborhood}`}
+          />
+        </div>
       </div>
+
+      {isHost && searchParams.edited === "1" && !cancelled && (
+        <p role="status" className="rounded-2xl bg-accent-soft px-4 py-3 text-sm text-accent-dark">
+          <span className="font-semibold">Saved.</span> The people who joined are being told by email and push notification.
+        </p>
+      )}
 
       {cancelled && (
         <div role="status" className="rounded-2xl border border-red-200 bg-red-50 p-4 text-red-900">
