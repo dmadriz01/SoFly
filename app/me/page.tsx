@@ -13,7 +13,9 @@ import { InterestsForm } from "@/components/InterestsForm";
 import { isAdminUser } from "@/lib/admin-access";
 import { repeatLabel, seriesNeedingMoreDates } from "@/lib/recurrence";
 import { getInterests } from "@/lib/interests";
-import { metCount } from "@/lib/engagement";
+import { metCount, summarizeHosting } from "@/lib/engagement";
+import { hostStats } from "@/lib/host-stats";
+import { HostingSummary } from "@/components/HostingSummary";
 import { parsePrefs } from "@/lib/notify-policy";
 import { getAbout, getBirthDate } from "@/lib/profile";
 import { createClient } from "@/lib/supabase/server";
@@ -175,6 +177,11 @@ export default async function MePage() {
     toRate = recent.filter((e) => !done.has(e.id));
   }
 
+  // Your hosting record, for you: exact from the database when it has it, otherwise counted from your meetups.
+  const pastHosted = hosting.filter((e) => !e.cancelled_at && new Date(e.starts_at).getTime() < Date.now());
+  const hostingSummary = summarizeHosting(pastHosted, await hostStats(supabase, user.id));
+  const lastHosted = [...pastHosted].sort((a, b) => new Date(b.starts_at).getTime() - new Date(a.starts_at).getTime())[0];
+
   // "You met N people": from the approved guest lists the person is themselves allowed to see.
   const metByEvent: Record<string, number> = {};
   if (toRate.length > 0) {
@@ -199,6 +206,8 @@ export default async function MePage() {
           Admin dashboard <span aria-hidden="true">&rarr;</span>
         </Link>
       )}
+
+      <HostingSummary summary={hostingSummary} lastEventId={lastHosted?.id ?? null} />
 
       {seriesNeedingMoreDates(hosting).map((last) => (
         <section key={last.id} className="card space-y-2 p-4">

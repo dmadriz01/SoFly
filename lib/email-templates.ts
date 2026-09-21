@@ -216,6 +216,22 @@ export function guestDropped(a: { name: string; guestName: string; eventTitle: s
   return { subject: `${oneLine(a.guestName)} can't make it to ${title.slice(0, 55)}`, ...body };
 }
 
+/** To a host, the morning after: how it went in numbers, and a nudge to post the next one. */
+export function hostRecap(a: { name: string; eventTitle: string; came: number; cameBack: number; nextUrl: string; eventUrl: string; siteUrl: string }): Email {
+  const title = oneLine(a.eventTitle);
+  const back = a.cameBack > 0 ? ` ${a.cameBack} of them had been to one of your meetups before.` : "";
+  const body = layout({
+    heading: `${a.came} ${a.came === 1 ? "person" : "people"} came to ${title}`,
+    paragraphs: [
+      `Hi ${a.name}, ${title} is done: ${a.came} ${a.came === 1 ? "person" : "people"} came.${back}`,
+      "The best time to post the next one is now, while everyone's still talking about it. It copies everything, and you just pick the date.",
+    ],
+    cta: { label: "Post the next one", url: a.nextUrl },
+    siteUrl: a.siteUrl,
+  });
+  return { subject: `${a.came} ${a.came === 1 ? "person" : "people"} came to ${title.slice(0, 55)}`, ...body };
+}
+
 /** The day before: what, when, where. */
 export function reminder(a: {
   name: string;

@@ -11,7 +11,8 @@ import { SeriesPanel, type SeriesDate } from "@/components/SeriesPanel";
 import { CoverChangeNote } from "@/components/CoverChangeNote";
 import { emojiFor } from "@/lib/constants";
 import { coverChangeNote } from "@/lib/cover-change";
-import { metCount } from "@/lib/engagement";
+import { metCount, summarizeHosting } from "@/lib/engagement";
+import { hostStats } from "@/lib/host-stats";
 import { signInvite, verifyInvite } from "@/lib/invite";
 import { SITE_URL } from "@/lib/site";
 import { EventActions } from "@/components/EventActions";
@@ -184,10 +185,15 @@ export default async function EventPage({ params, searchParams }: { params: { id
     .eq("host_id", event.host_id)
     .is("cancelled_at", null)
     .lt("starts_at", new Date().toISOString());
-  const hostedCount = hostHistory?.length ?? 0;
-  const hostedJoined = (hostHistory ?? []).reduce((sum, e) => sum + (e.spots_taken as number), 0);
-  const hostYes = (hostHistory ?? []).reduce((sum, e) => sum + (e.feedback_yes as number), 0);
-  const hostAnswers = (hostHistory ?? []).reduce((sum, e) => sum + (e.feedback_total as number), 0);
+  // The host's record: exact numbers from the database when it has them (before migration 019, our own count).
+  const record = summarizeHosting(
+    (hostHistory ?? []) as { spots_taken: number; feedback_yes: number; feedback_total: number }[],
+    await hostStats(supabase, event.host_id)
+  );
+  const hostedCount = record.hosted;
+  const hostedJoined = record.guests;
+  const hostYes = record.feedbackYes;
+  const hostAnswers = record.feedbackTotal;
 
   const guests = isHost
     ? attendees
@@ -369,6 +375,7 @@ export default async function EventPage({ params, searchParams }: { params: { id
           joined={hostedJoined}
           feedbackYes={hostYes}
           feedbackTotal={hostAnswers}
+          cameBack={record.repeatGuests}
         />
       )}
 

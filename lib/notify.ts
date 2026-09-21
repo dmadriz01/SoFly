@@ -426,6 +426,8 @@ export type DailyResult = {
   digests: number;
   /** Day-of "Still coming?" prompts sent. */
   stillComing: number;
+  /** "How it went" wrap-ups sent to hosts. */
+  hostRecaps: number;
   eventsTomorrow: number;
   eventsYesterday: number;
   /** People who would have been emailed but weren't, and why. */
@@ -457,6 +459,7 @@ export async function sendDailyEmails(now = new Date(), deps: Deps = {}): Promis
     feedbackRequests: 0,
     digests: 0,
     stillComing: 0,
+    hostRecaps: 0,
     eventsTomorrow: 0,
     eventsYesterday: 0,
     skipped: { noEmail: 0, optedOut: 0, lookupFailed: 0 },
@@ -491,7 +494,7 @@ export async function sendDailyEmails(now = new Date(), deps: Deps = {}): Promis
   };
 
   const CAP = 250; // stays well inside a Gmail account's daily sending limit
-  const capped = () => result.reminders + result.feedbackRequests + result.digests + result.stillComing >= CAP;
+  const capped = () => result.reminders + result.feedbackRequests + result.digests + result.stillComing + result.hostRecaps >= CAP;
 
   /** Look someone up and email them; returns whether it was sent. Skips and failures are counted. */
   const emailPerson = async (userId: string, build: (r: Recipient) => Omit<Mail, "to">, category: Category = "reminders") => {
@@ -601,6 +604,40 @@ export async function sendDailyEmails(now = new Date(), deps: Deps = {}): Promis
         tag: `feedback-${event.id}`,
       });
     }
+  }
+
+  // Host recap: the morning after, each host of a meetup that just happened hears how it went (how many
+  // came, how many had been before) and is nudged to post the next one. Once per meetup, as a nudge.
+  for (const event of past) {
+    if (capped()) return done("stopped at the daily cap");
+    const guests = (await approvedGuestIds(admin, event.id)).filter((id) => id !== event.host_id);
+    if (guests.length === 0) continue;
+    const { data: earlier } = await admin.from("events").select("id").eq("host_id", event.host_id).lt("starts_at", event.starts_at).is("cancelled_at", null);
+    const earlierIds = (earlier ?? []).map((e) => e.id as string);
+    let cameBack = 0;
+    if (earlierIds.length > 0) {
+      const { data: before } = await admin.from("rsvps").select("user_id").eq("status", "approved").in("event_id", earlierIds).in("user_id", guests);
+      cameBack = new Set((before ?? []).map((r) => r.user_id as string)).size;
+    }
+    const prefs = await prefsOf(event.host_id);
+    if (!prefs.activity) {
+      result.mutedByPrefs++;
+      continue;
+    }
+    if (!(await claimSend(admin, event.host_id, "host_recap", event.id))) continue;
+    await emailPerson(
+      event.host_id,
+      (r) => email.hostRecap({ name: r.name, eventTitle: event.title, came: guests.length, cameBack, nextUrl: `${SITE_URL}/events/new?from=${event.id}`, eventUrl: eventUrl(event.id), siteUrl: SITE_URL }),
+      "activity"
+    );
+    if (await underNudgeCap(admin, event.host_id, now)) {
+      await pushPerson(
+        event.host_id,
+        { title: `${guests.length} ${guests.length === 1 ? "person" : "people"} came to ${event.title}`, body: cameBack > 0 ? `${cameBack} had been before. Tap to post the next one.` : "Tap to post the next one.", url: `/events/new?from=${event.id}`, tag: `recap-${event.id}` },
+        "activity"
+      );
+    }
+    result.hostRecaps++;
   }
 
   // "Still coming?" the day of: approved guests of today's meetups that start at least two hours from

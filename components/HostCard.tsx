@@ -8,6 +8,7 @@ export function HostCard({
   joined,
   feedbackYes,
   feedbackTotal,
+  cameBack = 0,
 }: {
   name: string;
   since: string | null;
@@ -16,6 +17,8 @@ export function HostCard({
   /** Guests' "would join again" answers across the host's past meetups. */
   feedbackYes: number;
   feedbackTotal: number;
+  /** People who came to two or more of this host's meetups. */
+  cameBack?: number;
 }) {
   const member = since
     ? new Date(since).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "America/Los_Angeles" })
@@ -23,7 +26,7 @@ export function HostCard({
   const record =
     hosted === 0
       ? "New host: this is their first meetup"
-      : `${hosted} ${hosted === 1 ? "meetup" : "meetups"} hosted · ${joined} ${joined === 1 ? "person" : "people"} joined`;
+      : `${hosted} ${hosted === 1 ? "meetup" : "meetups"} hosted · ${joined} ${joined === 1 ? "person" : "people"} joined${cameBack > 0 ? ` · ${cameBack} came back` : ""}`;
 
   return (
     <div className="card flex items-center gap-3 p-4">

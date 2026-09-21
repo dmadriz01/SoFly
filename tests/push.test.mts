@@ -205,7 +205,8 @@ const NOW = new Date("2026-09-20T19:51:45Z");
   d.rsvps.push({ event_id: "ev1", user_id: "ann", status: "approved" });
   const r = recorder();
   const res = await silently(() => sendDailyEmails(NOW, { admin: fakeAdmin(d, users), send: fakeMailbox().send, push: r.push }));
-  t("the daily job pushes 'How was it?' to yesterday's guests, not the host", r.sent.length === 1 && r.sent[0].to === "ann" && r.sent[0].payload.title === "How was Pickeball?" && res.pushes === 1, JSON.stringify(r.sent));
+  const asked = r.sent.filter((p) => /^How was/.test(p.payload.title));
+  t("the daily job pushes 'How was it?' to yesterday's guests, not the host (who gets the wrap-up instead)", asked.length === 1 && asked[0].to === "ann" && asked[0].payload.title === "How was Pickeball?" && r.sent.some((p) => p.to === "host" && /came to Pickeball/.test(p.payload.title)) && res.pushes === 2, JSON.stringify(r.sent));
 }
 {
   const r = recorder(); const box = fakeMailbox();

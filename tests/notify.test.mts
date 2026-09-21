@@ -103,7 +103,7 @@ for (const [label, iso, expected] of [
   d.rsvps.push({ event_id: "ev1", user_id: "ann", status: "approved" }, { event_id: "ev1", user_id: "bob", status: "pending" });
   const r = await silently(() => sendDailyEmails(NOW, { admin: fakeAdmin(d, users), send: box.send }));
   t("yesterday's meetup: approved guests get 'How was it?'", r.feedbackRequests === 1 && box.sent[0]?.to === "ann@example.com" && box.sent[0]?.subject === "How was Pickeball?", JSON.stringify(r));
-  t("...the host and pending requesters do not", !box.sent.some((m) => m.to === "host@example.com" || m.to === "bob@example.com"));
+  t("...the host and pending requesters do not (the host gets a different message: how it went)", !box.sent.some((m) => (m.to === "host@example.com" && /How was/.test(m.subject)) || m.to === "bob@example.com") && box.sent.some((m) => m.to === "host@example.com" && /came to Pickeball/.test(m.subject)));
   t("...and no reminder goes out for a meetup that already happened", r.reminders === 0);
 }
 

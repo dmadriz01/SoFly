@@ -79,3 +79,34 @@ export function metCount(approvedIds: string[], selfId: string, hostId: string):
   if (hostId !== selfId) others.add(hostId);
   return others.size;
 }
+
+/** What we show about a host, with the numbers from the database when we have them. */
+export type HostingSummary = {
+  hosted: number;
+  guests: number;
+  /** People who came to two or more of their meetups. Zero when we can't tell (before the database update). */
+  repeatGuests: number;
+  /** Guests' "would join again" answers across past meetups. */
+  feedbackYes: number;
+  feedbackTotal: number;
+  /** True when the counts came from the database function (so `repeatGuests` is real). */
+  exact: boolean;
+};
+
+type PastEvent = { spots_taken: number; feedback_yes: number; feedback_total: number };
+
+/**
+ * A host's record. With the database's numbers it's exact; without them we count the past,
+ * uncancelled meetups ourselves (and can't say how many people came back).
+ */
+export function summarizeHosting(past: PastEvent[], record: { hosted: number; guests: number; repeatGuests: number } | null): HostingSummary {
+  const feedbackYes = past.reduce((n, e) => n + (e.feedback_yes ?? 0), 0);
+  const feedbackTotal = past.reduce((n, e) => n + (e.feedback_total ?? 0), 0);
+  if (record) return { ...record, feedbackYes, feedbackTotal, exact: true };
+  return { hosted: past.length, guests: past.reduce((n, e) => n + (e.spots_taken ?? 0), 0), repeatGuests: 0, feedbackYes, feedbackTotal, exact: false };
+}
+
+/** "9 came back" wording, or null when there's nothing to say. */
+export function cameBackText(repeatGuests: number): string | null {
+  return repeatGuests > 0 ? `${repeatGuests} came back` : null;
+}
