@@ -54,6 +54,15 @@ export function formatWhenShort(iso: string, now = new Date()) {
   return `${day} · ${time}`;
 }
 
+/** "Sat, Sep 26 · 10:00 AM": always the actual day, never "Today" or "Tomorrow". */
+export function formatWhenAbsolute(iso: string) {
+  const d = new Date(iso);
+  return `${fmt({ weekday: "short", month: "short", day: "numeric" }).format(d)} · ${fmt({ hour: "numeric", minute: "2-digit" }).format(d)}`;
+}
+
+/** "Sep 22" */
+export const formatDayShort = (iso: string) => fmt({ month: "short", day: "numeric" }).format(new Date(iso));
+
 /** { day: "Saturday, September 20", time: "6:30 PM PDT" } */
 export function formatWhenLong(iso: string) {
   const d = new Date(iso);

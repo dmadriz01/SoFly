@@ -23,6 +23,9 @@ export type EventRow = {
   age_max: number | null;
   /** Set by a moderator in Supabase; null for active events. */
   cancelled_at: string | null;
+  /** When a detail behind the cover picture last changed, and what those details were before. */
+  details_changed_at?: string | null;
+  details_before?: Record<string, unknown> | null;
 };
 
 /** Kept as an alias: spots_taken now lives on the event row itself. */

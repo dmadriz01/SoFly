@@ -560,6 +560,41 @@ async function behaviour({ db, U, oldEvent }, { migrated }) {
   await db.query(`delete from public.events where id=$1`, [PAST]);
   ok("deleting an event removes its feedback", (await one(`select count(*)::int c from public.meetup_feedback where event_id=$1`, [PAST])).c === 0);
 
+  // ---- remembering when the details behind the cover picture change ----
+  const TR = await mkEvent("host", { title: "track changes", max: 8 });
+  const tracked = () => one(`select details_changed_at, details_before from public.events where id=$1`, [TR]);
+  let tr = await tracked();
+  ok("a new meetup has no change recorded", tr.details_changed_at === null && tr.details_before === null);
+  r = await as("host", `update public.events set title='renamed', description='new words' where id=$1`, [TR]);
+  tr = await tracked();
+  ok("changing the title or description records nothing (they don't shape the picture)", !r.error && tr.details_changed_at === null);
+  r = await as("host", `update public.events set max_spots=6 where id=$1`, [TR]);
+  tr = await tracked();
+  ok("changing the number of spots records when, and the old number", !r.error && tr.details_changed_at !== null && tr.details_before.max_spots === 8, JSON.stringify(tr));
+  ok("...along with the other details as they were", tr.details_before.neighborhood === "Oakland" && tr.details_before.category === "Dinner" && tr.details_before.skill_level === "All levels" && /^2027-01-15/.test(tr.details_before.starts_at), JSON.stringify(tr.details_before));
+  const firstAt = tr.details_changed_at;
+  await db.query(`select pg_sleep(0.01)`);
+  r = await as("host", `update public.events set starts_at='2027-01-16T03:00:00Z', neighborhood='Berkeley', skill_level='Advanced' where id=$1`, [TR]);
+  tr = await tracked();
+  ok("a later change replaces the record: it holds the values from just before that change", !r.error && tr.details_before.max_spots === 6 && tr.details_before.neighborhood === "Oakland" && tr.details_before.skill_level === "All levels" && /^2027-01-15/.test(tr.details_before.starts_at), JSON.stringify(tr.details_before));
+  ok("...and the time moves forward", new Date(tr.details_changed_at) > new Date(firstAt));
+  const stamp = tr.details_changed_at;
+  r = await as("host", `update public.events set max_spots=6 where id=$1`, [TR]);
+  ok("saving the same values again doesn't count as a change", !r.error && (await tracked()).details_changed_at.getTime() === stamp.getTime());
+  await q(`insert into public.rsvps (event_id,user_id) values ($1,$2)`, [TR, U.ann]);
+  ok("someone joining (which updates spots_taken) doesn't count as a change", (await tracked()).details_changed_at.getTime() === stamp.getTime());
+  await as("host", `select public.cancel_event($1)`, [TR]);
+  ok("cancelling doesn't count as a change either", (await tracked()).details_changed_at.getTime() === stamp.getTime());
+  r = await as("host", `update public.events set details_changed_at = null where id=$1`, [TR]);
+  ok("a host cannot write the change time directly", denied(r), JSON.stringify(r));
+  r = await as("host", `update public.events set details_before = '{"max_spots": 1}' where id=$1`, [TR]);
+  ok("a host cannot write the 'before' details directly", denied(r), JSON.stringify(r));
+  r = await as("host", `insert into public.events (host_id,title,category,venue_name,address,neighborhood,starts_at,max_spots,details_before) values ($1,'x','Yoga','v','a','Oakland','2027-01-15T20:00:00Z',5,'{}')`, [U.host]);
+  ok("nobody can set them when posting either", denied(r), JSON.stringify(r));
+  r = await as("anon", `select details_changed_at, details_before from public.events where id=$1`, [TR]);
+  ok("the record is readable by anyone (it only holds details that were already public)", !r.error && sees(r) === 1, JSON.stringify(r));
+  await db.query(`delete from public.events where id=$1`, [TR]);
+
   // ---- cleanup and cascades ----
   await as("host", `delete from public.events where id=$1`, [EP]);
   ok("deleting an event clears its passes and reports", (await one(`select (select count(*) from public.event_passes where event_id=$1) + (select count(*) from public.reports where event_id=$1) as c`, [EP])).c == 0);
@@ -617,7 +652,7 @@ await behaviour(fromSchema, { migrated: false });
 // require the same database as a clean install.
 label = "rerun";
 {
-  const RECENT = MIGRATIONS.filter((f) => /^01[0-5]/.test(f));
+  const RECENT = MIGRATIONS.filter((f) => /^01[0-6]/.test(f));
   const clean = await catalog((await buildFromSchema()).db);
   const same = (x) => x.length === clean.length && x.every((line, i) => line === clean[i]);
 

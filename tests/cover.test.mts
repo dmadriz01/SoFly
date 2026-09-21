@@ -3,6 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { CATEGORIES, NEIGHBORHOODS } from "../lib/constants.ts";
+import { coverChangeNote, describeChanges, readBefore, type CoverChangeInput } from "../lib/cover-change.ts";
 import { CATEGORY_COLOR, coverSpec, coverSvg, sceneFor, slotFor, type CoverInput, type Scene, type Slot } from "../lib/cover.ts";
 
 let passed = 0;
@@ -98,6 +99,59 @@ function problems(markup: string) {
   const used = ["components/EventCover.tsx", "components/EventCard.tsx", "components/SwipeDeck.tsx", "components/NextUp.tsx", "app/events/[id]/page.tsx", "lib/event-og.tsx"];
   const calls = used.flatMap((f) => (fs.readFileSync(path.join(process.cwd(), f), "utf8").match(/<EventCover[\s\S]*?>|coverSvg\(\{[\s\S]*?\}\)/g) ?? []));
   t("privacy: nowhere passes a venue, address or description into the picture", calls.length >= 5 && calls.every((c) => !/venue|address|description|blurb|title/i.test(c)), calls.filter((c) => /venue|address|description|blurb|title/i.test(c)).join(" | "));
+}
+
+// ───────── telling people who joined when the picture's details change ─────────
+{
+  const NOW_STATE = { cancelled: false, ended: false };
+  // The meetup as it is now: 8 spots, changed from 10 on Sep 22.
+  const before = { starts_at: "2026-09-26T14:00:00Z", neighborhood: "Oakland", category: "Running", skill_level: "All levels", max_spots: 10 };
+  const now: CoverChangeInput = { id: base.id, starts_at: "2026-09-26T14:00:00Z", neighborhood: "Oakland", category: "Running", skill_level: "All levels", max_spots: 8, details_changed_at: "2026-09-22T18:00:00Z", details_before: before };
+  const joinedEarlier = { isHost: false, joinedAt: "2026-09-21T10:00:00Z" };
+  const joinedLater = { isHost: false, joinedAt: "2026-09-23T10:00:00Z" };
+  const stranger = { isHost: false, joinedAt: null };
+  const host = { isHost: true, joinedAt: null };
+
+  const note = coverChangeNote(now, joinedEarlier, NOW_STATE);
+  t("note: someone who joined before a change is told (spots 10 -> 8 redraws the group)", note !== null && note.redrawn && note.changes.length === 1 && note.changes[0].what === "Spots" && note.changes[0].from === "10" && note.changes[0].to === "8", JSON.stringify(note));
+  t("note: it carries the date of the change (Pacific)", note?.date === "Sep 22", note?.date);
+  t("note: the host is told too, even without a join date", coverChangeNote(now, host, NOW_STATE) !== null);
+  t("note: someone who joined AFTER the change isn't (they've only ever seen the current picture)", coverChangeNote(now, joinedLater, NOW_STATE) === null);
+  t("note: someone who hasn't joined isn't", coverChangeNote(now, stranger, NOW_STATE) === null);
+  t("note: nothing once the meetup is cancelled or over", coverChangeNote(now, joinedEarlier, { cancelled: true, ended: false }) === null && coverChangeNote(now, joinedEarlier, { cancelled: false, ended: true }) === null);
+  t("note: nothing when no change was ever recorded", coverChangeNote({ ...now, details_changed_at: null, details_before: null }, host, NOW_STATE) === null && coverChangeNote({ ...now, details_changed_at: undefined, details_before: undefined }, host, NOW_STATE) === null);
+
+  // spots that change nothing anyone can see stay quiet
+  const quiet = { ...now, details_before: { ...before, max_spots: 12 }, max_spots: 10 };
+  t("note: spots 12 -> 10 (picture identical, nothing else changed) stays quiet", coverChangeNote(quiet, joinedEarlier, NOW_STATE) === null);
+
+  // time, place, category and skill always matter, even when the sky doesn't change
+  const later = { ...now, max_spots: 10, starts_at: "2026-09-26T15:00:00Z" }; // 7 AM -> 8 AM: dawn -> morning
+  const sameSky = { ...now, max_spots: 10, details_before: { ...before, starts_at: "2026-09-26T13:30:00Z" }, starts_at: "2026-09-26T14:30:00Z" }; // 6:30 -> 7:30 AM, both dawn
+  const n1 = coverChangeNote(later, joinedEarlier, NOW_STATE);
+  t("note: a later start time is flagged, with the old and new time", n1 !== null && n1.changes[0].what === "Time" && n1.changes[0].from === "Sat, Sep 26 · 7:00 AM" && n1.changes[0].to === "Sat, Sep 26 · 8:00 AM", JSON.stringify(n1));
+  t("note: a time change that keeps the same sky is still flagged, but says nothing about a redraw", (() => { const n = coverChangeNote(sameSky, joinedEarlier, NOW_STATE); return n !== null && n.redrawn === false && n.changes[0].what === "Time"; })());
+  t("note: a new neighborhood is flagged (and redraws the scene)", (() => { const n = coverChangeNote({ ...now, max_spots: 10, neighborhood: "Berkeley" }, joinedEarlier, NOW_STATE); return n !== null && n.redrawn && n.changes[0].what === "Neighborhood" && n.changes[0].to === "Berkeley"; })());
+  t("note: a new category is flagged", coverChangeNote({ ...now, max_spots: 10, category: "Yoga" }, joinedEarlier, NOW_STATE)?.changes[0].what === "Category");
+  t("note: a new skill level is flagged", coverChangeNote({ ...now, max_spots: 10, skill_level: "Advanced" }, joinedEarlier, NOW_STATE)?.changes[0].what === "Skill level");
+  const many = coverChangeNote({ ...now, neighborhood: "Berkeley", starts_at: "2026-09-27T02:00:00Z" }, joinedEarlier, NOW_STATE);
+  t("note: several changes at once are all listed", many !== null && many.changes.map((c) => c.what).join() === "Time,Neighborhood,Spots", JSON.stringify(many?.changes));
+  t("note: the same instant written two ways isn't a time change", coverChangeNote({ ...now, max_spots: 10, starts_at: "2026-09-26T14:00:00+00:00", details_before: { ...before, starts_at: "2026-09-26T07:00:00-07:00" } }, joinedEarlier, NOW_STATE) === null);
+  t("note: it is exactly the moment of the change that counts (joined a second before is told, at the same second is not)", coverChangeNote(now, { isHost: false, joinedAt: "2026-09-22T17:59:59Z" }, NOW_STATE) !== null && coverChangeNote(now, { isHost: false, joinedAt: "2026-09-22T18:00:00Z" }, NOW_STATE) === null);
+
+  // bad data from the database never crashes the page
+  const junk: unknown[] = [null, undefined, "text", 5, [], {}, { starts_at: 1 }, { starts_at: "nope", neighborhood: "x", category: "y", skill_level: "z", max_spots: 1 }, { starts_at: "2026-09-26T14:00:00Z", neighborhood: "x", category: "y", skill_level: "z", max_spots: "3" }];
+  t("note: unusable 'before' data means no note, and no crash", junk.every((j) => readBefore(j) === null && coverChangeNote({ ...now, details_before: j }, host, NOW_STATE) === null));
+  t("note: an unreadable change time means no note", coverChangeNote({ ...now, details_changed_at: "garbage" }, host, NOW_STATE) === null);
+  t("describe: nothing changed means nothing to list", describeChanges(before, { ...before }).length === 0);
+
+  // the words shown to people never include anything they didn't already see
+  const text = fs.readFileSync(path.join(process.cwd(), "components/CoverChangeNote.tsx"), "utf8");
+  t("note: the text names what changed and says the picture was redrawn", /Details changed/.test(text) && /redrawn to match/.test(text) && /role="note"/.test(text));
+  const page = fs.readFileSync(path.join(process.cwd(), "app/events/[id]/page.tsx"), "utf8");
+  t("page: the note sits right under the picture, and is worked out from the viewer's own join time", /<\/EventCover>\s*\n\s*\n\s*\{coverNote && <CoverChangeNote note=\{coverNote\} \/>\}/.test(page) && /joinedAt: event\.rsvps\.find\(\(r\) => r\.user_id === user\?\.id\)\?\.created_at/.test(page));
+  const sql = fs.readFileSync(path.join(process.cwd(), "supabase/schema.sql"), "utf8");
+  t("database: the details_* columns are not in any grant the API roles get", !/grant[^;]*details_(changed_at|before)/i.test(sql));
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

@@ -96,6 +96,11 @@ create table public.events (
   -- can't write them. (The individual answers are private, see meetup_feedback.)
   feedback_yes    int  not null default 0,
   feedback_total  int  not null default 0,
+  -- When a detail that shapes the cover picture (time, neighborhood, category, skill level, number
+  -- of spots) last changed, and what those were before. Kept by a trigger (section 4); the API can't
+  -- write them. The meetup page uses them to tell people who joined earlier.
+  details_changed_at  timestamptz,
+  details_before      jsonb,
   created_at    timestamptz not null default now(),
 
   constraint events_title_length         check (char_length(title) between 1 and 100),
@@ -544,6 +549,34 @@ $$;
 create trigger meetup_feedback_after_change
   after insert or update or delete on public.meetup_feedback
   for each row execute function private.feedback_after_change();
+
+-- Remember when the details behind a meetup's cover picture change, and what they were before.
+create function private.events_track_changes()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if (new.starts_at, new.neighborhood, new.category, new.skill_level, new.max_spots)
+     is distinct from
+     (old.starts_at, old.neighborhood, old.category, old.skill_level, old.max_spots) then
+    new.details_before := jsonb_build_object(
+      'starts_at',    old.starts_at,
+      'neighborhood', old.neighborhood,
+      'category',     old.category,
+      'skill_level',  old.skill_level,
+      'max_spots',    old.max_spots
+    );
+    new.details_changed_at := now();
+  end if;
+  return new;
+end;
+$$;
+
+create trigger events_track_changes
+  before update on public.events
+  for each row execute function private.events_track_changes();
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 5. Row level security: which rows each person can see or change

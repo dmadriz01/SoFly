@@ -4,7 +4,9 @@ import { notFound } from "next/navigation";
 import { CategoryBadge } from "@/components/CategoryBadge";
 import { DeleteEventButton } from "@/components/DeleteEventButton";
 import { EventCover } from "@/components/EventCover";
+import { CoverChangeNote } from "@/components/CoverChangeNote";
 import { emojiFor } from "@/lib/constants";
+import { coverChangeNote } from "@/lib/cover-change";
 import { EventActions } from "@/components/EventActions";
 import { Avatar } from "@/components/Avatar";
 import { EventTags } from "@/components/EventTags";
@@ -180,6 +182,13 @@ export default async function EventPage({ params }: { params: { id: string } }) 
   const cancelled = Boolean(event.cancelled_at);
   const ended = new Date(event.starts_at).getTime() <= Date.now();
 
+  // If a detail behind the cover picture changed after someone joined (or asked to), tell them.
+  const coverNote = coverChangeNote(
+    event,
+    { isHost, joinedAt: event.rsvps.find((r) => r.user_id === user?.id)?.created_at ?? null },
+    { cancelled, ended }
+  );
+
   // After the meetup, guests are asked whether they'd join again (their own answer is private).
   let myAnswer: boolean | null = null;
   const canRate = going && ended && !cancelled && !isHost;
@@ -224,6 +233,8 @@ export default async function EventPage({ params }: { params: { id: string } }) 
       >
         <span aria-hidden className="drop-shadow-[0_2px_3px_rgba(0,0,0,0.25)]">{emojiFor(event.category)}</span>
       </EventCover>
+
+      {coverNote && <CoverChangeNote note={coverNote} />}
 
       <header>
         <div className="flex flex-wrap items-center gap-1.5">
