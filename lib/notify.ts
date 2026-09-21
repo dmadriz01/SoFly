@@ -4,9 +4,10 @@ import * as email from "./email-templates";
 import { mailConfigured, sendMail, type Mail, type MailResult } from "./mailer";
 import { pushConfigured, sendPushToUser, type PushOutcome, type PushPayload } from "./push";
 import { pushSummary, type DetailChange } from "./event-edit";
-import { rankMeetups, whyThis, type Candidate, type Taste } from "./engagement";
+import { metCount, whyThis, type Taste } from "./engagement";
 import { claimSend, digestSentRecently, underNudgeCap } from "./notify-log";
 import { channelsFor, parsePrefs, type Category, type Prefs } from "./notify-policy";
+import { loadPool, picksFor } from "./picks";
 import { SITE_URL } from "./site";
 import { createAdminClient } from "./supabase/admin";
 import { addDaysToKey, formatWhenLong, formatWhenShort, pacificDate, pacificLocalToUtc, pacificWeekday } from "./time";
@@ -387,6 +388,8 @@ export function notifyEventUpdated(eventId: string, changes: DetailChange[], dep
 
 type EventRow = {
   id: string;
+  category?: string;
+  neighborhood?: string;
   title: string;
   starts_at: string;
   host_id: string;
@@ -399,7 +402,7 @@ type EventRow = {
 async function eventsBetween(admin: SupabaseClient, from: Date, to: Date): Promise<EventRow[]> {
   const { data } = await admin
     .from("events")
-    .select("id, title, starts_at, host_id, join_mode, venue_name, address")
+    .select("id, title, starts_at, host_id, join_mode, venue_name, address, category, neighborhood")
     .is("cancelled_at", null)
     .gte("starts_at", from.toISOString())
     .lt("starts_at", to.toISOString());
@@ -560,20 +563,40 @@ export async function sendDailyEmails(now = new Date(), deps: Deps = {}): Promis
     }
   }
 
-  // Feedback requests: yesterday's meetups, to guests (the host doesn't rate their own).
+  // Feedback requests: yesterday's meetups, to guests (the host doesn't rate their own). Each carries
+  // a warm recap (how many people they met) and a few similar meetups coming up, while the good
+  // feeling is fresh.
   const past = await eventsBetween(admin, yesterday, startOfToday);
   result.eventsYesterday = past.length;
+  const similarPool = past.length > 0 ? await loadPool(admin, now, 14) : [];
   for (const event of past) {
-    const ids = (await approvedGuestIds(admin, event.id)).filter((id) => id !== event.host_id);
+    const approved = await approvedGuestIds(admin, event.id);
+    const ids = approved.filter((id) => id !== event.host_id);
     for (const id of ids) {
       if (capped()) return done("stopped at the daily cap");
+      const met = metCount(approved, id, event.host_id);
+      // Similar meetups: the same kind of thing, near the same place (best effort: never blocks the message).
+      let similar: Awaited<ReturnType<typeof picksFor>> = [];
+      try {
+        const taste: Taste = { categories: event.category ? [event.category] : [], neighborhoods: event.neighborhood ? [event.neighborhood] : [] };
+        similar = await picksFor(admin, id, similarPool, taste, { now, withinDays: 14, limit: 3 });
+      } catch (err) {
+        console.error("Couldn't pick similar meetups for the recap:", err);
+      }
       const sent = await emailPerson(id, (r) =>
-        email.feedbackRequest({ name: r.name, eventTitle: event.title, eventUrl: eventUrl(event.id), siteUrl: SITE_URL })
+        email.feedbackRequest({
+          name: r.name,
+          eventTitle: event.title,
+          eventUrl: eventUrl(event.id),
+          siteUrl: SITE_URL,
+          metCount: met,
+          similar: similar.map((c) => ({ title: c.title, when: formatWhenShort(c.starts_at), place: c.neighborhood, url: eventUrl(c.id) })),
+        })
       );
       if (sent) result.feedbackRequests++;
       await pushPerson(id, {
         title: `How was ${event.title}?`,
-        body: "Tap to answer in one tap.",
+        body: met > 0 ? `You met ${met} ${met === 1 ? "person" : "people"}. Tap to answer in one tap.` : "Tap to answer in one tap.",
         url: `/events/${event.id}`,
         tag: `feedback-${event.id}`,
       });
@@ -611,27 +634,7 @@ export async function sendDailyEmails(now = new Date(), deps: Deps = {}): Promis
   // interests, only when there is something worth sending, and never twice in a week.
   if (pacificWeekday(now) === DIGEST_WEEKDAY) {
     const horizon = new Date(now.getTime() + DIGEST_WINDOW_DAYS * 86400000);
-    const { data: rows } = await admin
-      .from("events")
-      .select("id, title, category, neighborhood, starts_at, max_spots, spots_taken, audience, age_min, age_max, host_id, series_id")
-      .is("cancelled_at", null)
-      .gt("starts_at", now.toISOString())
-      .lt("starts_at", horizon.toISOString())
-      .order("starts_at", { ascending: true })
-      .limit(300);
-    const pool: Candidate[] = (rows ?? []).map((e) => ({
-      id: e.id as string,
-      title: e.title as string,
-      category: e.category as string,
-      neighborhood: e.neighborhood as string,
-      starts_at: e.starts_at as string,
-      spots_left: Math.max((e.max_spots as number) - (e.spots_taken as number), 0),
-      audience: e.audience as string,
-      age_min: (e.age_min as number | null) ?? null,
-      age_max: (e.age_max as number | null) ?? null,
-      host_id: e.host_id as string,
-      series_id: (e.series_id as string | null | undefined) ?? null,
-    }));
+    const pool = await loadPool(admin, now, DIGEST_WINDOW_DAYS);
     if (pool.length > 0) {
       const { data: members } = await admin.from("user_interests").select("user_id, categories").limit(1000);
       for (const m of members ?? []) {
@@ -646,20 +649,8 @@ export async function sendDailyEmails(now = new Date(), deps: Deps = {}): Promis
         }
         if (await digestSentRecently(admin, id, now)) continue;
 
-        const poolIds = pool.map((c) => c.id);
-        const [mine, priv] = await Promise.all([
-          admin.from("rsvps").select("event_id").eq("user_id", id).in("event_id", poolIds),
-          admin.from("profile_private").select("birth_date").eq("user_id", id).maybeSingle(),
-        ]);
-        const exclude = new Set<string>([...(mine.data ?? []).map((r) => r.event_id as string), ...pool.filter((c) => c.host_id === id).map((c) => c.id)]);
         const taste: Taste = { categories, neighborhoods: [] };
-        const picks = rankMeetups(pool, taste, {
-          now,
-          withinDays: DIGEST_WINDOW_DAYS,
-          exclude,
-          birthDate: (priv.data?.birth_date as string | null | undefined) ?? null,
-          limit: DIGEST_ITEMS,
-        });
+        const picks = await picksFor(admin, id, pool, taste, { now, withinDays: DIGEST_WINDOW_DAYS, limit: DIGEST_ITEMS });
         if (picks.length === 0) continue; // nothing worth sending: send nothing
 
         if (!(await claimSend(admin, id, "digest", today))) continue;

@@ -69,3 +69,13 @@ export function whyThis(c: Candidate, taste: Taste): string {
   if (c.spots_left <= 3) return `${c.spots_left} ${c.spots_left === 1 ? "spot" : "spots"} left`;
   return "Happening soon";
 }
+
+/**
+ * How many other people were at a meetup, from the approved guests: everyone except the person
+ * asking, plus the host if the host isn't already in the list (a host may not have a guest row).
+ */
+export function metCount(approvedIds: string[], selfId: string, hostId: string): number {
+  const others = new Set(approvedIds.filter((id) => id !== selfId));
+  if (hostId !== selfId) others.add(hostId);
+  return others.size;
+}

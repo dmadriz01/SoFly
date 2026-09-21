@@ -237,13 +237,25 @@ export function reminder(a: {
 }
 
 /** The day after: one-tap feedback. */
-export function feedbackRequest(a: { name: string; eventTitle: string; eventUrl: string; siteUrl: string }): Email {
+export function feedbackRequest(a: {
+  name: string;
+  eventTitle: string;
+  eventUrl: string;
+  siteUrl: string;
+  /** How many other people were there (shown as a warm recap). */
+  metCount?: number;
+  /** A few meetups coming up that they might enjoy next. */
+  similar?: { title: string; when: string; place: string; url: string }[];
+}): Email {
   const title = oneLine(a.eventTitle);
+  const recap = a.metCount && a.metCount > 0 ? `You spent it with ${a.metCount} ${a.metCount === 1 ? "other person" : "other people"}. ` : "";
+  const next = (a.similar ?? []).map((m) => `${oneLine(m.title)}: ${m.when}, ${oneLine(m.place)}. ${m.url}`);
   const body = layout({
     heading: `How was ${title}?`,
     paragraphs: [
-      `Hi ${a.name}, thanks for joining. Would you join a meetup like this again?`,
+      `Hi ${a.name}, thanks for joining. ${recap}Would you join a meetup like this again?`,
       "It takes one tap. Your answer is private: only the total is shown, never who said what.",
+      ...(next.length > 0 ? ["If you enjoyed it, here's what's coming up:", ...next] : []),
     ],
     cta: { label: "Tell us", url: a.eventUrl },
     siteUrl: a.siteUrl,

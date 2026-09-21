@@ -11,6 +11,7 @@ import { SeriesPanel, type SeriesDate } from "@/components/SeriesPanel";
 import { CoverChangeNote } from "@/components/CoverChangeNote";
 import { emojiFor } from "@/lib/constants";
 import { coverChangeNote } from "@/lib/cover-change";
+import { metCount } from "@/lib/engagement";
 import { signInvite, verifyInvite } from "@/lib/invite";
 import { SITE_URL } from "@/lib/site";
 import { EventActions } from "@/components/EventActions";
@@ -371,7 +372,9 @@ export default async function EventPage({ params, searchParams }: { params: { id
         />
       )}
 
-      {canRate && <FeedbackPrompt eventId={event.id} title={event.title} initial={myAnswer} />}
+      {canRate && user && (
+        <FeedbackPrompt eventId={event.id} title={event.title} initial={myAnswer} met={metCount(attendees.map((r) => r.user_id), user.id, event.host_id)} />
+      )}
 
       {inviterName && !isHost && !myStatus && !cancelled && !ended && (
         <p role="note" className="rounded-2xl bg-accent-soft px-4 py-3 text-sm text-accent-dark">

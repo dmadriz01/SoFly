@@ -13,7 +13,9 @@ import { parseAbout, type AboutErrors, type AboutInput } from "@/lib/about";
 import { MIN_AGE, ageOn, parseBirthDate, resolveAgeRange } from "@/lib/age";
 import { HIDDEN_VENUE, REPORT_REASONS, isCategory } from "@/lib/constants";
 import { describeEdit } from "@/lib/event-edit";
+import { whyThis } from "@/lib/engagement";
 import { verifyInvite } from "@/lib/invite";
+import { loadPool, picksFor } from "@/lib/picks";
 import { occurrenceStarts } from "@/lib/recurrence";
 import {
   notifyEventCancelled,
@@ -26,9 +28,10 @@ import {
   notifySpotOpened,
   snapshotBeforeDelete,
 } from "@/lib/notify";
+import { getInterests } from "@/lib/interests";
 import { getBirthDate } from "@/lib/profile";
 import { isPushEndpoint, pushConfigured } from "@/lib/push";
-import { pacificDate, pacificLocalToUtc } from "@/lib/time";
+import { formatWhenShort, pacificDate, pacificLocalToUtc } from "@/lib/time";
 import { safeNext } from "@/lib/utils";
 import {
   EVENT_FIELDS,
@@ -774,6 +777,29 @@ export async function setEmailNotifications(enabled: boolean): Promise<{ error?:
   if (error) return { error: "Couldn't save that. Please try again." };
   revalidatePath("/me");
   return {};
+}
+
+/** After a meetup: a few similar ones coming up, for someone who went to it (never for someone who didn't). */
+export async function getSimilarMeetups(
+  eventId: string
+): Promise<{ items: { id: string; title: string; when: string; place: string; spotsLeft: number; why: string }[] }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { items: [] };
+
+  const { data: went } = await supabase.from("rsvps").select("status").eq("event_id", eventId).eq("user_id", user.id).maybeSingle();
+  if (went?.status !== "approved") return { items: [] };
+  const { data: event } = await supabase.from("events").select("category, neighborhood").eq("id", eventId).maybeSingle();
+  if (!event) return { items: [] };
+
+  const now = new Date();
+  const interests = (await getInterests(supabase, user.id)) ?? [];
+  const taste = { categories: Array.from(new Set([event.category as string, ...interests])), neighborhoods: [event.neighborhood as string] };
+  const pool = await loadPool(supabase, now, 14);
+  const picks = await picksFor(supabase, user.id, pool, taste, { now, withinDays: 14, limit: 3, alsoExclude: [eventId] });
+  return { items: picks.map((c) => ({ id: c.id, title: c.title, when: formatWhenShort(c.starts_at), place: c.neighborhood, spotsLeft: c.spots_left, why: whyThis(c, taste) })) };
 }
 
 /** A guest's private "would you join this meetup again?" answer. The database checks they're allowed. */

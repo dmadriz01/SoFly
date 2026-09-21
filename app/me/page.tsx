@@ -13,6 +13,7 @@ import { InterestsForm } from "@/components/InterestsForm";
 import { isAdminUser } from "@/lib/admin-access";
 import { repeatLabel, seriesNeedingMoreDates } from "@/lib/recurrence";
 import { getInterests } from "@/lib/interests";
+import { metCount } from "@/lib/engagement";
 import { parsePrefs } from "@/lib/notify-policy";
 import { getAbout, getBirthDate } from "@/lib/profile";
 import { createClient } from "@/lib/supabase/server";
@@ -174,6 +175,15 @@ export default async function MePage() {
     toRate = recent.filter((e) => !done.has(e.id));
   }
 
+  // "You met N people": from the approved guest lists the person is themselves allowed to see.
+  const metByEvent: Record<string, number> = {};
+  if (toRate.length > 0) {
+    const { data: crowd } = await supabase.from("rsvps").select("event_id, user_id").eq("status", "approved").in("event_id", toRate.map((e) => e.id));
+    for (const e of toRate) {
+      metByEvent[e.id] = metCount((crowd ?? []).filter((r) => r.event_id === e.id).map((r) => r.user_id as string), user.id, e.host_id);
+    }
+  }
+
   return (
     <div className="space-y-8">
       <div className="flex items-start justify-between gap-4">
@@ -218,7 +228,7 @@ export default async function MePage() {
       )}
 
       {toRate.map((e) => (
-        <FeedbackPrompt key={e.id} eventId={e.id} title={e.title} initial={null} />
+        <FeedbackPrompt key={e.id} eventId={e.id} title={e.title} initial={null} met={metByEvent[e.id]} />
       ))}
 
       <Section
