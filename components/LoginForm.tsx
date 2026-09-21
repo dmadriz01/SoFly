@@ -27,7 +27,10 @@ export function LoginForm({ next, initialError }: { next: string; initialError?:
       setError(
         error.status === 429
           ? "Too many attempts. Wait a minute and try again."
-          : "We couldn't send that link. Check the email address and try again."
+          : error.status !== undefined && error.status >= 500
+            ? // Not the person's fault (the email service is down or misconfigured), so don't blame their address.
+              "We couldn't send the email right now. Please try again in a few minutes."
+            : "We couldn't send that link. Check the email address and try again."
       );
       return;
     }
