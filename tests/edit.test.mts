@@ -80,10 +80,10 @@ const before = { starts_at: "2026-09-26T14:00:00Z", neighborhood: "Oakland", ven
 // ───────── the email ─────────
 {
   const changes: DetailChange[] = [{ what: "Time", from: "Sat, Sep 26 · 7:00 AM", to: "Sat, Sep 26 · 7:30 PM" }, { what: "Venue", from: "Old <b>Park</b>", to: "New Park" }];
-  const m = eventUpdated({ name: "Ana", eventTitle: "Sunrise <script>alert(1)</script> run", changes, when: "Saturday, September 26 at 7:30 PM PDT", eventUrl: "https://bay-meet.vercel.app/events/e1", siteUrl: "https://bay-meet.vercel.app" });
+  const m = eventUpdated({ name: "Ana", eventTitle: "Sunrise <script>alert(1)</script> run", changes, when: "Saturday, September 26 at 7:30 PM PDT", eventUrl: "https://so-fly-ai.vercel.app/events/e1", siteUrl: "https://so-fly-ai.vercel.app" });
   t("email: subject and greeting name the meetup", m.subject.startsWith("Updated: Sunrise") && m.text.includes("Hi Ana, the host changed the details"));
   t("email: it lists each change with old and new, and the new time", m.text.includes("Time: Sat, Sep 26 · 7:00 AM → Sat, Sep 26 · 7:30 PM") && m.text.includes("Venue: Old <b>Park</b> → New Park") && m.text.includes("It's now on Saturday, September 26 at 7:30 PM PDT"));
-  t("email: points to the meetup and tells them they can leave", m.text.includes("https://bay-meet.vercel.app/events/e1") && /leave the meetup/.test(m.text));
+  t("email: points to the meetup and tells them they can leave", m.text.includes("https://so-fly-ai.vercel.app/events/e1") && /leave the meetup/.test(m.text));
   t("email: anything a person typed is escaped in the HTML version", !m.html.includes("<script>") && !m.html.includes("<b>Park</b>") && m.html.includes("&lt;script&gt;"));
 }
 

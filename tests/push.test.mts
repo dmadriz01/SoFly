@@ -261,7 +261,7 @@ const NOW = new Date("2026-09-20T19:51:45Z");
       skipWaiting: () => {},
       clients,
       registration: { showNotification: async (title: string, options: Record<string, unknown>) => { shown.push({ title, options }); } },
-      location: { origin: "https://bay-meet.vercel.app" },
+      location: { origin: "https://so-fly-ai.vercel.app" },
     };
     vm.runInNewContext(source, { self, URL });
     const fire = async (type: string, event: Record<string, unknown>) => {
@@ -292,24 +292,24 @@ const NOW = new Date("2026-09-20T19:51:45Z");
   sw = build();
   await sw.fire("notificationclick", clickEvent("/events/ev1"));
   t("service worker: tapping closes the notification", closed >= 1);
-  t("service worker: with no window open, tapping opens the meetup", sw.opened[0] === "https://bay-meet.vercel.app/events/ev1", JSON.stringify(sw.opened));
+  t("service worker: with no window open, tapping opens the meetup", sw.opened[0] === "https://so-fly-ai.vercel.app/events/ev1", JSON.stringify(sw.opened));
 
-  const already = { url: "https://bay-meet.vercel.app/events/ev1" } as { url: string; focused?: boolean; navigated?: string };
+  const already = { url: "https://so-fly-ai.vercel.app/events/ev1" } as { url: string; focused?: boolean; navigated?: string };
   sw = build([already]);
   await sw.fire("notificationclick", clickEvent("/events/ev1"));
   t("service worker: if that page is already open, it's brought to the front", already.focused === true && sw.opened.length === 0);
 
-  const elsewhere = { url: "https://bay-meet.vercel.app/me" } as { url: string; focused?: boolean; navigated?: string };
+  const elsewhere = { url: "https://so-fly-ai.vercel.app/me" } as { url: string; focused?: boolean; navigated?: string };
   sw = build([elsewhere]);
   await sw.fire("notificationclick", clickEvent("/events/ev1"));
-  t("service worker: an open SoFly window is reused and sent to the meetup", elsewhere.focused === true && elsewhere.navigated === "https://bay-meet.vercel.app/events/ev1" && sw.opened.length === 0);
+  t("service worker: an open SoFly window is reused and sent to the meetup", elsewhere.focused === true && elsewhere.navigated === "https://so-fly-ai.vercel.app/events/ev1" && sw.opened.length === 0);
 
   sw = build();
   await sw.fire("notificationclick", clickEvent("https://evil.example.com/phish"));
-  t("service worker: a link to another website is never opened", sw.opened[0] === "https://bay-meet.vercel.app/", JSON.stringify(sw.opened));
+  t("service worker: a link to another website is never opened", sw.opened[0] === "https://so-fly-ai.vercel.app/", JSON.stringify(sw.opened));
   sw = build();
   await sw.fire("notificationclick", clickEvent(undefined));
-  t("service worker: a notification with no destination opens the home page", sw.opened[0] === "https://bay-meet.vercel.app/");
+  t("service worker: a notification with no destination opens the home page", sw.opened[0] === "https://so-fly-ai.vercel.app/");
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

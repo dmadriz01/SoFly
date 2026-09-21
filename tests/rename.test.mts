@@ -20,8 +20,7 @@ const read = (f: string) => fs.readFileSync(path.join(root, f), "utf8");
 t("name: the site is called SoFly", SITE_NAME === "SoFly");
 t("name: the tagline still talks about the Bay Area (that's a place, not the old name)", /Bay Area/.test(TAGLINE) && !/baymeet/i.test(TAGLINE));
 
-// The old name may only survive where it has to: the web address and the repository (which the
-// hosting and GitHub decide), and two OLD migration files whose text is history (migration 018
+// The old name may only survive where it has to: the repository (which GitHub decides), and two OLD migration files whose text is history (migration 018
 // replaces what they created).
 const walk = (dir: string): string[] =>
   fs.readdirSync(path.join(root, dir), { withFileTypes: true }).flatMap((d) => {
@@ -34,13 +33,12 @@ const offenders: string[] = [];
 for (const f of files) {
   read(f).split("\n").forEach((line, i) => {
     const allowed = line
-      .replace(/bay-meet\.vercel\.app/g, "")
       .replace(/dmadriz01\/BayMeet/g, "")
       .replace(/raise exception 'You must be 18 or older to use BayMeet';/g, "");
     if (/baymeet|bay meet|bay-meet|bay_meet/i.test(allowed)) offenders.push(`${f}:${i + 1}`);
   });
 }
-t("name: the old name is nowhere in the source (only the web address, the repo link and two old migration lines remain)", offenders.length === 0, offenders.slice(0, 6).join(", "));
+t("name: the old name is nowhere in the source (only the repo link and two old migration lines remain)", offenders.length === 0, offenders.slice(0, 6).join(", "));
 {
   const lines = ["supabase/migrations/005_profiles_and_filters.sql", "supabase/migrations/009_hardening_and_cleanup.sql"].filter((f) => /use BayMeet/.test(read(f)));
   t("name: the old text in old migrations is only that one message, and migration 018 replaces it", lines.length === 2 && /use SoFly/.test(read("supabase/migrations/018_rename_message.sql")) && /use SoFly/.test(read("supabase/schema.sql")) && !/BayMeet/.test(read("supabase/schema.sql")));
