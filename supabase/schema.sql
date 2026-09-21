@@ -193,6 +193,9 @@ create table public.reports (
   reason       text not null check (char_length(reason) between 1 and 100),
   details      text not null default '' check (char_length(details) <= 500),
   created_at   timestamptz not null default now(),
+  -- When a moderator dealt with it (null = still open). Set only by the server's admin page;
+  -- the API roles aren't granted this column.
+  reviewed_at  timestamptz,
   unique (event_id, reporter_id)
 );
 
@@ -211,6 +214,8 @@ create index meetup_feedback_user_id_idx on public.meetup_feedback (user_id);
 create index push_subscriptions_user_id_idx on public.push_subscriptions (user_id);
 create index reports_reporter_id_idx  on public.reports (reporter_id);
 create index reports_created_at_idx   on public.reports (created_at desc);
+-- The admin page lists open reports first.
+create index reports_open_idx         on public.reports (created_at desc) where reviewed_at is null;
 
 
 -- ─────────────────────────────────────────────────────────────────────────────

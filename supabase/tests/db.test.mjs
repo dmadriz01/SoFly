@@ -480,6 +480,21 @@ async function behaviour({ db, U, oldEvent }, { migrated }) {
   r = await as("cy", `insert into public.reports (event_id,reporter_id,reason,details) values ($1,$2,'Other',$3)`, [EP, U.cy, "d".repeat(501)]);
   ok("report details over 500 characters rejected", !!r.error, JSON.stringify(r));
 
+  // ---- reports: the moderator's "reviewed" flag (set only by the server's admin page) ----
+  r = await as("cy", `insert into public.reports (event_id,reporter_id,reason,reviewed_at) values ($1,$2,'Other',now())`, [EP, U.cy]);
+  ok("a reporter cannot pre-mark their own report as reviewed", !!r.error, JSON.stringify(r));
+  r = await as("cy", `insert into public.reports (event_id,reporter_id,reason) values ($1,$2,'Other')`, [EP, U.cy]);
+  ok("a normal report still goes through", !r.error, JSON.stringify(r));
+  r = await as("cy", `update public.reports set reviewed_at = now() where reporter_id = $1`, [U.cy]);
+  ok("a reporter cannot mark reports reviewed afterwards either", !!r.error || (r.rowCount ?? 0) === 0, JSON.stringify(r));
+  ok("a new report starts out open (reviewed_at is null)", (await one(`select reviewed_at from public.reports where reporter_id=$1`, [U.cy])).reviewed_at === null);
+  await q(`update public.reports set reviewed_at = now() where reporter_id = $1`, [U.cy]);
+  ok("the server (service role) can mark it reviewed, and reopen it", (await one(`select reviewed_at is not null as r from public.reports where reporter_id=$1`, [U.cy])).r === true
+    && ((await q(`update public.reports set reviewed_at = null where reporter_id = $1 returning 1`, [U.cy])).length === 1));
+  await q(`delete from public.reports where reporter_id = $1`, [U.cy]);
+  r = await as("host", `update public.events set cancelled_at = null where id = $1`, [EP]);
+  ok("a host still cannot reinstate a cancelled event (only the server can)", !!r.error || (r.rowCount ?? 0) === 0, JSON.stringify(r));
+
   // ---- meetup feedback ("would you join again?") ----
   const mkPast = async (title, mode = "open") =>
     (await one(`insert into public.events (host_id,title,category,venue_name,address,neighborhood,starts_at,max_spots,join_mode)
@@ -602,7 +617,7 @@ await behaviour(fromSchema, { migrated: false });
 // require the same database as a clean install.
 label = "rerun";
 {
-  const RECENT = MIGRATIONS.filter((f) => /^01[0-4]/.test(f));
+  const RECENT = MIGRATIONS.filter((f) => /^01[0-5]/.test(f));
   const clean = await catalog((await buildFromSchema()).db);
   const same = (x) => x.length === clean.length && x.every((line, i) => line === clean[i]);
 
@@ -621,6 +636,7 @@ label = "rerun";
   let halfError = "";
   try { await half.exec(read("migrations", MIGRATIONS.find((f) => f.startsWith("014")))); } catch (e) { halfError = e.message; }
   ok("014 finishes the job when only the table already exists", halfError === "", halfError);
+  for (const f of MIGRATIONS.filter((m) => m > "014")) await half.exec(read("migrations", f)); // then the ones after it
   ok("...leaving the same database as a clean install", same(await catalog(half)));
 }
 

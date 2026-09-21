@@ -8,6 +8,7 @@ import { FeedbackPrompt } from "@/components/FeedbackPrompt";
 import { EventCard } from "@/components/EventCard";
 import { NextUp } from "@/components/NextUp";
 import { InterestsForm } from "@/components/InterestsForm";
+import { isAdminUser } from "@/lib/admin-access";
 import { getInterests } from "@/lib/interests";
 import { getAbout, getBirthDate } from "@/lib/profile";
 import { createClient } from "@/lib/supabase/server";
@@ -175,6 +176,12 @@ export default async function MePage() {
         </div>
         <LogoutButton />
       </div>
+
+      {isAdminUser(user) && (
+        <Link href="/admin" className="card flex items-center justify-between p-4 text-sm font-semibold hover:border-accent/50">
+          Admin dashboard <span aria-hidden="true">&rarr;</span>
+        </Link>
+      )}
 
       {soon && (
         <NextUp

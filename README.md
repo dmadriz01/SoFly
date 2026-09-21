@@ -123,6 +123,7 @@ Set the subject to `Your BayMeet login code` and use this body in each:
 | `012_men_only_audience` | lets a meetup be set for men only (as well as everyone or women only) |
 | `013_push_subscriptions` | the devices that turned on push notifications |
 | `014_profile_bios` | a short bio and social usernames, visible to hosts of meetups you join or ask to join |
+| `015_admin_review` | lets the admin page mark a report as reviewed |
 
 **Changing the database?** Update `schema.sql` and add a migration, then run `npm test`. `test:db` builds a database both ways, runs about 240 checks on each (who can see and do what), and fails if the two ever differ. `test:unit` covers ages, dates, calendar files, chat-link safety, and the email logic (who gets emailed, when, and why someone is skipped). `test:contract` reads the app's own code, finds every database call, and checks each one against the permissions the schema really grants, so a write the database would refuse fails here, not in production.
 
@@ -187,12 +188,33 @@ To set it up (optional; without it the card doesn't appear and nothing else chan
 
 ## Moderating
 
-Reports are saved in Supabase → Table Editor → `reports`, and emailed to you if alerts are set up. Reporting never changes an event; you decide. In the Supabase **SQL editor**:
+### The admin page
+
+`/admin` is a private dashboard for you, with three sections:
+
+- **Overview**: members, meetups, joins, seats filled, "would join again", push devices, a 14-day chart of new members, meetups and joins, and what people host (categories and neighborhoods). It's built from BayMeet's own data. Website visits and page views are in your Vercel dashboard under Analytics.
+- **Reports**: open reports first, with the meetup, the host, the reporter and their note. **Cancel meetup** cancels it (the people who joined get an email and a push notification) and closes its reports; **Mark reviewed** closes a report and leaves the meetup up. Reviewed reports can be shown again or reopened.
+- **Meetups**: upcoming, past, cancelled or all, with a title search, and the same **Cancel meetup** / **Reinstate** buttons.
+
+To turn it on:
+
+1. Run `supabase/migrations/015_admin_review.sql` in the Supabase SQL editor.
+2. Set `ADMIN_EMAILS` to the email(s) you log in to BayMeet with (comma separated), in `.env.local` and in Vercel → Settings → Environment Variables, then redeploy. It's a server-only setting (no `NEXT_PUBLIC_`).
+3. `SUPABASE_SERVICE_ROLE_KEY` must also be set (it already is if emails work).
+
+Then log in as that person: an **Admin dashboard** link appears at the top of **Me**, or go to `/admin`.
+
+How it's kept safe: only a logged-in person whose verified email is exactly in `ADMIN_EMAILS` gets in (no wildcards; matching ignores letter case). Everyone else, logged in or not, gets an ordinary "not found" page. Every button re-checks this on the server. The page shows names only, never emails, birthdays, addresses or private notes, and it isn't indexed by search engines. If `ADMIN_EMAILS` is empty, nobody is an admin.
+
+### Or with SQL
+
+Reports are also saved in Supabase → Table Editor → `reports`, and emailed to you if alerts are set up. Reporting never changes an event; you decide. In the Supabase **SQL editor**:
 
 ```sql
 -- See open reports, newest first, with the event they're about
 select r.created_at, r.reason, r.details, e.title, e.id as event_id
 from public.reports r join public.events e on e.id = r.event_id
+where r.reviewed_at is null
 order by r.created_at desc;
 
 -- Cancel an event (hides it from the feed, shows a "cancelled" banner, blocks new RSVPs)
@@ -202,13 +224,13 @@ update public.events set cancelled_at = now() where id = 'EVENT_ID';
 update public.events set cancelled_at = null where id = 'EVENT_ID';
 ```
 
-Hosts can cancel their own meetups from the event page, but only you can **reinstate** one, from the SQL editor or table editor. Hosts can also still delete their own events.
+Hosts can cancel their own meetups from the event page, but only you can **reinstate** one (from the admin page, or the SQL editor). Hosts can also delete their own events. **Cancelling** keeps the page up with a "cancelled" notice; **deleting** removes it completely. Either way, the people who had joined get an email and a push notification (unless the meetup already started or was already cancelled).
 
 ## Things to know
 
 - **Browsing by date.** The feed has a week calendar: arrows move a week at a time, tapping a day shows just that day, and days show how many meetups are on. The chosen week or day is in the address, so it can be shared. Weeks run Monday to Sunday in Pacific time, up to 26 weeks ahead.
 - **The swipe screen.** On a phone, tapping **Swipe** (top right) turns the page into a single floating card: drag right to join, left to pass, tap for details. It doesn't scroll at all; filters live behind the **Filters** button. On larger screens it's a normal page with the same card.
-- **Migrations 010-014 can be run again safely.** If an earlier run stopped partway (for example with "already exists"), just run the file once more and it finishes the job.
+- **Migrations 010-015 can be run again safely.** If an earlier run stopped partway (for example with "already exists"), just run the file once more and it finishes the job.
 - **The emailed link only works in the browser that requested it.** The code always works, which is why the login page asks for it.
 - **Supabase's built-in email sender is heavily rate limited** (a few emails per hour, and only to project team members by default). It's fine for development. Before real users arrive, configure your own SMTP provider under **Project Settings → Authentication → SMTP Settings**.
 - **Times are Pacific.** The date picker on the post form is interpreted as Pacific time regardless of the poster's device time zone, and all times are displayed in Pacific.
