@@ -139,28 +139,40 @@ export default async function FeedPage({
   const interestSet = new Set(interests ?? []);
   const matchesInterests = (e: EventWithCount) => interestSet.has(e.category);
 
+  // The Filters button (calendar, dropdowns, chips) and the List/Swipe toggle. The same two controls,
+  // in the same place, on both tabs.
+  const activeFilters = [filters.category, filters.neighborhood, filters.level, filters.audience, filters.eligible, dateFiltered]
+    .filter(Boolean).length;
+  const controls = (
+    <div className="ml-auto flex shrink-0 items-center gap-2">
+      <FiltersSheet count={activeFilters}>
+        {strip}
+        <FeedSelects filters={filters} />
+        <FilterChips filters={filters} showEligible={Boolean(birthDate)} />
+      </FiltersSheet>
+      <ViewToggle filters={filters} active={activeView} />
+    </div>
+  );
+
   const header = (
     <>
       {user ? (
-        <div className="flex items-start justify-between gap-3">
-          <div>
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-3">
+          <div className="min-w-0 flex-1 basis-40">
             <h1 className="text-2xl font-bold tracking-tight">What&rsquo;s happening</h1>
             <p className="mt-1 text-muted">Find people to connect with!</p>
           </div>
-          <ViewToggle filters={filters} active={activeView} />
+          {controls}
         </div>
       ) : (
         <>
           <Hero />
-          <div className="flex items-center justify-between gap-3" id="feed">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2" id="feed">
             <h2 className="text-lg font-bold">Happening soon</h2>
-            <ViewToggle filters={filters} active={activeView} />
+            {controls}
           </div>
         </>
       )}
-      {strip}
-      <FeedSelects filters={filters} />
-      <FilterChips filters={filters} showEligible={Boolean(birthDate)} />
     </>
   );
 
@@ -220,21 +232,11 @@ export default async function FeedPage({
       };
     });
 
-    const activeFilters = [filters.category, filters.neighborhood, filters.level, filters.audience, filters.eligible, dateFiltered]
-      .filter(Boolean).length;
-
     return (
       <div className="swipe-screen">
         <div className="flex items-center justify-between gap-2">
           <h1 className="text-xl font-bold tracking-tight [@media(max-width:359px)]:hidden">Discover</h1>
-          <div className="flex items-center gap-2">
-            <FiltersSheet count={activeFilters}>
-              {strip}
-              <FeedSelects filters={filters} />
-              <FilterChips filters={filters} showEligible={Boolean(birthDate)} />
-            </FiltersSheet>
-            <ViewToggle filters={filters} active={activeView} />
-          </div>
+          {controls}
         </div>
         <SwipeDeck
           // A new key when the filters change resets which cards were swiped away.

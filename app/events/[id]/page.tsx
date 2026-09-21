@@ -222,9 +222,10 @@ export default async function EventPage({ params, searchParams }: { params: { id
         </div>
       </div>
 
-      {isHost && searchParams.edited === "1" && !cancelled && (
+      {isHost && (searchParams.edited === "1" || searchParams.edited === "spots") && !cancelled && (
         <p role="status" className="rounded-2xl bg-accent-soft px-4 py-3 text-sm text-accent-dark">
-          <span className="font-semibold">Saved.</span> The people who joined are being told by email and push notification.
+          <span className="font-semibold">Saved.</span>
+          {searchParams.edited === "1" && " The people who joined are being told by email and push notification."}
         </p>
       )}
 
@@ -369,7 +370,7 @@ export default async function EventPage({ params, searchParams }: { params: { id
       )}
 
       {isHost && !cancelled && (
-        <ManageEvent eventId={event.id} maxSpots={event.max_spots} spotsTaken={event.spots_taken} />
+        <ManageEvent eventId={event.id} />
       )}
 
       {isHost ? (

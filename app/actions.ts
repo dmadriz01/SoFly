@@ -27,12 +27,11 @@ import { pacificDate, pacificLocalToUtc } from "@/lib/time";
 import { safeNext } from "@/lib/utils";
 import {
   EVENT_FIELDS,
-  DETAILS_FIELDS,
+  EDIT_FIELDS,
   validateEvent,
-  validateEventDetails,
-  validateMaxSpots,
+  validateEventEdit,
   validateRequestNote,
-  type EventDetailsField,
+  type EditField,
   type EventErrors,
 } from "@/lib/validation";
 
@@ -106,12 +105,14 @@ export async function createEvent(formData: FormData): Promise<CreateEventResult
   redirect(`/events/${data.id}`);
 }
 
-export type UpdateDetailsResult = { errors: Partial<Record<EventDetailsField, string>>; formError?: string };
+export type UpdateDetailsResult = { errors: Partial<Record<EditField, string>>; formError?: string };
 
 /**
- * A host changing the date/time or place of their meetup. Everything is changed in one step by the
- * database (update_event_details), which also re-checks that they own it and that it hasn't started
- * or been cancelled. The people who were going are told only after the change went through.
+ * A host changing their meetup: date/time, place and the number of spots, all from one form. The
+ * date/time and place are saved in one step by the database (update_event_details), which also
+ * re-checks that they own the meetup and that it hasn't started or been cancelled. The number of
+ * spots is saved right after. The people who were going are told about a new time or place only
+ * once that change has gone through (a change in spots alone doesn't tell anyone).
  */
 export async function updateEventDetails(eventId: string, formData: FormData): Promise<UpdateDetailsResult> {
   const supabase = createClient();
@@ -121,22 +122,29 @@ export async function updateEventDetails(eventId: string, formData: FormData): P
   if (!user) redirect(`/login?next=/events/${eventId}/edit`);
 
   const input: Record<string, string> = {};
-  for (const field of DETAILS_FIELDS) {
+  for (const field of EDIT_FIELDS) {
     const value = formData.get(field);
     input[field] = typeof value === "string" ? value.trim() : "";
   }
-  const errors = validateEventDetails(input);
+  const errors = validateEventEdit(input);
   if (Object.keys(errors).length > 0) return { errors };
 
   const { data: event } = await supabase
     .from("events")
-    .select("host_id, join_mode, starts_at, neighborhood, venue_name, address, cancelled_at")
+    .select("host_id, join_mode, starts_at, neighborhood, venue_name, address, max_spots, spots_taken, cancelled_at")
     .eq("id", eventId)
     .maybeSingle();
   if (!event || event.host_id !== user.id) return { errors: {}, formError: "You can only edit your own meetups." };
   if (event.cancelled_at) return { errors: {}, formError: "This meetup was cancelled, so it can't be changed." };
   if (new Date(event.starts_at).getTime() <= Date.now()) {
     return { errors: {}, formError: "This meetup has already started, so it can't be changed." };
+  }
+
+  // Nobody who is already going can be squeezed out by lowering the spots.
+  const maxSpots = Number(input.max_spots);
+  if (maxSpots < event.spots_taken) {
+    const n = event.spots_taken as number;
+    return { errors: { max_spots: `${n} ${n === 1 ? "person is" : "people are"} going, so you can't go below that.` } };
   }
 
   // Where it is now. For approval-only meetups the real place is the private location.
@@ -153,40 +161,60 @@ export async function updateEventDetails(eventId: string, formData: FormData): P
     { starts_at: event.starts_at, neighborhood: event.neighborhood, venue_name: venue, address },
     { starts_at: startsAt, neighborhood: input.neighborhood, venue_name: input.venue_name, address: input.address }
   );
-  if (changes.length === 0) return { errors: {}, formError: "You haven't changed anything." };
+  const spotsChanged = maxSpots !== event.max_spots;
+  if (changes.length === 0 && !spotsChanged) return { errors: {}, formError: "You haven't changed anything." };
 
-  const { error } = await supabase.rpc("update_event_details", {
-    eid: eventId,
-    new_starts_at: startsAt,
-    new_neighborhood: input.neighborhood,
-    new_venue: input.venue_name,
-    new_address: input.address,
-  });
-  if (error) {
-    // PGRST202: the database function isn't there, i.e. migration 017 hasn't been run yet.
-    if (error.code === "PGRST202") {
-      console.error("Editing a meetup failed: run supabase/migrations/017_update_event_details.sql in the SQL editor.");
-      return { errors: {}, formError: "Editing isn't available right now. Please try again later." };
+  // 1. Date/time and place, all or nothing.
+  if (changes.length > 0) {
+    const { error } = await supabase.rpc("update_event_details", {
+      eid: eventId,
+      new_starts_at: startsAt,
+      new_neighborhood: input.neighborhood,
+      new_venue: input.venue_name,
+      new_address: input.address,
+    });
+    if (error) {
+      // PGRST202: the database function isn't there, i.e. migration 017 hasn't been run yet.
+      if (error.code === "PGRST202") {
+        console.error("Editing a meetup failed: run supabase/migrations/017_update_event_details.sql in the SQL editor.");
+        return { errors: {}, formError: "Editing isn't available right now. Please try again later." };
+      }
+      return {
+        errors: {},
+        formError: error.message.includes("already started")
+          ? "This meetup has already started, so it can't be changed."
+          : error.message.includes("cancelled")
+            ? "This meetup was cancelled, so it can't be changed."
+            : error.message.includes("future")
+              ? "Pick a time in the future."
+              : "Couldn't save your changes. Please try again.",
+      };
     }
-    return {
-      errors: {},
-      formError: error.message.includes("already started")
-        ? "This meetup has already started, so it can't be changed."
-        : error.message.includes("cancelled")
-          ? "This meetup was cancelled, so it can't be changed."
-          : error.message.includes("future")
-            ? "Pick a time in the future."
-            : "Couldn't save your changes. Please try again.",
-    };
+    // Saved: tell the people who were going (whatever happens with the spots below).
+    waitUntil(notifyEventUpdated(eventId, changes));
   }
 
-  // Only now that the change is saved: tell the people who were going.
-  waitUntil(notifyEventUpdated(eventId, changes));
+  // 2. The number of spots.
+  let spotsProblem: string | undefined;
+  if (spotsChanged) {
+    const { data, error } = await supabase.from("events").update({ max_spots: maxSpots }).eq("id", eventId).select("id");
+    if (error || !data || data.length === 0) {
+      spotsProblem = error?.message.includes("events_spots_within_capacity")
+        ? "That's fewer than the number of people already going."
+        : "Couldn't change the number of spots. Please try again.";
+    }
+  }
 
   revalidatePath(`/events/${eventId}`);
   revalidatePath("/");
   revalidatePath("/me");
-  redirect(`/events/${eventId}?edited=1`);
+  if (spotsProblem) {
+    return {
+      errors: {},
+      formError: changes.length > 0 ? `Your date and place were saved, but the number of spots wasn't changed. ${spotsProblem}` : spotsProblem,
+    };
+  }
+  redirect(`/events/${eventId}?edited=${changes.length > 0 ? "1" : "spots"}`);
 }
 
 export async function setRsvp(
@@ -447,40 +475,6 @@ export async function respondToRequest(
   revalidatePath(`/events/${eventId}`);
   revalidatePath("/me");
   revalidatePath("/");
-  return {};
-}
-
-/** Host-only (row level security). The database rejects going below the number already going. */
-export async function updateMaxSpots(eventId: string, maxSpots: number): Promise<{ error?: string }> {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "Please log in." };
-
-  const invalid = validateMaxSpots(maxSpots);
-  if (invalid) return { error: invalid };
-
-  const { data, error } = await supabase
-    .from("events")
-    .update({ max_spots: maxSpots })
-    .eq("id", eventId)
-    .select("id");
-
-  if (error) {
-    return {
-      error: error.message.includes("events_spots_within_capacity")
-        ? "That's fewer than the number of people already going."
-        : error.message.includes("events_max_spots_range")
-          ? (validateMaxSpots(maxSpots) ?? "Choose a number from 1 to 200.")
-          : "Couldn't update the spots. Please try again.",
-    };
-  }
-  if (!data || data.length === 0) return { error: "Only the host can change this." };
-
-  revalidatePath(`/events/${eventId}`);
-  revalidatePath("/");
-  revalidatePath("/me");
   return {};
 }
 

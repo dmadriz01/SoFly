@@ -62,6 +62,13 @@ const startsAtError = (v: string) => {
   return undefined;
 };
 
+const maxSpotsError = (raw: string) => {
+  if (!raw) return "How many people can join?";
+  const spots = Number(raw);
+  if (!Number.isInteger(spots) || spots < 1 || spots > LIMITS.maxSpots) return `Enter a whole number from 1 to ${LIMITS.maxSpots}.`;
+  return undefined;
+};
+
 export type EventDetailsField = "starts_at" | "neighborhood" | "venue_name" | "address";
 export const DETAILS_FIELDS: readonly EventDetailsField[] = ["starts_at", "neighborhood", "venue_name", "address"];
 
@@ -76,6 +83,17 @@ export function validateEventDetails(input: Record<string, string>): Partial<Rec
     ["starts_at", startsAtError(v("starts_at"))],
   ];
   for (const [field, message] of checks) if (message) errors[field] = message;
+  return errors;
+}
+
+/** What a host can change after posting: date/time, place and the number of spots. */
+export type EditField = EventDetailsField | "max_spots";
+export const EDIT_FIELDS: readonly EditField[] = [...DETAILS_FIELDS, "max_spots"];
+
+export function validateEventEdit(input: Record<string, string>): Partial<Record<EditField, string>> {
+  const errors: Partial<Record<EditField, string>> = { ...validateEventDetails(input) };
+  const spots = maxSpotsError((input.max_spots ?? "").trim());
+  if (spots) errors.max_spots = spots;
   return errors;
 }
 
@@ -95,10 +113,8 @@ export function validateEvent(input: Record<string, string>): EventErrors {
   if (place.address) errors.address = place.address;
   if (place.starts_at) errors.starts_at = place.starts_at;
 
-  const spots = Number(v("max_spots"));
-  if (!v("max_spots")) errors.max_spots = "How many people can join?";
-  else if (!Number.isInteger(spots) || spots < 1 || spots > LIMITS.maxSpots)
-    errors.max_spots = `Enter a whole number from 1 to ${LIMITS.maxSpots}.`;
+  const spotsProblem = maxSpotsError(v("max_spots"));
+  if (spotsProblem) errors.max_spots = spotsProblem;
 
   if (v("description").length > LIMITS.description)
     errors.description = `Keep it under ${LIMITS.description} characters.`;
@@ -127,11 +143,5 @@ export const NOTE_MAX = 500;
 /** The optional note a person can add when asking to join an approval-only event. */
 export function validateRequestNote(note: string): string | undefined {
   if (note.trim().length > NOTE_MAX) return `Keep it under ${NOTE_MAX} characters.`;
-  return undefined;
-}
-
-export function validateMaxSpots(value: number): string | undefined {
-  if (!Number.isInteger(value) || value < 1 || value > LIMITS.maxSpots)
-    return `Enter a whole number from 1 to ${LIMITS.maxSpots}.`;
   return undefined;
 }

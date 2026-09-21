@@ -6,7 +6,7 @@ import { eventUpdated } from "../lib/email-templates.ts";
 import { describeEdit, pushSummary, type DetailChange } from "../lib/event-edit.ts";
 import { notifyEventUpdated } from "../lib/notify.ts";
 import { formatWhenAbsolute, pacificLocalToUtc, pacificLocalValue } from "../lib/time.ts";
-import { DETAILS_FIELDS, validateEvent, validateEventDetails } from "../lib/validation.ts";
+import { DETAILS_FIELDS, EDIT_FIELDS, validateEvent, validateEventDetails, validateEventEdit } from "../lib/validation.ts";
 import { fakeAdmin, fakeMailbox, type FakeData } from "./fake-supabase.mts";
 
 let passed = 0;
@@ -38,6 +38,18 @@ const good = { starts_at: future, neighborhood: "Oakland", venue_name: "Lake Mer
   t("posting: still accepts a good meetup", Object.keys(post({})).length === 0, JSON.stringify(post({})));
   t("posting and editing give the same message for each of the four fields", (["starts_at", "neighborhood", "venue_name", "address"] as const).every((f) => post({ [f]: "" })[f] === validateEventDetails({ ...good, [f]: "" })[f] && !!post({ [f]: "" })[f]));
   t("posting: errors still come in the order the form focuses them (title, category, neighborhood, venue, address, time)", Object.keys(post({ title: "", category: "", neighborhood: "", venue_name: "", address: "", starts_at: "" })).join() === "title,category,neighborhood,venue_name,address,starts_at");
+}
+
+// ───────── the merged form: date/time, place and spots ─────────
+{
+  const withSpots = { ...good, max_spots: "8" };
+  t("edit rules: the one form covers date/time, neighborhood, venue, address and spots", [...EDIT_FIELDS].sort().join() === ["address", "max_spots", "neighborhood", "starts_at", "venue_name"].sort().join());
+  t("edit rules: a good edit with spots passes", Object.keys(validateEventEdit(withSpots)).length === 0, JSON.stringify(validateEventEdit(withSpots)));
+  t("edit rules: spots must be a whole number from 1 to 200", ["", "0", "-3", "201", "1.5", "abc", "1e2x"].every((v) => !!validateEventEdit({ ...withSpots, max_spots: v }).max_spots) && ["1", "200", "50"].every((v) => !validateEventEdit({ ...withSpots, max_spots: v }).max_spots));
+  t("edit rules: the other four fields are judged exactly as before", JSON.stringify(validateEventEdit({ ...withSpots, venue_name: "" })) === JSON.stringify({ venue_name: validateEventDetails({ ...good, venue_name: "" }).venue_name }));
+  t("edit rules: several mistakes are all reported", Object.keys(validateEventEdit({ starts_at: "", neighborhood: "", venue_name: "", address: "", max_spots: "" })).length === 5);
+  const post = (spots: string) => validateEvent({ title: "t", category: "Yoga", description: "", max_spots: spots, skill_level: "All levels", audience: "Everyone", join_mode: "open", age_min: "", age_max: "", chat_url: "", ...good });
+  t("posting and editing give the same message for spots", ["", "0", "201", "abc"].every((v) => post(v).max_spots === validateEventEdit({ ...withSpots, max_spots: v }).max_spots && !!post(v).max_spots) && !post("10").max_spots);
 }
 
 // ───────── the time shown in the box ─────────
@@ -138,14 +150,25 @@ const change = describeEdit(before, { starts_at: "2026-09-27T02:30:00Z", neighbo
   const actions = read("app/actions.ts");
   const body = actions.slice(actions.indexOf("export async function updateEventDetails"), actions.indexOf("export async function setRsvp"));
   const at = (needle: string) => body.indexOf(needle);
-  t("action: it needs a logged-in person", at("auth.getUser()") > -1 && at('redirect(`/login?next=/events/${eventId}/edit`)') > -1 && at("getUser") < at("validateEventDetails"));
-  t("action: the input is validated before anything is read or written", at("validateEventDetails(input)") > -1 && at("validateEventDetails(input)") < at('.from("events")') && at('.from("events")') < at("update_event_details"));
-  t("action: it checks the person is the host, and that the meetup isn't cancelled or started, before saving", at("event.host_id !== user.id") > -1 && at("event.host_id !== user.id") < at("update_event_details") && at("event.cancelled_at") < at("update_event_details") && at("<= Date.now()") < at("update_event_details"));
-  t("action: it saves through the one database function (all or nothing), not separate writes", at('.rpc("update_event_details"') > -1 && !/\.from\("events"\)\s*\.update|\.from\("event_locations"\)\s*\.(update|insert|upsert)/.test(body));
+  t("action: it needs a logged-in person", at("auth.getUser()") > -1 && at('redirect(`/login?next=/events/${eventId}/edit`)') > -1 && at("getUser") < at("validateEventEdit"));
+  t("action: the input is validated before anything is read or written", at("validateEventEdit(input)") > -1 && at("validateEventEdit(input)") < at('.from("events")') && at('.from("events")') < at("update_event_details"));
+  t("action: it checks the person is the host, and that the meetup isn't cancelled or started, before saving anything", at("event.host_id !== user.id") > -1 && at("event.host_id !== user.id") < at("update_event_details") && at("event.cancelled_at") < at("update_event_details") && at("<= Date.now()") < at("update_event_details") && at("event.host_id !== user.id") < at('update({ max_spots'));
+  t("action: spots can't be lowered below the people already going, and that's checked before any save", at("maxSpots < event.spots_taken") > -1 && at("maxSpots < event.spots_taken") < at("update_event_details") && at("maxSpots < event.spots_taken") < at('update({ max_spots'));
+  const updates = [...body.matchAll(/\.update\(\{([^}]*)\}\)/g)].map((m) => m[1].trim());
+  t("action: date/time and place are saved only through the one database function (all or nothing); the only direct write is the number of spots", updates.length === 1 && updates[0] === "max_spots: maxSpots" && at('.rpc("update_event_details"') > -1 && !/event_locations"\)\s*\.(update|insert|upsert)/.test(body), JSON.stringify(updates));
+  t("action: nothing changed is reported, not saved or announced", at("You haven't changed anything") > -1 && at("You haven't changed anything") < at("update_event_details") && /!spotsChanged/.test(body));
   t("action: if the database update hasn't been run yet, the host gets a plain message and the owner gets a clear log line", /PGRST202/.test(body) && /017_update_event_details\.sql/.test(body) && /Editing isn't available right now/.test(body));
-  t("action: nothing changed is reported, not saved or announced", at("You haven't changed anything") > -1 && at("You haven't changed anything") < at("update_event_details"));
-  t("action: guests are told only AFTER the save succeeded (after the error check)", at("notifyEventUpdated(") > at("if (error)") && at("notifyEventUpdated(") > at("update_event_details"));
-  t("action: it then goes back to the meetup", at("redirect(`/events/${eventId}?edited=1`)") > at("notifyEventUpdated("));
+  t("action: the database function is only called when the date/time or place actually changed", /if \(changes\.length > 0\) \{\s*\n\s*const \{ error \} = await supabase\.rpc/.test(body));
+  t("action: guests are told only AFTER the date/time/place save succeeded (after the error check), and only if that changed", at("notifyEventUpdated(") > at("if (error)") && at("notifyEventUpdated(") > at("update_event_details") && /Saved: tell the people who were going/.test(body));
+  t("action: a change in spots alone tells nobody (the notification sits inside the date/place branch)", body.indexOf("notifyEventUpdated(") < body.indexOf('update({ max_spots') && (body.match(/notifyEventUpdated\(/g) ?? []).length === 1);
+  t("action: the spots are saved after the date/place, and a failure there is reported honestly (the date and place WERE saved)", at('update({ max_spots') > at("notifyEventUpdated(") && /Your date and place were saved, but the number of spots wasn't changed/.test(body));
+  t("action: it then goes back to the meetup, saying whether people are being told", /redirect\(`\/events\/\$\{eventId\}\?edited=\$\{changes\.length > 0 \? "1" : "spots"\}`\)/.test(body) && body.indexOf("redirect(`/events/${eventId}?edited=") > body.indexOf("notifyEventUpdated("));
+  t("the separate 'change spots' action is gone (one way to do it)", !/updateMaxSpots/.test(actions) && !/validateMaxSpots/.test(read("lib/validation.ts")));
+  const manage = read("components/ManageEvent.tsx");
+  t("the Manage card no longer has its own spots form; it points to Edit and keeps Cancel", !/max-spots|updateMaxSpots|type="number"/.test(manage) && /use <span className="font-semibold">Edit<\/span>/.test(manage) && /cancelEvent/.test(manage));
+  const form = read("components/EditEventForm.tsx");
+  t("the edit form has the spots field, pre-filled, with a floor of the people already going", /name="max_spots"/.test(form) && /defaultValue=\{initial\.max_spots\}/.test(form) && /min=\{Math\.max\(spotsTaken, 1\)\}/.test(form) && /Number\(input\.max_spots\) < spotsTaken/.test(form));
+  t("the edit form only promises notifications for date, time or place changes", /If you change the date, time or place, the/.test(form));
 
   const edit = read("app/events/[id]/edit/page.tsx");
   t("edit page: logged-out visitors are sent to log in and back", /if \(!user\) redirect\(`\/login\?next=\/events\/\$\{params\.id\}\/edit`\)/.test(edit));
@@ -154,8 +177,10 @@ const change = describeEdit(before, { starts_at: "2026-09-27T02:30:00Z", neighbo
   t("edit page: the private address of an approval-only meetup is read from the private location (host only)", /isRequest[\s\S]{0,200}event_locations/.test(edit));
 
   const page = read("app/events/[id]/page.tsx");
+  t("edit page: it loads the spots and the number going for the form", /max_spots, spots_taken/.test(edit) && /spotsTaken=\{event\.spots_taken\}/.test(edit));
+  t("meetup page: the Manage card gets only the meetup id now", /<ManageEvent eventId=\{event\.id\} \/>/.test(read("app/events/[id]/page.tsx")));
   t("meetup page: the Edit button is for the host of a live meetup only", /isHost && !cancelled && !ended && \(\s*\n\s*<Link href=\{`\/events\/\$\{event\.id\}\/edit`\}/.test(page));
-  t("meetup page: the 'Saved' banner is for the host only", /isHost && searchParams\.edited === "1" && !cancelled/.test(page));
+  t("meetup page: the 'Saved' banner is for the host only, and only mentions telling people when that happened", /isHost && \(searchParams\.edited === "1" \|\| searchParams\.edited === "spots"\) && !cancelled/.test(page) && /searchParams\.edited === "1" && " The people who joined are being told/.test(page));
 
   const me = read("app/me/page.tsx");
   t("Me: requests the host declined are fetched too (they no longer drop off)", /\.in\("status", \["approved", "pending", "declined"\]\)/.test(me) && !/declined request just drops off/.test(me));

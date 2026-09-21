@@ -182,6 +182,15 @@ t("weeks: only real dates are accepted", isDateKey("2026-09-21") && !isDateKey("
   t("delete: the confirmation says the guests will be told, and how the button differs from Cancel", /will be told it was cancelled/.test(del) && /Cancel above instead/.test(del));
 }
 
+// ---- the feed: the same Filters button on the List and Swipe tabs ----
+{
+  const feed = fs.readFileSync(path.join(process.cwd(), "app/(feed)/page.tsx"), "utf8");
+  t("feed: there is ONE Filters button + View toggle, defined once and used by both tabs", (feed.match(/<FiltersSheet\b/g) ?? []).length === 1 && (feed.match(/<ViewToggle\b/g) ?? []).length === 1 && (feed.match(/\{controls\}/g) ?? []).length === 3, `${(feed.match(/\{controls\}/g) ?? []).length} uses`);
+  t("feed: the calendar, dropdowns and chips exist only inside the Filters panel (not spread across the list page)", (feed.match(/<FeedSelects\b/g) ?? []).length === 1 && (feed.match(/<FilterChips\b/g) ?? []).length === 1 && (feed.match(/\{strip\}/g) ?? []).length === 1 && /<FiltersSheet count=\{activeFilters\}>\s*\n\s*\{strip\}\s*\n\s*<FeedSelects[^\n]*\n\s*<FilterChips/.test(feed));
+  t("feed: the count on the button covers every kind of filter, including the date", /const activeFilters = \[filters\.category, filters\.neighborhood, filters\.level, filters\.audience, filters\.eligible, dateFiltered\]/.test(feed));
+  t("feed: the controls sit at the right end of the row on both tabs, even when the row wraps on a small phone", /className="ml-auto flex shrink-0 items-center gap-2"/.test(feed));
+}
+
 // ---- chat links (only known apps; no look-alike hosts) ----
 t("WhatsApp link accepted", "url" in parseChatUrl("https://chat.whatsapp.com/AbC123"));
 t("scheme added when missing", parseChatUrl("chat.whatsapp.com/AbC123").hasOwnProperty("url"));

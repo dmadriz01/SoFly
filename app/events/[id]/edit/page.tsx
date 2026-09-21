@@ -29,7 +29,7 @@ export default async function EditEventPage({ params }: { params: { id: string }
 
   const { data: event } = await supabase
     .from("events")
-    .select("id, title, host_id, join_mode, starts_at, neighborhood, venue_name, address, cancelled_at")
+    .select("id, title, host_id, join_mode, starts_at, neighborhood, venue_name, address, max_spots, spots_taken, cancelled_at")
     .eq("id", params.id)
     .maybeSingle();
   if (!event) notFound();
@@ -74,14 +74,15 @@ export default async function EditEventPage({ params }: { params: { id: string }
         <Link href={`/events/${event.id}`} className="text-sm font-medium text-muted hover:text-ink">
           ← Back to the meetup
         </Link>
-        <h1 className="mt-3 text-2xl font-bold tracking-tight">Edit date &amp; place</h1>
+        <h1 className="mt-3 text-2xl font-bold tracking-tight">Edit meetup</h1>
         <p className="mt-1 text-muted">{event.title}</p>
       </div>
       <EditEventForm
         eventId={event.id}
         isRequest={isRequest}
         toNotify={count ?? 0}
-        initial={{ starts_at: pacificLocalValue(event.starts_at), neighborhood: event.neighborhood, venue_name: venue, address }}
+        spotsTaken={event.spots_taken}
+        initial={{ starts_at: pacificLocalValue(event.starts_at), neighborhood: event.neighborhood, venue_name: venue, address, max_spots: event.max_spots }}
       />
     </div>
   );
