@@ -171,7 +171,7 @@ To set it up (optional; without it the card doesn't appear and nothing else chan
 
 **iPhone and iPad:** Apple only allows web push for sites on the Home Screen (iOS 16.4 or newer). In Safari tap Share → **Add to Home Screen**, open SoFly from that icon, then turn notifications on. The card explains this itself when it detects it.
 
-**Nothing arrives?** The **Send a test notification** button checks each link (keys, contact address, server key, your devices, and whether the push service accepts the message) and shows which is broken. The `Daily emails:` line in Vercel's logs also reports `pushes` and `pushFailed`.
+**Nothing arrives?** The **Send a test notification** button checks each link (keys, contact address, server key, your devices, and whether the push service accepts the message) and shows which is broken. If it says the keys aren't valid, it explains why (for example the public key was pasted where the private key belongs, or a key was cut short) without showing either key; fix the value in Vercel and redeploy. The `Daily emails:` line in Vercel's logs also reports `pushes` and `pushFailed`.
 
 ## Launch setup
 

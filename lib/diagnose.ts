@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import * as email from "./email-templates";
 import { mailConfigured, sendMail, type Mail, type MailResult } from "./mailer";
-import { pushConfigured, sendPushToUser, vapidSubject, type PushOutcome, type PushPayload } from "./push";
+import { pushConfigured, sendPushToUser, vapidKeyProblem, vapidSubject, type PushOutcome, type PushPayload } from "./push";
 import { SITE_URL } from "./site";
 import { createAdminClient } from "./supabase/admin";
 import { firstName } from "./utils";
@@ -107,6 +107,8 @@ type PushDeps = {
   publicKeySet?: boolean;
   privateKeySet?: boolean;
   subject?: string | null;
+  /** For tests: what is wrong with the key pair (null = fine). Normally worked out from the real keys. */
+  keyProblem?: string | null;
 };
 
 /**
@@ -130,6 +132,12 @@ export async function diagnosePush(who: { userId: string }, deps: PushDeps = {})
     ok: privateKeySet,
     detail: privateKeySet ? undefined : "Add VAPID_PRIVATE_KEY in Vercel, then redeploy.",
   });
+  let keyBroken = false;
+  if (publicKeySet && privateKeySet) {
+    const problem = deps.keyProblem === undefined ? vapidKeyProblem(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY) : deps.keyProblem;
+    keyBroken = Boolean(problem);
+    checks.push({ label: "Push keys are valid and belong together", ok: !problem, detail: problem ?? undefined });
+  }
   checks.push({
     label: "Push contact address is set up",
     ok: Boolean(subject),
@@ -141,7 +149,7 @@ export async function diagnosePush(who: { userId: string }, deps: PushDeps = {})
     detail: admin ? undefined : "Add SUPABASE_SERVICE_ROLE_KEY in Vercel, then redeploy.",
   });
 
-  if (admin && publicKeySet && privateKeySet && subject) {
+  if (admin && publicKeySet && privateKeySet && subject && !keyBroken) {
     const { data: devices } = await admin.from("push_subscriptions").select("id").eq("user_id", who.userId);
     const count = devices?.length ?? 0;
     checks.push({

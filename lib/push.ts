@@ -1,5 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { createECDH } from "node:crypto";
 import webpush from "web-push";
 import { CONTACT_EMAIL, SITE_URL } from "./site";
 
@@ -10,6 +11,38 @@ export type PushSender = (device: Device, body: string) => Promise<void>;
 
 /** The public half of the key pair; the browser needs it to subscribe. */
 export const pushPublicKey = () => process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
+
+/** A key as pasted into Vercel, tidied up: surrounding spaces, line breaks and one pair of quotes removed. */
+export function cleanKey(value: string | undefined): string {
+  const v = (value ?? "").trim();
+  return (/^(["']).*\1$/.test(v) ? v.slice(1, -1) : v).trim();
+}
+
+/**
+ * What is wrong with the key pair, in plain words, or null if it's fine. Never includes the keys
+ * themselves. The public key decodes to 65 bytes and the private key to 32; the two must belong together.
+ */
+export function vapidKeyProblem(publicKey: string | undefined, privateKey: string | undefined): string | null {
+  const pub = cleanKey(publicKey);
+  const priv = cleanKey(privateKey);
+  const bytes = (k: string) => (/^[A-Za-z0-9_-]+$/.test(k) ? Buffer.from(k, "base64url") : null);
+  const pubBytes = bytes(pub);
+  const privBytes = bytes(priv);
+  if (!privBytes) return 'The private key has characters a key never has (a key is letters, numbers, "-" and "_" only). Copy the whole "Private Key" line again.';
+  if (privBytes.length === 65) return "VAPID_PRIVATE_KEY holds the public key. Put the line labelled \"Private Key\" there instead.";
+  if (privBytes.length !== 32) return `The private key is ${priv.length} characters long; it should be 43. It was probably cut short or has extra text. Copy the whole "Private Key" line again.`;
+  if (!pubBytes) return 'The public key has characters a key never has (a key is letters, numbers, "-" and "_" only). Copy the whole "Public Key" line again.';
+  if (pubBytes.length === 32) return "NEXT_PUBLIC_VAPID_PUBLIC_KEY holds the private key. Put the line labelled \"Public Key\" there instead.";
+  if (pubBytes.length !== 65) return `The public key is ${pub.length} characters long; it should be 87. Copy the whole "Public Key" line again.`;
+  try {
+    const ecdh = createECDH("prime256v1");
+    ecdh.setPrivateKey(privBytes);
+    if (!ecdh.getPublicKey().equals(pubBytes)) return "The public and private keys aren't a pair (they came from different runs of the generator). Set both from the same run.";
+  } catch {
+    return "The private key isn't a valid key. Generate a new pair with npx web-push generate-vapid-keys and set both.";
+  }
+  return null;
+}
 
 /** Whether push is set up on the server: both halves of the key pair. */
 export const pushConfigured = () => Boolean(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY);
@@ -55,7 +88,7 @@ const realSender: PushSender = async (device, body) => {
   const subject = vapidSubject();
   if (!subject) throw new Error("No VAPID subject: set VAPID_SUBJECT or NEXT_PUBLIC_CONTACT_EMAIL");
   await webpush.sendNotification({ endpoint: device.endpoint, keys: { p256dh: device.p256dh, auth: device.auth } }, body, {
-    vapidDetails: { subject, publicKey: pushPublicKey(), privateKey: process.env.VAPID_PRIVATE_KEY ?? "" },
+    vapidDetails: { subject, publicKey: cleanKey(pushPublicKey()), privateKey: cleanKey(process.env.VAPID_PRIVATE_KEY) },
     TTL: 12 * 60 * 60, // if the phone is off, keep it for 12 hours
     urgency: "normal",
   });

@@ -228,7 +228,7 @@ const NOW = new Date("2026-09-20T19:51:45Z");
 {
   const data: FakeData = { push_subscriptions: [device("a", "host")] };
   const failing = (checks: { label: string; ok: boolean }[]) => checks.filter((c) => !c.ok).map((c) => c.label).join(" | ") || "(none)";
-  const ok = { publicKeySet: true, privateKeySet: true, subject: "mailto:a@b.com" };
+  const ok = { publicKeySet: true, privateKeySet: true, subject: "mailto:a@b.com", keyProblem: null };
   let c = await diagnosePush({ userId: "host" }, { ...ok, admin: fakeAdmin(data, {}), push: async () => ({ sent: 1, removed: 0, failed: 0 }) });
   t("push diagnostic: everything set up -> all green", failing(c) === "(none)", failing(c));
   c = await diagnosePush({ userId: "host" }, { ...ok, publicKeySet: false, admin: fakeAdmin(data, {}) });
@@ -243,6 +243,30 @@ const NOW = new Date("2026-09-20T19:51:45Z");
   t("push diagnostic: no device yet -> tells you to turn push on first", failing(c) === "You have a device with push turned on", failing(c));
   c = await diagnosePush({ userId: "host" }, { ...ok, admin: fakeAdmin(data, {}), push: async () => ({ sent: 0, removed: 0, failed: 1, firstFailure: "status 403: bad key" }) });
   t("push diagnostic: a rejected notification shows the reason", failing(c) === "The push service accepted the test notification" && (c.find((x) => !x.ok)?.detail ?? "").includes("403"), failing(c));
+}
+
+// ───────── the key pair is checked without ever showing a key ─────────
+{
+  const { cleanKey, vapidKeyProblem } = await import("../lib/push.ts");
+  const good = webpush.generateVAPIDKeys();
+  const other = webpush.generateVAPIDKeys();
+  const problem = (pub?: string, priv?: string) => vapidKeyProblem(pub, priv);
+  t("keys: a real pair is fine", problem(good.publicKey, good.privateKey) === null);
+  t("keys: stray spaces, line breaks and quotes are tolerated", problem(` "${good.publicKey}" \n`, `\n'${good.privateKey}'  `) === null);
+  t("keys: the public key pasted as the private key is named", (problem(good.publicKey, good.publicKey) ?? "").includes("holds the public key"));
+  t("keys: the private key pasted as the public key is named", (problem(good.privateKey, good.privateKey) ?? "").includes("holds the private key"));
+  t("keys: a cut-short private key reports its length, not its content", (() => { const m = problem(good.publicKey, good.privateKey.slice(0, 30)) ?? ""; return m.includes("30 characters") && m.includes("43") && !m.includes(good.privateKey.slice(0, 10)); })());
+  t("keys: a private key with extra text is caught", (problem(good.publicKey, `${good.privateKey}abc`) ?? "").includes("46 characters"));
+  t("keys: a private key with '=' padding or spaces inside is caught", (problem(good.publicKey, `${good.privateKey}=`) ?? "").includes("characters a key never has") && (problem(good.publicKey, `${good.privateKey.slice(0, 20)} ${good.privateKey.slice(20)}`) ?? "").includes("characters a key never has"));
+  t("keys: a public key from another run is caught as not a pair", (problem(other.publicKey, good.privateKey) ?? "").includes("aren't a pair"));
+  t("keys: a short public key is caught", (problem(good.publicKey.slice(0, 50), good.privateKey) ?? "").includes("87"));
+  t("keys: nothing set gives a problem rather than a crash", problem(undefined, undefined) !== null);
+  t("keys: the message never contains either key", [problem(other.publicKey, good.privateKey), problem(good.publicKey, good.privateKey.slice(0, 30))].every((m) => !!m && !m.includes(good.privateKey) && !m.includes(other.publicKey)));
+  t("keys: cleanKey removes spaces and one pair of quotes only", cleanKey('  "abc-_"\n') === "abc-_" && cleanKey(undefined) === "");
+  const c = await diagnosePush({ userId: "host" }, { publicKeySet: true, privateKeySet: true, subject: "mailto:a@b.com", keyProblem: "The private key is 30 characters long", admin: fakeAdmin({ push_subscriptions: [device("a", "host")] }, {}), push: async () => { throw new Error("must not send with broken keys"); } });
+  t("push diagnostic: broken keys are named and no test is attempted", c.filter((x) => !x.ok).map((x) => x.label).join("|") === "Push keys are valid and belong together" && !c.some((x) => x.label.includes("accepted")), JSON.stringify(c));
+  const real = await diagnosePush({ userId: "host" }, { publicKeySet: true, privateKeySet: true, subject: "mailto:a@b.com", admin: fakeAdmin({ push_subscriptions: [device("a", "host")] }, {}), push: async () => ({ sent: 1, removed: 0, failed: 0 }) }).catch((e) => e);
+  t("push diagnostic: with no real keys in the environment it reports a problem (not a crash)", Array.isArray(real));
 }
 
 // ───────── the service worker itself ─────────
