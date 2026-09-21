@@ -178,7 +178,7 @@ const change = describeEdit(before, { starts_at: "2026-09-27T02:30:00Z", neighbo
 
   const page = read("app/events/[id]/page.tsx");
   t("edit page: it loads the spots and the number going for the form", /max_spots, spots_taken/.test(edit) && /spotsTaken=\{event\.spots_taken\}/.test(edit));
-  t("meetup page: the Manage card gets only the meetup id now", /<ManageEvent eventId=\{event\.id\} \/>/.test(read("app/events/[id]/page.tsx")));
+  t("meetup page: the Manage card gets the meetup id and how many are waiting for a spot (and no spots controls of its own)", /<ManageEvent eventId=\{event\.id\} waiting=\{waitingCount\} \/>/.test(read("app/events/[id]/page.tsx")));
   t("meetup page: the Edit button is for the host of a live meetup only", /isHost && !cancelled && !ended && \(\s*\n\s*<Link href=\{`\/events\/\$\{event\.id\}\/edit`\}/.test(page));
   t("meetup page: the 'Saved' banner is for the host only, and only mentions telling people when that happened", /isHost && \(searchParams\.edited === "1" \|\| searchParams\.edited === "spots"\) && !cancelled/.test(page) && /searchParams\.edited === "1" && " The people who joined are being told/.test(page));
 
