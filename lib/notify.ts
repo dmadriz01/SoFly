@@ -253,6 +253,60 @@ export function notifyEventDeleted(snapshot: Cancellation, deps: Deps = {}) {
 }
 
 /**
+ * A spot opened at a full meetup: tell the people waiting, oldest first (up to five, since only a
+ * spot or two opened). They asked to be told, so this is critical news: their quiet hours don't
+ * hold it back. First come, first served: nobody is added automatically.
+ */
+export function notifySpotOpened(eventId: string, deps: Deps = {}) {
+  return safely("spot opened", async () => {
+    const { admin, send, push } = use(deps);
+    if (!admin) return;
+    const now = deps.now ?? new Date();
+    const { data: event } = await admin.from("events").select("title, starts_at, max_spots, spots_taken, cancelled_at, join_mode").eq("id", eventId).maybeSingle();
+    if (!event || event.cancelled_at || event.join_mode !== "open" || new Date(event.starts_at as string) <= now) return;
+    const free = (event.max_spots as number) - (event.spots_taken as number);
+    if (free <= 0) return;
+    const { data: waiting } = await admin.from("event_waitlist").select("user_id").eq("event_id", eventId).order("created_at", { ascending: true }).limit(5);
+    for (const w of waiting ?? []) {
+      const id = w.user_id as string;
+      // One message per person per ten minutes, so a burst of changes doesn't repeat itself.
+      if (!(await claimSend(admin, id, "spot_opened", `${eventId}:${Math.floor(now.getTime() / 600000)}`))) continue;
+      const to = await recipient(admin, id);
+      const via = channelsFor(to.prefs, "critical", now);
+      if (to.ok && via.email) {
+        await send({ to: to.to.email, ...email.spotOpened({ name: to.to.name, eventTitle: event.title as string, when: formatWhenShort(event.starts_at as string), eventUrl: eventUrl(eventId), siteUrl: SITE_URL }) });
+      }
+      if (via.push) await push(id, { title: `A spot opened up: ${event.title}`, body: "First come, first served. Tap to take it.", url: `/events/${eventId}`, tag: `spot-${eventId}` });
+    }
+  });
+}
+
+/** A guest freed their spot close to the start (within 48 hours): tell the host, who may want to fill it. */
+export function notifyHostOfDrop(eventId: string, guestId: string, deps: Deps = {}) {
+  return safely("guest dropped", async () => {
+    const { admin, send, push } = use(deps);
+    if (!admin) return;
+    const now = deps.now ?? new Date();
+    const { data: event } = await admin.from("events").select("title, starts_at, host_id, max_spots, spots_taken, cancelled_at").eq("id", eventId).maybeSingle();
+    if (!event || event.cancelled_at || event.host_id === guestId) return;
+    const hoursAway = (new Date(event.starts_at as string).getTime() - now.getTime()) / 3600000;
+    if (hoursAway <= 0 || hoursAway > 48) return;
+    if (!(await claimSend(admin, event.host_id as string, "host_drop", `${eventId}:${guestId}`))) return;
+
+    const [host, guest] = await Promise.all([recipient(admin, event.host_id as string), admin.from("profiles").select("name").eq("id", guestId).maybeSingle()]);
+    const guestName = firstName(guest.data?.name);
+    const via = channelsFor(host.prefs, "activity", now);
+    const spotsLeft = Math.max((event.max_spots as number) - (event.spots_taken as number), 0);
+    if (host.ok && via.email) {
+      await send({ to: host.to.email, ...email.guestDropped({ name: host.to.name, guestName, eventTitle: event.title as string, when: formatWhenShort(event.starts_at as string), spotsLeft, eventUrl: eventUrl(eventId), siteUrl: SITE_URL }) });
+    }
+    if (via.push && (await underNudgeCap(admin, event.host_id as string, now))) {
+      await push(event.host_id as string, { title: `${guestName} can't make it`, body: `${event.title}: ${spotsLeft} ${spotsLeft === 1 ? "spot" : "spots"} open.`, url: `/events/${eventId}`, tag: `drop-${eventId}` });
+    }
+  });
+}
+
+/**
  * Someone came along because a friend invited them: tell the friend. Only for an approved guest
  * (so for approval-only meetups it waits for the host's yes), once per friend and meetup, as a
  * nudge (limited per person, quiet hours respected).
@@ -367,6 +421,8 @@ export type DailyResult = {
   feedbackRequests: number;
   /** Weekly "meetups you might like" notes sent (email or push). */
   digests: number;
+  /** Day-of "Still coming?" prompts sent. */
+  stillComing: number;
   eventsTomorrow: number;
   eventsYesterday: number;
   /** People who would have been emailed but weren't, and why. */
@@ -397,6 +453,7 @@ export async function sendDailyEmails(now = new Date(), deps: Deps = {}): Promis
     reminders: 0,
     feedbackRequests: 0,
     digests: 0,
+    stillComing: 0,
     eventsTomorrow: 0,
     eventsYesterday: 0,
     skipped: { noEmail: 0, optedOut: 0, lookupFailed: 0 },
@@ -431,7 +488,7 @@ export async function sendDailyEmails(now = new Date(), deps: Deps = {}): Promis
   };
 
   const CAP = 250; // stays well inside a Gmail account's daily sending limit
-  const capped = () => result.reminders + result.feedbackRequests + result.digests >= CAP;
+  const capped = () => result.reminders + result.feedbackRequests + result.digests + result.stillComing >= CAP;
 
   /** Look someone up and email them; returns whether it was sent. Skips and failures are counted. */
   const emailPerson = async (userId: string, build: (r: Recipient) => Omit<Mail, "to">, category: Category = "reminders") => {
@@ -520,6 +577,33 @@ export async function sendDailyEmails(now = new Date(), deps: Deps = {}): Promis
         url: `/events/${event.id}`,
         tag: `feedback-${event.id}`,
       });
+    }
+  }
+
+  // "Still coming?" the day of: approved guests of today's meetups that start at least two hours from
+  // now, who haven't confirmed yet. If they can't come, freeing the spot lets the waitlist have it.
+  const soonest = new Date(Math.max(now.getTime() + 2 * 3600000, startOfToday.getTime()));
+  if (soonest < tomorrow) {
+    for (const event of await eventsBetween(admin, soonest, tomorrow)) {
+      const { data: going, error: goingError } = await admin.from("rsvps").select("user_id, confirmed_at").eq("event_id", event.id).eq("status", "approved");
+      if (goingError) continue; // the database update (migration 019) hasn't been run: skip rather than guess
+      const when = formatWhenLong(event.starts_at);
+      for (const g of going ?? []) {
+        const id = g.user_id as string;
+        if (id === event.host_id || g.confirmed_at) continue;
+        if (capped()) return done("stopped at the daily cap");
+        const prefs = await prefsOf(id);
+        if (!prefs.reminders) {
+          result.mutedByPrefs++;
+          continue;
+        }
+        if (!(await claimSend(admin, id, "still_coming", event.id))) continue;
+        await emailPerson(id, (r) => email.stillComing({ name: r.name, eventTitle: event.title, when: when.time, eventUrl: eventUrl(event.id), siteUrl: SITE_URL }), "reminders");
+        if (await underNudgeCap(admin, id, now)) {
+          await pushPerson(id, { title: `Still coming to ${event.title}?`, body: `Starts ${when.time}. Tap to confirm, or free your spot.`, url: `/events/${event.id}`, tag: `still-${event.id}` }, "reminders");
+        }
+        result.stillComing++;
+      }
     }
   }
 

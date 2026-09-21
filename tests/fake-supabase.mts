@@ -8,7 +8,7 @@ export type FakeData = Record<string, Row[]>;
 export function fakeAdmin(
   data: FakeData,
   users: Record<string, { email: string | null }>,
-  opts: { lookupError?: string; /** act like a database without the new settings columns (migration 019) */ noPrefColumns?: boolean; /** act like a database without the send log table */ logError?: boolean } = {}
+  opts: { lookupError?: string; /** act like a database without the new settings columns (migration 019) */ noPrefColumns?: boolean; /** act like a database without the send log table */ logError?: boolean; /** act like a database without rsvps.confirmed_at */ noConfirmColumn?: boolean } = {}
 ) {
   const from = (table: string) => {
     const filters: ((r: Row) => boolean)[] = [];
@@ -84,6 +84,7 @@ export function fakeAdmin(
         }
         if (table === "user_settings" && opts.noPrefColumns && /notify_|quiet_/.test(selected)) return resolve({ data: null, error: { message: "column user_settings.notify_reminders does not exist" } });
         if (table === "notification_log" && opts.logError) return resolve({ data: null, error: { code: "42P01", message: 'relation "notification_log" does not exist' } });
+        if (table === "rsvps" && opts.noConfirmColumn && /confirmed_at/.test(selected)) return resolve({ data: null, error: { message: "column rsvps.confirmed_at does not exist" } });
         if (headCount) return resolve({ data: null, error: null, count: matching().length });
         return resolve({ data: ordered(), error: null });
       },

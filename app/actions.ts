@@ -20,8 +20,10 @@ import {
   notifyEventDeleted,
   notifyEventUpdated,
   notifyFriendJoined,
+  notifyHostOfDrop,
   notifyHostOfRequest,
   notifyRequestDecision,
+  notifySpotOpened,
   snapshotBeforeDelete,
 } from "@/lib/notify";
 import { getBirthDate } from "@/lib/profile";
@@ -286,6 +288,9 @@ export async function updateEventDetails(eventId: string, formData: FormData): P
     }
   }
 
+  // More room than before: anyone waiting for a spot can be told.
+  if (spotsChanged && !spotsProblem && maxSpots > event.max_spots) waitUntil(notifySpotOpened(eventId));
+
   revalidatePath(`/events/${eventId}`);
   revalidatePath("/");
   revalidatePath("/me");
@@ -369,17 +374,91 @@ export async function setRsvp(
       waitUntil(notifyHostOfRequest(eventId, user.id));
     }
   } else {
+    // If they held a spot, a freed spot goes to the waitlist, and the host hears about a late drop.
+    const { data: mine } = await supabase.from("rsvps").select("status").eq("event_id", eventId).eq("user_id", user.id).maybeSingle();
     const { error } = await supabase
       .from("rsvps")
       .delete()
       .eq("event_id", eventId)
       .eq("user_id", user.id);
     if (error) return { error: "Couldn't leave. Please try again." };
+    if (mine?.status === "approved") {
+      waitUntil(notifySpotOpened(eventId));
+      waitUntil(notifyHostOfDrop(eventId, user.id));
+    }
   }
 
   revalidatePath(`/events/${eventId}`);
   revalidatePath("/");
   revalidatePath("/me");
+  return {};
+}
+
+/** "Still coming?": a guest confirms they'll be there. */
+export async function confirmAttendance(eventId: string): Promise<{ error?: string }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Please log in." };
+
+  const { error } = await supabase.rpc("confirm_attendance", { eid: eventId });
+  if (error) {
+    if (error.code === "PGRST202") {
+      console.error("Confirming attendance failed: run supabase/migrations/019_retention_features.sql in the SQL editor.");
+      return { error: "This isn't available right now. Please try again later." };
+    }
+    return {
+      error: error.message.includes("not going")
+        ? "You're not on this meetup's list."
+        : error.message.includes("already started")
+          ? "This meetup has already started."
+          : error.message.includes("cancelled")
+            ? "This meetup was cancelled."
+            : "Couldn't confirm. Please try again.",
+    };
+  }
+  revalidatePath(`/events/${eventId}`);
+  return {};
+}
+
+/** For a full, open meetup: ask to be told if a spot opens. */
+export async function joinWaitlist(eventId: string): Promise<{ error?: string }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Please log in." };
+
+  const { error } = await supabase.from("event_waitlist").insert({ event_id: eventId, user_id: user.id });
+  if (error && error.code !== "23505") {
+    if (error.code === "PGRST205" || error.code === "42P01") {
+      console.error("The waitlist failed: run supabase/migrations/019_retention_features.sql in the SQL editor.");
+      return { error: "The waitlist isn't available right now." };
+    }
+    return {
+      error: error.message.includes("spots left")
+        ? "A spot just opened up. You can join now."
+        : error.message.includes("already joined")
+          ? "You've already joined this meetup."
+          : error.message.includes("only for open")
+            ? "This meetup approves people one by one, so there's no waitlist."
+            : "Couldn't add you to the waitlist. Please try again.",
+    };
+  }
+  revalidatePath(`/events/${eventId}`);
+  return {};
+}
+
+export async function leaveWaitlist(eventId: string): Promise<{ error?: string }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Please log in." };
+  const { error } = await supabase.from("event_waitlist").delete().eq("event_id", eventId).eq("user_id", user.id);
+  if (error) return { error: "Couldn't update the waitlist. Please try again." };
+  revalidatePath(`/events/${eventId}`);
   return {};
 }
 

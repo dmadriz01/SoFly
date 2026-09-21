@@ -174,6 +174,48 @@ export function friendJoined(a: { name: string; friendName: string; eventTitle: 
   return { subject: `${oneLine(a.friendName)} is coming to ${title.slice(0, 60)}`, ...body };
 }
 
+/** The day of a meetup: are you still coming? (Answering frees the spot for someone else if not.) */
+export function stillComing(a: { name: string; eventTitle: string; when: string; eventUrl: string; siteUrl: string }): Email {
+  const title = oneLine(a.eventTitle);
+  const body = layout({
+    heading: `Still coming to ${title} today?`,
+    paragraphs: [
+      `Hi ${a.name}, ${title} starts ${a.when}.`,
+      "Tap below to confirm you're coming. If your plans changed, please free your spot so someone on the waitlist can take it. It only takes a tap.",
+    ],
+    cta: { label: "Yes, or free my spot", url: a.eventUrl },
+    siteUrl: a.siteUrl,
+  });
+  return { subject: `Still coming to ${title.slice(0, 55)} today?`, ...body };
+}
+
+/** To someone on a waitlist: a spot opened up. */
+export function spotOpened(a: { name: string; eventTitle: string; when: string; eventUrl: string; siteUrl: string }): Email {
+  const title = oneLine(a.eventTitle);
+  const body = layout({
+    heading: `A spot opened up: ${title}`,
+    paragraphs: [`Hi ${a.name}, a spot just opened at ${title} (${a.when}).`, "It's first come, first served, so join now if you still want it."],
+    cta: { label: "Take the spot", url: a.eventUrl },
+    siteUrl: a.siteUrl,
+  });
+  return { subject: `A spot opened up: ${title.slice(0, 60)}`, ...body };
+}
+
+/** To a host: someone dropped out close to the start. */
+export function guestDropped(a: { name: string; guestName: string; eventTitle: string; when: string; spotsLeft: number; eventUrl: string; siteUrl: string }): Email {
+  const title = oneLine(a.eventTitle);
+  const body = layout({
+    heading: `${a.guestName} can't make it to ${title}`,
+    paragraphs: [
+      `Hi ${a.name}, ${a.guestName} freed their spot for ${title} (${a.when}).`,
+      `${a.spotsLeft} ${a.spotsLeft === 1 ? "spot is" : "spots are"} open now. Anyone on the waitlist has been told.`,
+    ],
+    cta: { label: "See the meetup", url: a.eventUrl },
+    siteUrl: a.siteUrl,
+  });
+  return { subject: `${oneLine(a.guestName)} can't make it to ${title.slice(0, 55)}`, ...body };
+}
+
 /** The day before: what, when, where. */
 export function reminder(a: {
   name: string;

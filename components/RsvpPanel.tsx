@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useOptimistic, useState, useTransition } from "react";
-import { setRsvp } from "@/app/actions";
+import { joinWaitlist, leaveWaitlist, setRsvp } from "@/app/actions";
 import { NOTE_MAX, validateRequestNote } from "@/lib/validation";
 
 type Status = "pending" | "approved" | "declined" | null;
@@ -22,6 +22,7 @@ export function RsvpPanel({
   myNote,
   hasAbout,
   invite,
+  waitlist,
 }: {
   eventId: string;
   maxSpots: number;
@@ -42,6 +43,8 @@ export function RsvpPanel({
   hasAbout: boolean;
   /** The signed token from an invite link (?ref=...), passed along when joining. */
   invite?: string;
+  /** For a full open meetup: whether the viewer is already waiting for a spot. Absent when waitlists aren't available. */
+  waitlist?: { joined: boolean };
 }) {
   const isRequest = joinMode === "request";
   const [error, setError] = useState<string>();
@@ -69,6 +72,20 @@ export function RsvpPanel({
       setOptimistic(action);
       const result = await setRsvp(eventId, action === "join", intro, invite);
       if (result.error) setError(result.error);
+    });
+  }
+
+  const [waiting, setWaiting] = useState(Boolean(waitlist?.joined));
+  function toggleWaitlist() {
+    setError(undefined);
+    const next = !waiting;
+    setWaiting(next);
+    startTransition(async () => {
+      const result = await (next ? joinWaitlist(eventId) : leaveWaitlist(eventId));
+      if (result.error) {
+        setWaiting(!next);
+        setError(result.error);
+      }
     });
   }
 
@@ -111,7 +128,19 @@ export function RsvpPanel({
       </div>
     );
   } else if (state.status === "declined") body = disabled("Not approved this time");
-  else if (full) body = disabled("Full");
+  else if (full && waitlist && loggedIn && !isRequest && !isHost) {
+    body = (
+      <div className="space-y-2">
+        <button disabled className="btn-primary w-full">
+          Full
+        </button>
+        <button type="button" onClick={toggleWaitlist} disabled={pending} className="btn-secondary w-full">
+          {waiting ? "You're on the waitlist. Tap to leave" : "Tell me if a spot opens"}
+        </button>
+        <p className="text-xs text-muted">{waiting ? "We'll email you and send a notification the moment a spot opens. It's first come, first served." : "People drop out. We'll tell you right away if someone does."}</p>
+      </div>
+    );
+  } else if (full) body = disabled("Full");
   else if (!loggedIn) {
     body = (
       <Link href={`/login?next=${encodeURIComponent(invite ? `/events/${eventId}?ref=${invite}` : `/events/${eventId}`)}`} className="btn-primary w-full">

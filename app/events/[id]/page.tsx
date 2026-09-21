@@ -6,6 +6,7 @@ import { DeleteEventButton } from "@/components/DeleteEventButton";
 import { EventCover } from "@/components/EventCover";
 import { BringAFriend } from "@/components/BringAFriend";
 import { PushPrompt } from "@/components/PushPrompt";
+import { StillComing } from "@/components/StillComing";
 import { SeriesPanel, type SeriesDate } from "@/components/SeriesPanel";
 import { CoverChangeNote } from "@/components/CoverChangeNote";
 import { emojiFor } from "@/lib/constants";
@@ -208,6 +209,23 @@ export default async function EventPage({ params, searchParams }: { params: { id
     seriesDates = (siblings ?? []) as SeriesDate[];
   }
 
+  // Best-effort extras that need migration 019: whether I've confirmed I'm coming, and the waitlist.
+  let confirmedAt: string | null | undefined; // undefined = not available
+  if (user && myStatus === "approved" && !isHost) {
+    const { data: mineRow, error: mineError } = await supabase.from("rsvps").select("confirmed_at").eq("event_id", event.id).eq("user_id", user.id).maybeSingle();
+    if (!mineError) confirmedAt = (mineRow?.confirmed_at as string | null | undefined) ?? null;
+  }
+  let onWaitlist: boolean | undefined; // undefined = waitlists aren't available
+  let waitingCount = 0;
+  if (user && !isHost && !myStatus) {
+    const { data: rowW, error: errW } = await supabase.from("event_waitlist").select("user_id").eq("event_id", event.id).eq("user_id", user.id).maybeSingle();
+    if (!errW) onWaitlist = Boolean(rowW);
+  }
+  if (isHost) {
+    const { count, error: errC } = await supabase.from("event_waitlist").select("user_id", { count: "exact", head: true }).eq("event_id", event.id);
+    if (!errC) waitingCount = count ?? 0;
+  }
+
   // A friend's invite link (?ref=...): only a genuine, unaltered link for THIS meetup counts.
   const inviteToken = typeof searchParams.ref === "string" ? searchParams.ref : "";
   const inviterId = inviteToken ? verifyInvite(event.id, inviteToken) : null;
@@ -376,7 +394,13 @@ export default async function EventPage({ params, searchParams }: { params: { id
         myNote={(user && notes.get(user.id)) || null}
         hasAbout={viewerHasAbout}
         invite={inviterName ? inviteToken : undefined}
+        waitlist={onWaitlist === undefined ? undefined : { joined: onWaitlist }}
       />
+
+      {/* The day before or the day of: are you still coming? (Only once the database update is in.) */}
+      {confirmedAt !== undefined && !isHost && myStatus === "approved" && !cancelled && !ended && new Date(event.starts_at).getTime() - Date.now() <= 30 * 3600 * 1000 && (
+        <StillComing eventId={event.id} startsAt={`at ${when.time}`} confirmed={Boolean(confirmedAt)} />
+      )}
 
       {/* Right after joining is when a reminder is worth having: ask then, not on arrival. */}
       {!isHost && (myStatus === "approved" || myStatus === "pending") && !cancelled && !ended && <PushPrompt />}
@@ -451,7 +475,7 @@ export default async function EventPage({ params, searchParams }: { params: { id
       )}
 
       {isHost && !cancelled && (
-        <ManageEvent eventId={event.id} />
+        <ManageEvent eventId={event.id} waiting={waitingCount} />
       )}
 
       {isHost ? (
